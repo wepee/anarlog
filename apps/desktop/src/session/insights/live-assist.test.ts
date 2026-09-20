@@ -223,7 +223,7 @@ describe("streamLiveAssistSuggestion", () => {
       expect.objectContaining({
         model: { id: "model-1" },
         maxRetries: 1,
-        maxOutputTokens: 260,
+        maxOutputTokens: 700,
       }),
     );
   });
@@ -249,6 +249,55 @@ describe("streamLiveAssistSuggestion", () => {
         sourceText: "You: We should ship the doc.",
       }),
     ).resolves.toEqual(["Follow up with Ada.", "Confirm the launch date."]);
+  });
+
+  it("salvages the complete items out of a truncated object stream", async () => {
+    const error = new NoObjectGeneratedError({
+      text: '{"items": ["Les participants ont bri\\u00e8vement \\u00e9voqu\\u00e9 le travail sur l\'int\\u00e9gration.", "La d\\u00e9mo est repouss\\u00e9e.", "Le dernier item est coup\\u00e9 en pleine ph',
+      response: {},
+      usage: {},
+      finishReason: "length",
+    } as never);
+    hoisted.streamText.mockReturnValue({
+      get output() {
+        return Promise.reject(error);
+      },
+    });
+
+    await expect(
+      streamLiveAssistSuggestion({
+        model: { id: "model-1" } as never,
+        language: "fr",
+        kind: "catch_up",
+        sourceText: "Speaker 1: On parle de l'intégration.",
+      }),
+    ).resolves.toEqual([
+      "Les participants ont brièvement évoqué le travail sur l'intégration.",
+      "La démo est repoussée.",
+    ]);
+  });
+
+  it("never surfaces unsalvageable raw JSON as a suggestion", async () => {
+    const error = new NoObjectGeneratedError({
+      text: '{"items": ["Les participants ont bri\\u00e8vement \\u00e9voqu\\u00e9 le travail sur l\'int',
+      response: {},
+      usage: {},
+      finishReason: "length",
+    } as never);
+    hoisted.streamText.mockReturnValue({
+      get output() {
+        return Promise.reject(error);
+      },
+    });
+
+    await expect(
+      streamLiveAssistSuggestion({
+        model: { id: "model-1" } as never,
+        language: "fr",
+        kind: "catch_up",
+        sourceText: "Speaker 1: On parle de l'intégration.",
+      }),
+    ).rejects.toBe(error);
   });
 
   it("rethrows when no items can be recovered from the raw text", async () => {

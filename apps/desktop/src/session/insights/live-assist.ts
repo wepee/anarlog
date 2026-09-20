@@ -46,7 +46,13 @@ export const LIVE_ASSIST_SUMMARIZE_SO_FAR_MAX_CHARS = 6_000;
 export const LIVE_ASSIST_MAX_ITEMS = 3;
 
 const LIVE_ASSIST_GENERATION_TIMEOUT_MS = 18_000;
-const LIVE_ASSIST_MAX_OUTPUT_TOKENS = 260;
+// Three short items, but serialized as JSON: providers escape non-ASCII, so a
+// French item spends ~6 characters per accent ("\u00e9") and the budget goes
+// much further on an English meeting than on a French one. The schema and the
+// prompts are what keep the answer short; this is only the ceiling that stops
+// a runaway generation, so it is set well above a normal answer rather than
+// close to it.
+const LIVE_ASSIST_MAX_OUTPUT_TOKENS = 700;
 
 const liveAssistSchema = z.object({
   items: z.array(z.string()).min(1).max(LIVE_ASSIST_MAX_ITEMS),
@@ -166,7 +172,50 @@ export function sanitizeLiveAssistItems(
   return result;
 }
 
+// A run that stops mid-object leaves valid JSON behind up to the cut, e.g.
+// `{"items": ["first item", "second ite`. Every string that still has its
+// closing quote is a complete suggestion worth keeping; the trailing one is
+// not, and never matches.
+function salvageItemsFromPartialJson(text: string): string[] {
+  const itemsAt = text.indexOf('"items"');
+  if (itemsAt === -1) {
+    return [];
+  }
+
+  const stringPattern = /"((?:[^"\\]|\\.)*)"/g;
+  stringPattern.lastIndex = itemsAt + '"items"'.length;
+
+  const items: string[] = [];
+  for (
+    let match = stringPattern.exec(text);
+    match !== null;
+    match = stringPattern.exec(text)
+  ) {
+    try {
+      items.push(JSON.parse(`"${match[1]}"`) as string);
+    } catch {
+      // Not decodable on its own (a lone escape at the cut); skip it.
+    }
+  }
+
+  return items;
+}
+
 function extractLiveAssistItemsFromText(text: string): string[] {
+  const salvaged = sanitizeLiveAssistItems(salvageItemsFromPartialJson(text));
+  if (salvaged.length > 0) {
+    return salvaged;
+  }
+
+  // Raw JSON we could not salvage is not a suggestion. Letting it through is
+  // how a run cut short (token ceiling, generation timeout, dropped stream)
+  // ended up rendered as a bullet of literal `{"items": ["Les participants
+  // ont bri\u00e8vement...`. Throwing instead surfaces the card's error state
+  // and logs the cause, which is also what makes the next one diagnosable.
+  if (/^\s*[{[]/.test(text)) {
+    return [];
+  }
+
   const lines = text
     .split("\n")
     .map((line) => line.trim())
