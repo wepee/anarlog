@@ -221,7 +221,12 @@ impl LivePartial {
         let text = normalize_transcript_text(&self.text);
         let is_final = self.is_final;
 
-        let words = if self.words.is_empty() {
+        // The per-word timings are the analyzer's, but `text` is the only field
+        // guaranteed to carry the whole hypothesis. When the two disagree the
+        // words lost characters on the way out of the bridge, and showing an
+        // utterance with holes in it is worse than showing it on synthetic,
+        // evenly spread timings.
+        let words = if self.words.is_empty() || !words_cover_text(&self.words, &text) {
             stream_words_from_text(&text, start, duration)
         } else {
             self.words
@@ -484,19 +489,32 @@ pub fn batch_response_from_transcripts(channels: Vec<FileTranscript>) -> batch::
                 .enumerate()
                 .map(|(channel_index, channel)| {
                     let transcript = normalize_transcript_text(&channel.text);
-                    let words = channel
-                        .words
-                        .into_iter()
-                        .map(|word| batch::Word {
-                            word: word.text.clone(),
-                            start: word.start,
-                            end: word.end.max(word.start + MIN_SYNTHETIC_DURATION_SECONDS),
-                            confidence: word.confidence.unwrap_or(1.0),
-                            channel: channel_index as i32,
-                            speaker: None,
-                            punctuated_word: Some(word.text),
-                        })
-                        .collect();
+                    // Same guard as the live path: `text` is the whole
+                    // hypothesis, the words are only a view on it, and a
+                    // transcript with holes is worse than coarse timings.
+                    let words = if channel.words.is_empty()
+                        || !words_cover_text(&channel.words, &transcript)
+                    {
+                        batch_words_from_text(
+                            &transcript,
+                            channel.duration_seconds,
+                            channel_index as i32,
+                        )
+                    } else {
+                        channel
+                            .words
+                            .into_iter()
+                            .map(|word| batch::Word {
+                                word: word.text.clone(),
+                                start: word.start,
+                                end: word.end.max(word.start + MIN_SYNTHETIC_DURATION_SECONDS),
+                                confidence: word.confidence.unwrap_or(1.0),
+                                channel: channel_index as i32,
+                                speaker: None,
+                                punctuated_word: Some(word.text),
+                            })
+                            .collect()
+                    };
 
                     batch::Channel {
                         alternatives: vec![batch::Alternatives {
@@ -533,6 +551,21 @@ fn metadata_json(duration_seconds: f64, channels: u32) -> serde_json::Value {
     value
 }
 
+fn batch_words_from_text(text: &str, duration: f64, channel: i32) -> Vec<batch::Word> {
+    stream_words_from_text(text, 0.0, duration.max(MIN_SYNTHETIC_DURATION_SECONDS))
+        .into_iter()
+        .map(|word| batch::Word {
+            word: word.word.clone(),
+            start: word.start,
+            end: word.end,
+            confidence: word.confidence,
+            channel,
+            speaker: None,
+            punctuated_word: Some(word.word),
+        })
+        .collect()
+}
+
 fn stream_words_from_text(text: &str, start: f64, duration: f64) -> Vec<stream::Word> {
     let word_strs = split_words(text);
     let count = word_strs.len();
@@ -564,6 +597,25 @@ fn stream_words_from_text(text: &str, start: f64, duration: f64) -> Vec<stream::
             }
         })
         .collect()
+}
+
+/// Whitespace is the one thing word payloads are free to drop (the bridge trims
+/// each run), so the comparison ignores it and only checks that no other
+/// character went missing.
+fn words_cover_text(words: &[Word], text: &str) -> bool {
+    let mut expected = text.chars().filter(|c| !c.is_whitespace());
+    let mut actual = words
+        .iter()
+        .flat_map(|word| word.text.chars())
+        .filter(|c| !c.is_whitespace());
+
+    loop {
+        match (expected.next(), actual.next()) {
+            (None, None) => return true,
+            (left, right) if left == right => continue,
+            _ => return false,
+        }
+    }
 }
 
 fn split_words(text: &str) -> Vec<&str> {

@@ -248,13 +248,42 @@ private func installLocaleAssets(key: String, identifier: String) async throws {
 
 /// Volatile results carry a single run spanning the whole hypothesis, so per-word
 /// timings only materialize on finalized results.
+///
+/// Runs split on every attribute change, not on word boundaries: a confidence
+/// change inside a word cuts it into several runs, and the ones the analyzer
+/// leaves without an `audioTimeRange` used to be dropped outright. That silently
+/// ate characters mid-word ("intégration" arriving as "ingration"), so untimed
+/// runs are now re-attached instead: what precedes their first whitespace
+/// continues the previous word, the rest prefixes the next timed one.
 @available(macOS 26.0, *)
 private func words(from text: AttributedString) -> [WordPayload] {
   var payloads: [WordPayload] = []
+  var pending = ""
+
+  func appendToPrevious(_ fragment: String) {
+    guard !fragment.isEmpty else { return }
+    guard let last = payloads.indices.last else {
+      pending += fragment
+      return
+    }
+    payloads[last].text += fragment
+  }
 
   for run in text.runs {
-    guard let range = run.audioTimeRange else { continue }
-    let word = String(text[run.range].characters).trimmingCharacters(in: .whitespacesAndNewlines)
+    let chunk = String(text[run.range].characters)
+
+    guard let range = run.audioTimeRange else {
+      if let boundary = chunk.firstIndex(where: { $0.isWhitespace }) {
+        appendToPrevious(String(chunk[chunk.startIndex..<boundary]))
+        pending += String(chunk[boundary...])
+      } else {
+        appendToPrevious(chunk)
+      }
+      continue
+    }
+
+    let word = (pending + chunk).trimmingCharacters(in: .whitespacesAndNewlines)
+    pending = ""
     guard !word.isEmpty else { continue }
 
     payloads.append(
@@ -266,6 +295,8 @@ private func words(from text: AttributedString) -> [WordPayload] {
       )
     )
   }
+
+  appendToPrevious(pending.trimmingCharacters(in: .whitespacesAndNewlines))
 
   return payloads
 }
