@@ -18,15 +18,40 @@ export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DESKTOP_DIR="$REPO_ROOT/apps/desktop"
 
+DEV_SIGNING_IDENTITY_NAME="${DEV_SIGNING_IDENTITY_NAME:-BlackMushi Local Signing}"
+
 resolve_identity() {
   if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
     printf '%s' "$APPLE_SIGNING_IDENTITY"
     return
   fi
 
-  security find-identity -v -p codesigning 2>/dev/null |
+  local identity
+  identity="$(security find-identity -v -p codesigning 2>/dev/null |
     sed -n 's/.*"\(Developer ID Application:.*\)".*/\1/p' |
+    head -n 1)"
+  if [[ -n "$identity" ]]; then
+    printf '%s' "$identity"
+    return
+  fi
+
+  # Fall back to the local development identity from
+  # scripts/dev-signing-identity.sh. It cannot be notarised, but it gives the
+  # bundle a designated requirement that survives rebuilds, so keychain ACLs
+  # and TCC grants stop resetting on every build.
+  security find-identity -v -p codesigning 2>/dev/null |
+    sed -n "s/.*\"\($DEV_SIGNING_IDENTITY_NAME\)\".*/\\1/p" |
     head -n 1
+}
+
+# Ad-hoc and the local identity are signed here; only a Developer ID is handed
+# to Tauri, which signs with the hardened runtime and a timestamp.
+identity_kind() {
+  case "$1" in
+    -) printf 'adhoc' ;;
+    "Developer ID Application:"*) printf 'developer-id' ;;
+    *) printf 'local' ;;
+  esac
 }
 
 # Signs the bundle in place. A Developer ID keeps its designated requirement
@@ -43,9 +68,10 @@ sign_app() {
   executable="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$info_plist")"
   main_binary="$app/Contents/MacOS/$executable"
 
-  # The hardened runtime requires library validation, which an ad-hoc signature
-  # cannot satisfy for the vendored dylib.
-  if [[ "$identity" != "-" ]]; then
+  # The hardened runtime requires library validation, which neither an ad-hoc
+  # nor a self-signed local signature can satisfy for the vendored dylib. A
+  # timestamp is only worth its round trip on a certificate Apple issued.
+  if [[ "$(identity_kind "$identity")" == "developer-id" ]]; then
     options=(--timestamp --options runtime)
   fi
 
@@ -77,16 +103,28 @@ entitlements_for() {
   fi
 }
 
+warn_local() {
+  local app="$1"
+
+  cat >&2 <<EOF
+
+$(basename "$app") was signed with "$signing_identity", a local identity. Its
+designated requirement is stable, so keychain and TCC grants carry over to the
+next build, but the bundle is not notarisable and cannot be distributed. Install
+a Developer ID Application certificate (or set APPLE_SIGNING_IDENTITY) to ship.
+EOF
+}
+
 warn_adhoc() {
   local app="$1"
 
   cat >&2 <<EOF
 
-No Developer ID certificate found, so $(basename "$app") was signed ad-hoc.
+No signing certificate found, so $(basename "$app") was signed ad-hoc.
 Entitlements and the bundle identifier are now correct, but macOS identifies an
 ad-hoc app by its cdhash: the permissions granted to this build will not carry
-over to the next one. Install a Developer ID Application certificate (or set
-APPLE_SIGNING_IDENTITY) to keep granted permissions across rebuilds.
+over to the next one. Run scripts/dev-signing-identity.sh for a local identity,
+or install a Developer ID Application certificate, to keep them across rebuilds.
 EOF
 }
 
@@ -101,9 +139,10 @@ if [[ "${1:-}" == "--sign-only" ]]; then
   fi
 
   sign_app "$app_bundle" "$signing_identity" "$(entitlements_for "$app_bundle")"
-  if [[ "$signing_identity" == "-" ]]; then
-    warn_adhoc "$app_bundle"
-  fi
+  case "$(identity_kind "$signing_identity")" in
+    adhoc) warn_adhoc "$app_bundle" ;;
+    local) warn_local "$app_bundle" ;;
+  esac
   exit 0
 fi
 
@@ -126,7 +165,9 @@ else
   esac
 fi
 
-if [[ "$signing_identity" != "-" ]]; then
+kind="$(identity_kind "$signing_identity")"
+
+if [[ "$kind" == "developer-id" ]]; then
   echo "Signing with: $signing_identity"
 
   # Tauri copies the vendored dylib in as a framework, and the hardened runtime
@@ -144,24 +185,33 @@ if [[ "$signing_identity" != "-" ]]; then
   fi
 
   export APPLE_SIGNING_IDENTITY="$signing_identity"
+elif [[ "$kind" == "local" ]]; then
+  # Keep APPLE_SIGNING_IDENTITY out of Tauri's environment: it would sign with
+  # the hardened runtime, whose library validation a self-signed certificate
+  # cannot satisfy. Sign below instead, the same way the ad-hoc path does.
+  echo "Signing with: $signing_identity (local identity, set below)"
 fi
 
 cd "$DESKTOP_DIR"
 pnpm exec tauri build "$@"
 
 # Tauri signed the app and the .dmg around it already.
-if [[ "$signing_identity" != "-" ]]; then
+if [[ "$kind" == "developer-id" ]]; then
   exit 0
 fi
 
 app_bundle="$(ls -dt "$bundle_dir"/*.app 2>/dev/null | head -n 1 || true)"
 if [[ -z "$app_bundle" ]]; then
-  echo "No .app found under $bundle_dir; skipping ad-hoc signing." >&2
+  echo "No .app found under $bundle_dir; skipping signing." >&2
   exit 0
 fi
 
-sign_app "$app_bundle" "-" "$(entitlements_for "$@")"
-warn_adhoc "$app_bundle"
+sign_app "$app_bundle" "$signing_identity" "$(entitlements_for "$@")"
+if [[ "$kind" == "local" ]]; then
+  warn_local "$app_bundle"
+else
+  warn_adhoc "$app_bundle"
+fi
 
 cat >&2 <<EOF
 The .dmg, if one was produced, still holds the app as it was before signing.
