@@ -130,7 +130,7 @@ detectEvent: "plugin:detect:detect-event"
 export type DetectEvent = { type: "micDetected"; key: string; apps: InstalledApp[]; duration_secs: number } | { type: "micStopped"; apps: InstalledApp[] } | { type: "micMuted"; value: boolean } | { type: "sleepStateChanged"; value: boolean }
 export type InstalledApp = { id: string; name: string }
 export type InstalledApplicationIcon = { id: string; dataUrl: string }
-export type MeetingAccessibilityInspection = { activeCall: boolean; app: MeetingApp; pid: number; platform: MeetingPlatform; surface: MeetingSurface; accessibilityTrusted: boolean; windowTitle: string | null; warnings: string[] }
+export type MeetingAccessibilityInspection = { activeCall: boolean; app: MeetingApp; pid: number; platform: MeetingPlatform; surface: MeetingSurface; accessibilityTrusted: boolean; windowTitle: string | null; pageUrl: string | null; warnings: string[] }
 export type MeetingApp = { id: string; name: string }
 export type MeetingCapturedChatMessage = { id: string; platform: MeetingPlatform; surface: MeetingSurface; sender: string | null; timestamp: string | null; direction: MeetingChatDirection | null; text: string; links: string[] }
 export type MeetingChatCaptureResult = { app: MeetingApp | null; platform: MeetingPlatform; surface: MeetingSurface; contextId: string | null; messages: MeetingCapturedChatMessage[]; warnings: string[] }

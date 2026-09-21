@@ -24,6 +24,7 @@ const {
   listenMock,
   clearNotificationsMock,
   showNotificationMock,
+  resolveFaviconPathMock,
   useStoreMock,
   useConfigValueMock,
   getNearbyCalendarEventsMock,
@@ -35,6 +36,7 @@ const {
   listenMock: vi.fn(),
   clearNotificationsMock: vi.fn(),
   showNotificationMock: vi.fn(),
+  resolveFaviconPathMock: vi.fn(),
   useStoreMock: vi.fn(() => null),
   useConfigValueMock: vi.fn((key: string) => key !== "notification_disabled"),
   getNearbyCalendarEventsMock: vi.fn(),
@@ -58,6 +60,7 @@ vi.mock("@anlg/plugin-notification", () => ({
   commands: {
     clearNotifications: clearNotificationsMock,
     showNotification: showNotificationMock,
+    resolveFaviconPath: resolveFaviconPathMock,
   },
 }));
 
@@ -234,6 +237,7 @@ describe("ListenerProvider detect events", () => {
     getNearbyCalendarEventsMock.mockReset();
     loadSessionEventMock.mockReset();
     openNewNoteAndListenMock.mockReset();
+    resolveFaviconPathMock.mockReset();
     useStoreMock.mockReturnValue(null);
     useConfigValueMock.mockImplementation(
       (key: string) => key !== "notification_disabled",
@@ -1349,6 +1353,76 @@ describe("ListenerProvider detect events", () => {
         }),
       ),
     );
+  });
+
+  test("prefers the real page favicon over the calendar-guessed icon for browser mic notifications", async () => {
+    const store = createListenerStore();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-24T02:09:00.000Z"));
+    (useStoreMock as any).mockReturnValue(
+      mockNearbyEventStore({
+        title: "Design sync",
+        started_at: "2026-06-24T02:09:00.000Z",
+        meeting_link: "https://meet.google.com/abc-defg-hij",
+      }),
+    );
+    inspectMeetingAccessibilityMock.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          activeCall: true,
+          app: { id: "at.studio.AsideBrowser", name: "Aside" },
+          pid: 1,
+          platform: "googleMeet",
+          surface: "web",
+          accessibilityTrusted: true,
+          windowTitle: "Meet - abc-defg-hij",
+          pageUrl: "https://meet.google.com/abc-defg-hij",
+          warnings: [],
+        },
+      ],
+    });
+    resolveFaviconPathMock.mockResolvedValue({
+      status: "ok",
+      data: "/cache/favicons/meet.google.com.png",
+    });
+
+    render(
+      <ListenerProvider store={store}>
+        <div>child</div>
+      </ListenerProvider>,
+    );
+
+    await vi.waitFor(() => expect(listenMock).toHaveBeenCalledTimes(1));
+
+    const handler = listenMock.mock.calls[0]?.[0];
+    handler({
+      payload: {
+        type: "micDetected",
+        key: "mic-1",
+        apps: [{ id: "at.studio.AsideBrowser", name: "Aside" }],
+        duration_secs: 15,
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(showNotificationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          icon: {
+            type: "path",
+            path: "/cache/favicons/meet.google.com.png",
+          },
+          footer: expect.objectContaining({
+            icon: {
+              type: "path",
+              path: "/resources/notification-icons/google-meet.svg",
+            },
+          }),
+        }),
+      ),
+    );
+    expect(resolveFaviconPathMock).toHaveBeenCalledWith("meet.google.com");
   });
 
   test("uses event participants for nearby mic notification copy", async () => {

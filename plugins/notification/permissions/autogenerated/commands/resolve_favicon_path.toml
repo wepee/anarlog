@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-resolve-favicon-path"
+description = "Enables the resolve_favicon_path command without any pre-configured scope."
+commands.allow = ["resolve_favicon_path"]
+
+[[permission]]
+identifier = "deny-resolve-favicon-path"
+description = "Denies the resolve_favicon_path command without any pre-configured scope."
+commands.deny = ["resolve_favicon_path"]

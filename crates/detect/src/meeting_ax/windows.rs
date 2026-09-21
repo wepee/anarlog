@@ -563,6 +563,7 @@ pub(super) fn inspect_meeting_accessibility() -> Vec<MeetingAccessibilityInspect
                 surface,
                 accessibility_trusted: true,
                 window_title: has_active_call.then_some(title).flatten(),
+                page_url: None,
                 warnings,
             })
         })

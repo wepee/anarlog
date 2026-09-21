@@ -6,6 +6,7 @@ Default permissions for the plugin
 
 - `allow-show-notification`
 - `allow-clear-notifications`
+- `allow-resolve-favicon-path`
 
 ## Permission Table
 
@@ -38,6 +39,32 @@ Enables the clear_notifications command without any pre-configured scope.
 <td>
 
 Denies the clear_notifications command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`notification:allow-resolve-favicon-path`
+
+</td>
+<td>
+
+Enables the resolve_favicon_path command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`notification:deny-resolve-favicon-path`
+
+</td>
+<td>
+
+Denies the resolve_favicon_path command without any pre-configured scope.
 
 </td>
 </tr>

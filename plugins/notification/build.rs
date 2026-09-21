@@ -1,4 +1,8 @@
-const COMMANDS: &[&str] = &["show_notification", "clear_notifications"];
+const COMMANDS: &[&str] = &[
+    "show_notification",
+    "clear_notifications",
+    "resolve_favicon_path",
+];
 
 fn main() {
     let is_windows_msvc = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")

@@ -4,6 +4,7 @@ import { useStore } from "zustand";
 import {
   commands as detectCommands,
   events as detectEvents,
+  type InstalledApp,
 } from "@anlg/plugin-detect";
 import { commands as notificationCommands } from "@anlg/plugin-notification";
 
@@ -21,6 +22,7 @@ import { cancelAutoStopEndedNotification } from "./auto-stop-notification";
 import { inspectionsShowActiveMeetingForApps } from "./meeting-accessibility";
 import {
   getBrowserMeetingPlatform,
+  getFaviconIconForUrl,
   getIgnorableApps,
   getIgnoreAppsFooterText,
   getNotificationAppName,
@@ -28,6 +30,7 @@ import {
   getNotificationDisplayApps,
   getNotificationIconForDetectedApps,
   getNotificationIconForDisplayApp,
+  isBrowserApp,
 } from "./meeting-apps";
 import { recordDetectedMeetingApps } from "./meeting-source-apps";
 
@@ -50,6 +53,30 @@ type PendingAutoStop = {
   networkInterrupted: boolean;
   networkHoldUntilMs?: number;
 };
+
+async function getFaviconIconForDetectedApps(apps: InstalledApp[]) {
+  if (!apps.some(isBrowserApp)) {
+    return null;
+  }
+
+  const inspectionResult = await detectCommands.inspectMeetingAccessibility();
+  if (inspectionResult.status === "error") {
+    return null;
+  }
+
+  const appIds = new Set(apps.map((app) => app.id));
+  for (const inspection of inspectionResult.data) {
+    if (!inspection.pageUrl || !appIds.has(inspection.app.id)) {
+      continue;
+    }
+    const icon = await getFaviconIconForUrl(inspection.pageUrl);
+    if (icon) {
+      return icon;
+    }
+  }
+
+  return null;
+}
 
 function getMicDetectedNotificationTitle(event: NearbyEvent | null): string {
   if (!event) {
@@ -446,10 +473,12 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
                       browserMeetingPlatform,
                     )
                   : null;
-              const notificationIcon = await getNotificationIconForDetectedApps(
-                payload.apps,
-                browserMeetingPlatform,
-              );
+              const notificationIcon =
+                (await getFaviconIconForDetectedApps(payload.apps)) ??
+                (await getNotificationIconForDetectedApps(
+                  payload.apps,
+                  browserMeetingPlatform,
+                ));
               const footer =
                 displayIgnorableApps.length > 0
                   ? {

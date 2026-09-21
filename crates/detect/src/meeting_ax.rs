@@ -1823,6 +1823,7 @@ fn inspect_app(
     let mut warnings = Vec::new();
     let bundle_platform = classify_bundle(&app.id);
     let mut window_title = None;
+    let mut page_url = None;
     let mut nodes = Vec::new();
     let mut scoped_platform = None;
     let mut native_scope = false;
@@ -1863,6 +1864,7 @@ fn inspect_app(
                     let root = roots.remove(index);
                     scoped_platform = Some(root.platform);
                     window_title = root.window_title;
+                    page_url = root.web_area_url;
                     nodes = root.nodes;
                 }
                 UniqueMatch::Ambiguous => warnings.push(
@@ -1914,6 +1916,7 @@ fn inspect_app(
         surface,
         accessibility_trusted,
         window_title,
+        page_url,
         warnings,
     }
 }

@@ -685,6 +685,7 @@ fn inspection_from_nodes(
         surface,
         accessibility_trusted,
         window_title,
+        page_url: None,
         warnings,
     }
 }

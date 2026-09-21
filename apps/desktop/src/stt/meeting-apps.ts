@@ -1,6 +1,9 @@
 import { resolveResource } from "@tauri-apps/api/path";
 
-import type { NotificationIcon } from "@anlg/plugin-notification";
+import {
+  commands as notificationCommands,
+  type NotificationIcon,
+} from "@anlg/plugin-notification";
 
 import type { NearbyCalendarEvent } from "~/calendar/queries";
 
@@ -374,8 +377,31 @@ export function getNotificationAppName(app: MicApp) {
   return getMicAppNotificationOverride(app)?.displayName ?? app.name;
 }
 
-function isBrowserApp(app: MicApp) {
+export function isBrowserApp(app: MicApp) {
   return BROWSER_AUTO_STOP_APP_IDS.has(app.id);
+}
+
+// The page's own favicon is a more accurate signal than a guess from calendar
+// context or the browser's generic icon, since it reflects what is actually
+// open rather than what we expect to be open.
+export async function getFaviconIconForUrl(
+  pageUrl: string,
+): Promise<NotificationIcon | null> {
+  let hostname: string;
+  try {
+    hostname = new URL(pageUrl).hostname;
+  } catch {
+    return null;
+  }
+  if (!hostname) {
+    return null;
+  }
+
+  const result = await notificationCommands.resolveFaviconPath(hostname);
+  if (result.status === "error") {
+    return null;
+  }
+  return { type: "path", path: result.data };
 }
 
 function detectMeetingPlatformFromUrl(value: string): MeetingPlatform | null {

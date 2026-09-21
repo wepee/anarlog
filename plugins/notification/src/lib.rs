@@ -18,6 +18,7 @@ fn make_specta_builder<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
         .commands(tauri_specta::collect_commands![
             commands::show_notification::<tauri::Wry>,
             commands::clear_notifications::<tauri::Wry>,
+            commands::resolve_favicon_path::<tauri::Wry>,
         ])
         .events(tauri_specta::collect_events![NotificationEvent])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
