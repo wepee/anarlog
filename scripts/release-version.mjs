@@ -4,8 +4,6 @@ import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const desktopVersionPath = "release-version.json";
-const mobileVersionPath = "apps/mobile/release-version.json";
-const mobilePackagePath = "apps/mobile/package.json";
 const watchConfigPath = "apps/watch/apple/Version.xcconfig";
 
 function validateVersion(version, label) {
@@ -34,10 +32,6 @@ export function readReleaseVersion(root = repositoryRoot) {
   return readVersionFile(root, desktopVersionPath, "desktop");
 }
 
-export function readMobileReleaseVersion(root = repositoryRoot) {
-  return readVersionFile(root, mobileVersionPath, "mobile");
-}
-
 export function checkReleaseVersion(expected, root = repositoryRoot) {
   const version = readReleaseVersion(root);
   if (expected !== undefined && expected !== version) {
@@ -55,24 +49,6 @@ export function checkReleaseVersion(expected, root = repositoryRoot) {
   return version;
 }
 
-export function checkMobileReleaseVersion(expected, root = repositoryRoot) {
-  const version = readMobileReleaseVersion(root);
-  if (expected !== undefined && expected !== version) {
-    throw new Error(
-      `Requested version ${expected} does not match the mobile release version ${version}. Run node scripts/release-version.mjs --mobile ${expected} and commit the result first.`,
-    );
-  }
-  const packageVersion = JSON.parse(
-    readFileSync(join(root, mobilePackagePath), "utf8"),
-  ).version;
-  if (packageVersion !== version) {
-    throw new Error(
-      `Mobile package version ${packageVersion} is out of sync. Run node scripts/release-version.mjs --mobile ${version}.`,
-    );
-  }
-  return version;
-}
-
 export function setReleaseVersion(version, root = repositoryRoot) {
   validateVersion(version, "desktop");
   writeFileSync(
@@ -82,40 +58,15 @@ export function setReleaseVersion(version, root = repositoryRoot) {
   writeFileSync(join(root, watchConfigPath), watchConfig(version));
 }
 
-export function setMobileReleaseVersion(version, root = repositoryRoot) {
-  validateVersion(version, "mobile");
-  writeFileSync(
-    join(root, mobileVersionPath),
-    `${JSON.stringify({ version }, null, 2)}\n`,
-  );
-  const packagePath = join(root, mobilePackagePath);
-  const packageSource = readFileSync(packagePath, "utf8");
-  const updated = packageSource.replace(
-    /^(\s*"version":\s*")[^"]+(")/m,
-    `$1${version}$2`,
-  );
-  if (updated === packageSource) {
-    const current = JSON.parse(packageSource).version;
-    if (current !== version) {
-      throw new Error(`Could not update ${mobilePackagePath} version.`);
-    }
-    return;
-  }
-  writeFileSync(packagePath, updated);
-}
-
 function parseArgs(args) {
-  const mobile = args.includes("--mobile");
   const check = args.includes("--check");
-  const positional = args.filter(
-    (arg) => arg !== "--mobile" && arg !== "--check",
-  );
+  const positional = args.filter((arg) => arg !== "--check");
   if (positional.length > 1) {
     throw new Error(
-      "Usage: node scripts/release-version.mjs [--mobile] [major.minor.patch | --check [expected-version]]",
+      "Usage: node scripts/release-version.mjs [major.minor.patch | --check [expected-version]]",
     );
   }
-  return { mobile, check, value: positional[0] };
+  return { check, value: positional[0] };
 }
 
 if (
@@ -123,17 +74,12 @@ if (
   realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
 ) {
   try {
-    const { mobile, check, value } = parseArgs(process.argv.slice(2));
+    const { check, value } = parseArgs(process.argv.slice(2));
     if (check) {
-      const version = mobile
-        ? checkMobileReleaseVersion(value)
-        : checkReleaseVersion(value);
+      const version = checkReleaseVersion(value);
       if (value === undefined) console.log(version);
     } else if (value !== undefined) {
-      if (mobile) setMobileReleaseVersion(value);
-      else setReleaseVersion(value);
-    } else if (mobile) {
-      console.log(readMobileReleaseVersion());
+      setReleaseVersion(value);
     } else {
       console.log(readReleaseVersion());
     }

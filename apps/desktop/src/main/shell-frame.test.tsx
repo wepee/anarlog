@@ -61,10 +61,6 @@ vi.mock("~/contexts/shell", () => ({
   }),
 }));
 
-vi.mock("~/devtools-bar", () => ({
-  DevtoolsStatusBar: () => <div data-testid="devtools-status-bar" />,
-}));
-
 vi.mock("~/sidebar/toast", () => ({
   ToastNotifications: () => <div data-testid="toast-notifications" />,
 }));
@@ -174,18 +170,6 @@ describe("ClassicMainShellFrame", () => {
       ).toBe(String(visible));
     },
   );
-
-  it("places the devtools status bar below the shell", () => {
-    render(<ClassicMainShellFrame />);
-
-    const scaffold = screen.getByTestId("main-shell-scaffold");
-    const statusBar = screen.getByTestId("devtools-status-bar");
-
-    expect(scaffold.compareDocumentPosition(statusBar)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-    expect(statusBar.parentElement?.className).toContain("flex-col");
-  });
 
   it("uses left-edge main surface chrome while the sidebar timeline is expanded", () => {
     render(<ClassicMainShellFrame />);
