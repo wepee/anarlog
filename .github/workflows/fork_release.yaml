@@ -32,7 +32,6 @@ permissions:
 
 env:
   TARGET: aarch64-apple-darwin
-  APP_BINARY: anarlog
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
