@@ -33,21 +33,30 @@ Aucune donnée d'usage ni rapport de crash ne quitte la machine.
 | `plugins/analytics/src/ext.rs` | `APP_VERSION` devient optionnel (repli sur la version du package) |
 | `apps/desktop/src-tauri/src/lib.rs` | Sentry retiré (plus de client, plus de plugin) |
 | `apps/desktop/src/settings/privacy/index.tsx` | interrupteurs PostHog et rapports d'erreur retirés (ils ne pilotaient plus rien) |
-| `plugins/updater2/src/ext.rs` | `Updater2::check()` renvoie toujours `Ok(None)` |
-| `plugins/updater2/src/lib.rs` | boucle native de vérification/installation auto (30 min) retirée |
 
 Note : Sentry était déjà inactif sans `SENTRY_DSN` au build (`option_env!`).
 Le retrait explicite sert surtout à supprimer la dépendance du build.
 
-Note sur l'updater : `plugins.updater.active: false` dans `tauri.conf.stable.json`
-(voir historique git) ne coupe que la génération d'artefacts de mise à jour au
-build — pas les appels runtime. Sans le correctif ci-dessus, l'app interrogeait
-quand même `desktop.anarlog.so` (le serveur officiel upstream) et pouvait
-**installer automatiquement le binaire officiel par-dessus ce fork**, effaçant
-au passage tous les patchs de vie privée et de déblocage Pro. `Updater2::check()`
-est le point de passage unique de tout le plugin (vérification manuelle,
-téléchargement, boucle native) : le couper là suffit, sans toucher au frontend
-(`apps/desktop/src/main/update-banner.tsx`) ni à ses tests.
+## 2 bis. Canal de mise à jour
+
+Le fork a son propre canal, servi par ses Releases GitHub. `Updater2::check()`
+et sa boucle native (30 min) sont donc rétablis à l'identique d'upstream ; ce
+qui change est *où* ils regardent et *quelle clé* ils acceptent.
+
+| Fichier | Changement |
+|---|---|
+| `apps/desktop/src-tauri/tauri.conf.json` | `pubkey` remplacée par la clé minisign du fork |
+| `apps/desktop/src-tauri/tauri.conf.stable.json` | `active: true`, endpoint → `github.com/wepee/anarlog/releases/latest/download/latest.json` |
+| `apps/desktop/src-tauri/tauri.conf.stable-macos.json` | même endpoint pour la variante macOS |
+| `apps/desktop/src-tauri/tauri.conf.nightly*.json` | `active: false` — le fork ne publie pas de nightly |
+| `.github/workflows/fork_release.yaml` | construit, signe et publie la Release qui alimente cet endpoint |
+
+Le point important : `plugins.updater.active` ne pilote que la génération des
+artefacts au build, pas les appels runtime. Ce qui empêche réellement une
+mise à jour upstream de s'installer par-dessus ce fork, c'est la `pubkey` —
+un artefact signé par la clé d'upstream est rejeté à la vérification. La clé
+privée correspondante vit dans le secret GitHub `TAURI_SIGNING_PRIVATE_KEY`
+du dépôt ; sans elle, plus aucune mise à jour ne peut être publiée.
 
 ## 3. Déverrouillage des fonctions Pro
 

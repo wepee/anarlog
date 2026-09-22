@@ -13,10 +13,7 @@
       }
     },
     "updater": {
-      "active": true,
-      "endpoints": [
-        "https://desktop.anarlog.so/update/{{target}}-{{arch}}-{{bundle_type}}/{{current_version}}?channel=nightly"
-      ]
+      "active": false
     }
   },
   "bundle": {
