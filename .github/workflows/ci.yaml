@@ -13,7 +13,6 @@ jobs:
           python3 .github/scripts/test_check_license_boundary.py
           python3 .github/scripts/check_license_boundary.py
       - run: node scripts/release-version.mjs --check
-      - run: node scripts/release-version.mjs --mobile --check
       - run: >-
           node --test
           scripts/pr-description.test.mjs
@@ -21,11 +20,9 @@ jobs:
           scripts/notarize-dmg.test.mjs
           scripts/changelog-bundle.test.mjs
           scripts/verify-release-candidate.test.mjs
-          scripts/desktop-release-provenance.test.mjs
           scripts/publish-anarlog-skill.test.mjs
           scripts/repack-linux-appimage.test.mjs
           scripts/verify-linux-audio-qa-run.test.mjs
           scripts/verify-linux-audio-qa-evidence.test.mjs
           scripts/update-apt-repository.test.mjs
-          scripts/verify-apt-repository.test.mjs
           scripts/update-aur-pkgbuild.test.mjs

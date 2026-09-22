@@ -7,14 +7,12 @@ vi.mock("~/settings/hydration-boundary", () => ({
 }));
 
 vi.mock("./general", () => ({
-  SettingsAccount: () => <div>Account settings</div>,
   SettingsApp: () => null,
   SettingsMeetings: () => null,
   SettingsNotifications: () => null,
   SettingsPermissions: () => null,
 }));
 
-vi.mock("./todo", () => ({ SettingsTodo: () => null }));
 vi.mock("~/settings/ai/llm", () => ({ LLM: () => null }));
 vi.mock("~/settings/ai/stt", () => ({ STT: () => null }));
 vi.mock("~/settings/appearance", () => ({ SettingsAppearance: () => null }));
@@ -25,7 +23,6 @@ vi.mock("~/settings/privacy", () => ({ SettingsPrivacy: () => null }));
 vi.mock("~/settings/stats", () => ({
   SettingsInsights: () => <div>Personal insights</div>,
 }));
-vi.mock("~/settings/sync", () => ({ SettingsSync: () => null }));
 vi.mock("~/shared/main", () => ({
   StandardContentWrapper: ({ children }: { children: React.ReactNode }) =>
     children,
@@ -37,13 +34,6 @@ import { createSettingsTab } from "~/store/zustand/tabs/test-utils";
 
 describe("TabContentSettings", () => {
   afterEach(cleanup);
-
-  it("opens billing separately from account", () => {
-    render(
-      <TabContentSettings tab={createSettingsTab({ state: { tab: "app" } })} />,
-    );
-    expect(screen.getByText("Billing settings")).toBeTruthy();
-  });
 
   it("opens personal insights from its settings destination", () => {
     render(

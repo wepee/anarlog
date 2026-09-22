@@ -1,0 +1,268 @@
+name: Fork Release
+
+# Publishes this fork's own macOS release, and the `latest.json` that the
+# in-app updater reads from
+# https://github.com/<owner>/<repo>/releases/latest/download/latest.json
+# (see plugins.updater.endpoints in tauri.conf.stable.json).
+#
+# The app only accepts artifacts signed with the minisign key whose public half
+# lives in tauri.conf.json, so upstream's official builds can never install
+# themselves over this fork. The private half is the TAURI_SIGNING_PRIVATE_KEY
+# repository secret; without it this workflow cannot publish.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (defaults to release-version.json)"
+        required: false
+        type: string
+        default: ""
+      draft:
+        description: "Create the release as a draft"
+        type: boolean
+        default: true
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TARGET: aarch64-apple-darwin
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  release:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          lfs: true
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Resolve version
+        id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${REQUESTED:-}"
+          if [[ -z "$version" ]]; then
+            version="$(node scripts/release-version.mjs)"
+          else
+            node scripts/release-version.mjs --check "$version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check the signing material
+        id: signing
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set. Updates signed with any other key are rejected by the app, so there is nothing useful to publish."
+            exit 1
+          fi
+          if [[ -n "${APPLE_CERTIFICATE:-}" ]]; then
+            echo "apple_cert=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "apple_cert=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No APPLE_CERTIFICATE secret: the bundle will be signed ad-hoc, so macOS re-asks for microphone and screen permissions after every update."
+          fi
+
+      - uses: ./.github/actions/macos_tcc
+      - uses: ./.github/actions/install_desktop_deps
+        with:
+          target: macos
+      - uses: ./.github/actions/rust_install
+        with:
+          platform: macos
+      - uses: ./.github/actions/pnpm_install
+
+      - run: echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
+      - run: pnpm -F ui build
+
+      - name: Stamp the version and sidecars into the Tauri config
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ./scripts/version.sh ./apps/desktop/src-tauri/tauri.conf.json "$APP_VERSION"
+          TAURI_ENV_TARGET_TRIPLE="$TARGET" cargo xtask prepare-binaries
+          for sidecar in binaries/char-chrome-native-host binaries/check-permissions resources/cli/anarlog-cli; do
+            ./scripts/sidecar.sh ./apps/desktop/src-tauri/tauri.conf.json "$sidecar"
+          done
+
+      # A Developer ID is optional here: without one the bundle is signed
+      # ad-hoc, which still carries the right entitlements and bundle id but
+      # changes cdhash on every release, so macOS re-asks for microphone and
+      # screen permissions after each update.
+      - name: Import the Developer ID certificate
+        id: apple-cert
+        if: ${{ steps.signing.outputs.apple_cert == 'true' }}
+        uses: ./.github/actions/apple_cert
+        with:
+          apple-certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          apple-certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: Build the macOS bundle
+        env:
+          CI: false
+          CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple-cert.outputs.cert-id }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+          ./scripts/build-macos.sh \
+            --target "$TARGET" \
+            --config ./src-tauri/tauri.conf.stable.json \
+            --config ./src-tauri/tauri.conf.stable-macos.json \
+            --verbose
+
+      # scripts/build-macos.sh re-signs the .app after `tauri build` whenever it
+      # falls back to an ad-hoc or local identity, which leaves the updater
+      # tarball and the .dmg holding the pre-signature bundle. Rebuild both from
+      # the final .app so what ships is what was signed.
+      - name: Repackage the signed bundle
+        id: package
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # A key generated without a password still needs this variable to
+          # exist: unset, `tauri signer sign` looks for a TTY to prompt on and
+          # fails on the runner with "Device not configured".
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+
+          bundle_dir="apps/desktop/src-tauri/target/$TARGET/release/bundle/macos"
+          apps=("$bundle_dir"/*.app)
+          if [[ ${#apps[@]} -ne 1 ]]; then
+            echo "::error::Expected one .app under $bundle_dir, found ${#apps[@]}"
+            exit 1
+          fi
+          app="${apps[0]}"
+
+          built_version="$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")"
+          if [[ "$built_version" != "$APP_VERSION" ]]; then
+            echo "::error::Built $built_version but expected $APP_VERSION"
+            exit 1
+          fi
+          codesign --verify --verbose=2 "$app"
+
+          out="$RUNNER_TEMP/release"
+          mkdir -p "$out"
+          # COPYFILE_DISABLE keeps bsdtar from emitting AppleDouble `._` entries,
+          # which Tauri's extractor would otherwise unpack next to the bundle.
+          archive="$out/BlackMushi_${APP_VERSION}_aarch64.app.tar.gz"
+          COPYFILE_DISABLE=1 tar -czf "$archive" -C "$bundle_dir" "$(basename "$app")"
+          rm -f "$archive.sig"
+          pnpm -F @anlg/desktop exec tauri signer sign "$archive"
+
+          dmg="$out/BlackMushi_${APP_VERSION}_aarch64.dmg"
+          staging="$RUNNER_TEMP/dmg-staging"
+          rm -rf "$staging" && mkdir -p "$staging"
+          ditto "$app" "$staging/$(basename "$app")"
+          ln -s /Applications "$staging/Applications"
+          hdiutil create -volname "BlackMushi" -srcfolder "$staging" -ov -format UDZO "$dmg"
+
+          {
+            echo "app_name=$(basename "$app")"
+            echo "archive=$archive"
+            echo "dmg=$dmg"
+            echo "out=$out"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify the updater signature against the shipped public key
+        env:
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          cargo run --locked -p updater-core --bin verify-updater-signature -- \
+            "$ARCHIVE" "$ARCHIVE.sig" apps/desktop/src-tauri/tauri.conf.json
+
+      - name: Verify the packaged CLI and MCP
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          APP_NAME: ${{ steps.package.outputs.app_name }}
+        run: |
+          python3 scripts/verify-packaged-cli.py \
+            "apps/desktop/src-tauri/target/$TARGET/release/bundle/macos/$APP_NAME" \
+            "$APP_VERSION"
+
+      # The updater fetches this by the `latest` alias, so the URL has to stay
+      # valid for the newest release only; `platforms` is keyed the way Tauri
+      # builds the key at runtime (`{target}-{arch}`).
+      - name: Write latest.json
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+          OUT: ${{ steps.package.outputs.out }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib
+
+          archive = pathlib.Path(os.environ["ARCHIVE"])
+          version = os.environ["APP_VERSION"]
+          repository = os.environ["REPOSITORY"]
+          signature = pathlib.Path(f"{archive}.sig").read_text().strip()
+
+          manifest = {
+              "version": version,
+              "notes": f"BlackMushi {version}",
+              "pub_date": __import__("datetime").datetime.now(
+                  __import__("datetime").timezone.utc
+              ).isoformat(timespec="seconds").replace("+00:00", "Z"),
+              "platforms": {
+                  "darwin-aarch64": {
+                      "signature": signature,
+                      "url": f"https://github.com/{repository}/releases/download/v{version}/{archive.name}",
+                  }
+              },
+          }
+          pathlib.Path(os.environ["OUT"], "latest.json").write_text(
+              json.dumps(manifest, indent=2) + "\n"
+          )
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          OUT: ${{ steps.package.outputs.out }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+          args=(--title "BlackMushi $APP_VERSION" --notes "BlackMushi $APP_VERSION")
+          if [[ "$DRAFT" == "true" ]]; then
+            args+=(--draft)
+          fi
+          gh release create "v$APP_VERSION" \
+            "$OUT"/*.app.tar.gz \
+            "$OUT"/*.app.tar.gz.sig \
+            "$OUT"/*.dmg \
+            "$OUT/latest.json" \
+            "${args[@]}"

@@ -9,11 +9,6 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  billing: {
-    isPro: true,
-    isUpgradingToPro: false,
-    upgradeToPro: vi.fn(),
-  },
   toastWarning: vi.fn(),
 }));
 
@@ -53,32 +48,18 @@ import { DictionarySettings, SettingsDictionary } from "./index";
 
 describe("DictionarySettings", () => {
   beforeEach(() => {
-    mocks.billing.isPro = true;
-    mocks.billing.isUpgradingToPro = false;
-    mocks.billing.upgradeToPro.mockClear();
     mocks.toastWarning.mockClear();
   });
 
   afterEach(cleanup);
 
-  it("shows the dictionary editor and toasts on the free plan", () => {
-    mocks.billing.isPro = false;
-
+  it("renders the dictionary editor without a plan gate", () => {
     render(<SettingsDictionary />);
 
     expect(screen.getByRole("textbox")).toBeTruthy();
     fireEvent.click(screen.getByRole("textbox"));
 
-    expect(mocks.toastWarning).toHaveBeenCalledWith(
-      "This requires BlackMushi Pro",
-      {
-        action: {
-          label: "Upgrade",
-          onClick: expect.any(Function),
-        },
-      },
-    );
-    expect(mocks.billing.upgradeToPro).not.toHaveBeenCalled();
+    expect(mocks.toastWarning).not.toHaveBeenCalled();
   });
 
   it("shows an empty state and disabled add control", () => {
@@ -204,7 +185,7 @@ describe("DictionarySettings", () => {
     render(<DictionarySettings terms={["BlackMushi"]} onSave={onSave} />);
 
     fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "anarlog" },
+      target: { value: "blackmushi" },
     });
 
     const addButton = screen.getByRole("button", {
