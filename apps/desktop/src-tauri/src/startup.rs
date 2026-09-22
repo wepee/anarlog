@@ -248,6 +248,7 @@ fn spawn_indicator_alert() -> Option<std::process::Child> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::{NIGHTLY_BUNDLE_ID, STABLE_BUNDLE_ID};
 
     #[test]
     fn linux_webkit_workaround_defaults_dmabuf_off_when_unset() {
@@ -299,26 +300,22 @@ mod tests {
     #[test]
     fn channel_lock_excludes_the_peer_channel_while_held() {
         let dir = tempfile::tempdir().unwrap();
-        let stable = dir
-            .path()
-            .join(channel_lock_filename("com.hyprnote.stable"));
-        let nightly = dir
-            .path()
-            .join(channel_lock_filename("com.hyprnote.nightly"));
+        let stable = dir.path().join(channel_lock_filename(STABLE_BUNDLE_ID));
+        let nightly = dir.path().join(channel_lock_filename(NIGHTLY_BUNDLE_ID));
 
-        let stable_lock = lock_channel_files(&stable, &nightly, "com.hyprnote.nightly");
+        let stable_lock = lock_channel_files(&stable, &nightly, NIGHTLY_BUNDLE_ID);
         assert!(matches!(stable_lock, ChannelLockState::Acquired(Some(_))));
 
         assert!(matches!(
-            lock_channel_files(&nightly, &stable, "com.hyprnote.stable"),
+            lock_channel_files(&nightly, &stable, STABLE_BUNDLE_ID),
             ChannelLockState::PeerRunning {
-                peer: "com.hyprnote.stable"
+                peer: STABLE_BUNDLE_ID
             }
         ));
 
         drop(stable_lock);
         assert!(matches!(
-            lock_channel_files(&nightly, &stable, "com.hyprnote.stable"),
+            lock_channel_files(&nightly, &stable, STABLE_BUNDLE_ID),
             ChannelLockState::Acquired(Some(_))
         ));
     }
@@ -326,17 +323,13 @@ mod tests {
     #[test]
     fn channel_lock_defers_same_channel_relaunches_to_single_instance() {
         let dir = tempfile::tempdir().unwrap();
-        let stable = dir
-            .path()
-            .join(channel_lock_filename("com.hyprnote.stable"));
-        let nightly = dir
-            .path()
-            .join(channel_lock_filename("com.hyprnote.nightly"));
+        let stable = dir.path().join(channel_lock_filename(STABLE_BUNDLE_ID));
+        let nightly = dir.path().join(channel_lock_filename(NIGHTLY_BUNDLE_ID));
 
-        let _running = lock_channel_files(&stable, &nightly, "com.hyprnote.nightly");
+        let _running = lock_channel_files(&stable, &nightly, NIGHTLY_BUNDLE_ID);
 
         assert!(matches!(
-            lock_channel_files(&stable, &nightly, "com.hyprnote.nightly"),
+            lock_channel_files(&stable, &nightly, NIGHTLY_BUNDLE_ID),
             ChannelLockState::Acquired(None)
         ));
     }
@@ -344,7 +337,10 @@ mod tests {
     #[test]
     fn channels_without_a_shared_database_skip_the_channel_lock() {
         assert!(matches!(
-            acquire_channel_lock("com.hyprnote.staging"),
+            // Only stable and nightly share a database, so any third channel
+            // is alone whatever it is called; STAGING_BUNDLE_ID itself is
+            // gated behind the dev features and unavailable here.
+            acquire_channel_lock("com.blackmushi.staging"),
             ChannelLockState::Acquired(None)
         ));
     }
@@ -352,10 +348,10 @@ mod tests {
     #[test]
     fn channel_product_names_follow_the_bundle_identifier() {
         assert_eq!(
-            channel_product_name("com.hyprnote.nightly"),
+            channel_product_name(NIGHTLY_BUNDLE_ID),
             "BlackMushi Nightly"
         );
-        assert_eq!(channel_product_name("com.hyprnote.stable"), "BlackMushi");
+        assert_eq!(channel_product_name(STABLE_BUNDLE_ID), "BlackMushi");
     }
 
     #[test]
