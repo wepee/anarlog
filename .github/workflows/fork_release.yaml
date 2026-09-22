@@ -131,6 +131,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
           ./scripts/build-macos.sh \
             --target "$TARGET" \
             --config ./src-tauri/tauri.conf.stable.json \
@@ -150,6 +151,11 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+
+          # A key generated without a password still needs this variable to
+          # exist: unset, `tauri signer sign` looks for a TTY to prompt on and
+          # fails on the runner with "Device not configured".
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
 
           bundle_dir="apps/desktop/src-tauri/target/$TARGET/release/bundle/macos"
           apps=("$bundle_dir"/*.app)
