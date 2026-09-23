@@ -100,8 +100,37 @@ jobs:
           set -euo pipefail
           ./scripts/version.sh ./apps/desktop/src-tauri/tauri.conf.json "$APP_VERSION"
           TAURI_ENV_TARGET_TRIPLE="$TARGET" cargo xtask prepare-binaries
-          for sidecar in binaries/char-chrome-native-host binaries/check-permissions resources/cli/anarlog-cli; do
-            ./scripts/sidecar.sh ./apps/desktop/src-tauri/tauri.conf.json "$sidecar"
+
+          # The sidecars go in the channel config, not the base one: Tauri
+          # auto-merges tauri.macos.conf.json for macOS targets, and its own
+          # externalBin REPLACES the base array rather than extending it, so
+          # anything listed in tauri.conf.json is silently dropped. A --config
+          # overlay outranks it, which is why check-permissions has to be
+          # repeated here — this list is the whole set, not an addition to it.
+          conf=./apps/desktop/src-tauri/tauri.conf.stable.json
+          sidecars=(binaries/char-chrome-native-host binaries/check-permissions resources/cli/anarlog-cli)
+          for sidecar in "${sidecars[@]}"; do
+            ./scripts/sidecar.sh "$conf" "$sidecar"
+          done
+
+          # Catch a dropped or misplaced sidecar here rather than an hour later
+          # in a bundle that silently lacks the CLI.
+          for sidecar in "${sidecars[@]}"; do
+            if ! jq -e --arg s "$sidecar" '.bundle.externalBin | index($s)' "$conf" >/dev/null; then
+              echo "::error::$conf does not declare the $sidecar sidecar"
+              exit 1
+            fi
+          done
+
+          # Only the two binaries prepare-binaries just produced can be checked
+          # now; check-permissions is compiled by the desktop crate's build.rs
+          # during `tauri build`, so it does not exist yet.
+          for sidecar in binaries/char-chrome-native-host resources/cli/anarlog-cli; do
+            binary="apps/desktop/src-tauri/$sidecar-$TARGET"
+            if [[ ! -f "$binary" ]]; then
+              echo "::error::Sidecar binary is missing: $binary"
+              exit 1
+            fi
           done
 
       # A Developer ID is optional here: without one the bundle is signed
