@@ -29,7 +29,7 @@ describe("meeting export parser", () => {
       actionItems: ["Prepare the release"],
       attendees: [{ name: "Alex", email: "alex@example.com" }],
     });
-    expect(meeting?.noteMarkdown).toContain("We agreed to ship.");
+    expect(meeting?.summaryMarkdown).toContain("We agreed to ship.");
     expect(meeting?.transcript[0]).toMatchObject({
       speaker: "Alex",
       text: "Let's ship it.",
@@ -97,7 +97,7 @@ describe("meeting export parser", () => {
       title: "Weekly Sync",
       startedAt: "2026-03-25T15:04:05.000Z",
     });
-    expect(meeting?.noteMarkdown).toContain("Finalize QA by Friday.");
+    expect(meeting?.summaryMarkdown).toContain("Finalize QA by Friday.");
     expect(meeting?.transcript[0]).toMatchObject({
       speaker: "Alex",
       text: "Let's review the launch plan.",
@@ -143,8 +143,8 @@ describe("meeting export parser", () => {
       title: "Customer discovery",
       sourceUrl: "https://example.com/calls/call-1",
     });
-    expect(meeting?.noteMarkdown).toContain("Pricing is the blocker");
-    expect(meeting?.noteMarkdown).toContain("Follow up next week");
+    expect(meeting?.summaryMarkdown).toContain("Pricing is the blocker");
+    expect(meeting?.summaryMarkdown).toContain("Follow up next week");
   });
 
   it("parses Fireflies timestamped speaker turns from a single text blob", () => {

@@ -7,6 +7,7 @@ export type ImportedMeeting = {
   endedAt: string;
   sourceUrl: string;
   noteMarkdown: string;
+  summaryMarkdown: string;
   transcript: Array<{
     speaker: string;
     text: string;
@@ -190,6 +191,7 @@ function normalizeMeeting(value: unknown, fallbackTitle: string) {
         "granolaUrl",
       ]),
       noteMarkdown,
+      summaryMarkdown: summary,
       transcript,
       attendees: parseAttendees(
         firstValue(record, ["attendees", "participants", "people", "invitees"]),
@@ -455,19 +457,20 @@ function parseActionItems(value: unknown): string[] {
   });
 }
 
+// The provider summary becomes its own summary document, so the memo keeps only
+// what the user wrote, and falls back to the raw record when nothing else made
+// it through the parser.
 function composeNote(
   summary: string,
   notes: string,
   record: JsonRecord,
   transcriptCount: number,
 ) {
-  const sections: string[] = [];
-  if (summary) sections.push(`## Summary\n\n${summary}`);
-  if (notes && notes !== summary) sections.push(`## Notes\n\n${notes}`);
-  if (sections.length === 0 && transcriptCount === 0) {
-    sections.push(`\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\``);
+  if (notes && notes !== summary) return notes;
+  if (!summary && transcriptCount === 0) {
+    return `\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\``;
   }
-  return sections.join("\n\n");
+  return "";
 }
 
 function emptyMeeting(
@@ -481,6 +484,7 @@ function emptyMeeting(
     endedAt: "",
     sourceUrl: "",
     noteMarkdown: "",
+    summaryMarkdown: "",
     transcript: [],
     attendees: [],
     actionItems: [],

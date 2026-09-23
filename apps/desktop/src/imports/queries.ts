@@ -12,8 +12,11 @@ import { DEFAULT_USER_ID, id } from "~/shared/utils";
 const IMPORTER_VERSION = 2;
 export const EMPTY_MEETING_IMPORT_HISTORY: MeetingImportRun[] = [];
 
-type ImportItemRow = { discovered_count: number };
-type SessionIdRow = { id: string };
+type ImportItemRow = {
+  discovered_count: number;
+  settled_target_count: number;
+};
+type SessionIdRow = { id: string; import_key: string };
 type ExternalMeetingIdRow = { external_event_id: string };
 type MeetingImportMode = "connection" | "export";
 
@@ -181,19 +184,21 @@ async function runMeetingImport(
     try {
       const meetings = parseMeetingExport(file);
       const targets = await Promise.all(
-        meetings.map(async (meeting, meetingIndex) => ({
-          meeting,
-          sessionId: await stableSessionId(
-            providerId,
-            meeting.externalId || `${file.path}#${meetingIndex}`,
-          ),
-        })),
+        meetings.map(async (meeting, meetingIndex) => {
+          const importKey = `${providerId}:${
+            meeting.externalId || `${file.path}#${meetingIndex}`
+          }`;
+          return {
+            meeting,
+            importKey,
+            legacySessionId: await legacySessionId(importKey),
+            sessionId: id(),
+          };
+        }),
       );
-      const existingIds = await findExistingSessionIds(
-        targets.map((target) => target.sessionId),
-      );
+      const existing = await findExistingMeetings(targets);
       const importedTargets = targets.filter(
-        (target) => !existingIds.has(target.sessionId),
+        (target) => !existing.has(target.importKey),
       );
 
       const statements: Array<{ sql: string; params: unknown[] }> = [];
@@ -203,6 +208,7 @@ async function runMeetingImport(
             providerId,
             sourcePath: file.path,
             sessionId: target.sessionId,
+            importKey: target.importKey,
             meeting: target.meeting,
           }),
         );
@@ -247,8 +253,8 @@ async function runMeetingImport(
             itemId,
             file.path,
             sourceKind,
-            target.sessionId,
-            existingIds.has(target.sessionId)
+            existing.get(target.importKey) ?? target.sessionId,
+            existing.has(target.importKey)
               ? mode === "connection"
                 ? "matched"
                 : "conflict"
@@ -319,15 +325,107 @@ async function runMeetingImport(
   return totals;
 }
 
+// Imported transcripts have no channel separation, so every speaker shares the
+// direct-mic channel and is told apart by its provider speaker index.
+const IMPORTED_TRANSCRIPT_CHANNEL = 0;
+
+type ImportedSpeaker = { name: string; humanId: string; speakerIndex: number };
+
+type ImportedSpeakerHint = {
+  id: string;
+  word_id: string;
+  type: string;
+  value: string;
+};
+
+function speakerKey(speaker: string): string {
+  return speaker.trim().replace(/\s+/gu, " ").toLowerCase();
+}
+
+export function collectTranscriptSpeakers(
+  transcript: ImportedMeeting["transcript"],
+): Map<string, ImportedSpeaker> {
+  const speakers = new Map<string, ImportedSpeaker>();
+
+  for (const segment of transcript) {
+    const key = speakerKey(segment.speaker);
+    if (!key || speakers.has(key)) {
+      continue;
+    }
+
+    speakers.set(key, {
+      name: segment.speaker.trim().replace(/\s+/gu, " "),
+      humanId: `import-speaker:${key}`,
+      speakerIndex: speakers.size,
+    });
+  }
+
+  return speakers;
+}
+
+function buildImportedSpeakerHints(
+  transcript: ImportedMeeting["transcript"],
+  words: Array<{ id: string }>,
+  speakers: Map<string, ImportedSpeaker>,
+): ImportedSpeakerHint[] {
+  const hints: ImportedSpeakerHint[] = [];
+  const anchorWordIdBySpeaker = new Map<string, string>();
+
+  for (const [index, segment] of transcript.entries()) {
+    const speaker = speakers.get(speakerKey(segment.speaker));
+    const wordId = words[index]?.id;
+    if (!speaker || !wordId) {
+      continue;
+    }
+
+    if (!anchorWordIdBySpeaker.has(speaker.humanId)) {
+      anchorWordIdBySpeaker.set(speaker.humanId, wordId);
+    }
+
+    hints.push({
+      id: `${wordId}:provider_speaker_index`,
+      word_id: wordId,
+      type: "provider_speaker_index",
+      value: JSON.stringify({
+        channel: IMPORTED_TRANSCRIPT_CHANNEL,
+        speaker_index: speaker.speakerIndex,
+      }),
+    });
+  }
+
+  for (const speaker of speakers.values()) {
+    const anchorWordId = anchorWordIdBySpeaker.get(speaker.humanId);
+    if (!anchorWordId) {
+      continue;
+    }
+
+    hints.push({
+      id: `${anchorWordId}:user_speaker_assignment`,
+      word_id: anchorWordId,
+      type: "user_speaker_assignment",
+      value: JSON.stringify({
+        human_id: speaker.humanId,
+        scope: "speaker",
+        channel: IMPORTED_TRANSCRIPT_CHANNEL,
+        speaker_index: speaker.speakerIndex,
+      }),
+    });
+  }
+
+  return hints;
+}
+
 export function buildMeetingStatements({
   providerId,
   sourcePath,
   sessionId,
+  importKey,
   meeting,
 }: {
   providerId: string;
   sourcePath: string;
   sessionId: string;
+  importKey: string;
   meeting: ImportedMeeting;
 }) {
   const now = new Date().toISOString();
@@ -337,6 +435,7 @@ export function buildMeetingStatements({
     sourcePath,
     sourceUrl: meeting.sourceUrl,
     externalId: meeting.externalId,
+    importKey,
   });
   const statements: Array<{ sql: string; params: unknown[] }> = [
     {
@@ -386,15 +485,65 @@ export function buildMeetingStatements({
     },
   ];
 
+  // The provider already wrote the summary, so it belongs next to the enhanced
+  // notes the app generates rather than inside the user's memo.
+  if (meeting.summaryMarkdown) {
+    statements.push({
+      sql: `
+        INSERT INTO session_documents (
+          id, workspace_id, session_id, kind, template_id, title, body_format,
+          body, sort_order, created_by, updated_by, created_at, updated_at,
+          deleted_at
+        ) SELECT ?, workspace_id, id, 'summary', '', 'Summary',
+          'prosemirror_json', ?, 1, owner_user_id, owner_user_id, ?, ?, NULL
+        FROM sessions WHERE id = ? AND deleted_at IS NULL
+      `,
+      params: [
+        `${sessionId}:summary`,
+        JSON.stringify(md2json(meeting.summaryMarkdown)),
+        createdAt,
+        now,
+        sessionId,
+      ],
+    });
+  }
+
   if (meeting.transcript.length > 0) {
-    const words = meeting.transcript.map((segment, index) => ({
-      id: `${sessionId}:word:${index}`,
-      text: segment.text,
-      start_ms: segment.startMs,
-      end_ms: segment.endMs,
-      channel: 0,
-      ...(segment.speaker ? { speaker: segment.speaker } : {}),
-    }));
+    const speakers = collectTranscriptSpeakers(meeting.transcript);
+    const words = meeting.transcript.map((segment, index) => {
+      const speaker = speakers.get(speakerKey(segment.speaker));
+      return {
+        id: `${sessionId}:word:${index}`,
+        text: segment.text,
+        start_ms: segment.startMs,
+        end_ms: segment.endMs,
+        channel: IMPORTED_TRANSCRIPT_CHANNEL,
+        ...(speaker ? { speaker: speaker.name } : {}),
+      };
+    });
+    const speakerHints = buildImportedSpeakerHints(
+      meeting.transcript,
+      words,
+      speakers,
+    );
+
+    for (const speaker of speakers.values()) {
+      statements.push({
+        sql: `
+          INSERT INTO humans (
+            id, workspace_id, owner_user_id, name, created_at, updated_at,
+            deleted_at
+          ) SELECT ?, workspace_id, owner_user_id, ?, ?, ?, NULL
+          FROM sessions WHERE id = ? AND deleted_at IS NULL
+          ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            deleted_at = NULL,
+            updated_at = excluded.updated_at
+        `,
+        params: [speaker.humanId, speaker.name, createdAt, now, sessionId],
+      });
+    }
+
     statements.push({
       sql: `
         INSERT INTO transcripts (
@@ -402,7 +551,7 @@ export function buildMeetingStatements({
           started_at_ms, ended_at_ms, words_json, speaker_hints_json,
           metadata_json, created_at, updated_at, deleted_at
         ) SELECT ?, workspace_id, owner_user_id, id, 'import', ?, ?, ?, ?,
-          '[]', ?, ?, ?, NULL
+          ?, ?, ?, ?, NULL
         FROM sessions WHERE id = ? AND deleted_at IS NULL
       `,
       params: [
@@ -411,6 +560,7 @@ export function buildMeetingStatements({
         words[0]?.start_ms ?? 0,
         words[words.length - 1]?.end_ms ?? null,
         JSON.stringify(words),
+        JSON.stringify(speakerHints),
         metadata,
         createdAt,
         now,
@@ -471,6 +621,12 @@ export function buildMeetingStatements({
   return statements;
 }
 
+// A file that only ever produced conflicts imported nothing, so its hash must
+// not shortcut later runs the way a file that really landed does.
+export function isPriorImportSettled(row: ImportItemRow) {
+  return row.settled_target_count > 0;
+}
+
 async function findPriorImport(
   sourcePath: string,
   sourceKind: string,
@@ -478,28 +634,57 @@ async function findPriorImport(
 ) {
   const rows = await liveQueryClient.execute<ImportItemRow>(
     `
-      SELECT item.discovered_count
+      SELECT item.discovered_count, (
+        SELECT COUNT(*)
+        FROM migration_import_targets AS target
+        WHERE target.source_path = item.source_path
+          AND target.source_kind = item.source_kind
+          AND target.table_name = 'sessions'
+          AND target.status <> 'conflict'
+      ) AS settled_target_count
       FROM migration_import_items AS item
       JOIN migration_import_runs AS run ON run.id = item.run_id
       WHERE item.source_path = ? AND item.source_kind = ?
         AND item.source_sha256 = ?
-        AND item.status IN ('complete', 'unchanged', 'conflict')
+        AND item.status IN ('complete', 'unchanged')
         AND run.importer_version = ? AND run.dry_run = 0
       ORDER BY item.created_at DESC
       LIMIT 1
     `,
     [sourcePath, sourceKind, sourceSha256, IMPORTER_VERSION],
   );
-  return rows[0];
+  const row = rows[0];
+  return row && isPriorImportSettled(row) ? row : undefined;
 }
 
-async function findExistingSessionIds(sessionIds: string[]) {
-  if (sessionIds.length === 0) return new Set<string>();
+// Imports before this used a hash of the import key as the session id, which
+// the vault rejects as a directory name. New sessions get a real UUID, so the
+// key they were imported under is matched through the metadata instead, and the
+// old id keeps recognising everything imported before the change.
+async function findExistingMeetings(
+  targets: Array<{ importKey: string; legacySessionId: string }>,
+) {
+  if (targets.length === 0) return new Map<string, string>();
   const rows = await liveQueryClient.execute<SessionIdRow>(
-    `SELECT id FROM sessions WHERE id IN (${sessionIds.map(() => "?").join(",")})`,
-    sessionIds,
+    `
+      SELECT id, COALESCE(json_extract(metadata_json, '$.importKey'), '')
+        AS import_key
+      FROM sessions
+      WHERE id IN (${targets.map(() => "?").join(",")})
+        OR json_extract(metadata_json, '$.importKey')
+          IN (${targets.map(() => "?").join(",")})
+    `,
+    [
+      ...targets.map((target) => target.legacySessionId),
+      ...targets.map((target) => target.importKey),
+    ],
   );
-  return new Set(rows.map((row) => row.id));
+  const legacyIds = new Map(
+    targets.map((target) => [target.legacySessionId, target.importKey]),
+  );
+  return new Map(
+    rows.map((row) => [row.import_key || legacyIds.get(row.id) || "", row.id]),
+  );
 }
 
 async function recordUnchangedItem({
@@ -575,8 +760,8 @@ async function recordImportError({
   ]);
 }
 
-async function stableSessionId(providerId: string, sourceIdentity: string) {
-  return `meeting-import:${await sha256(`${providerId}:${sourceIdentity}`)}`;
+async function legacySessionId(importKey: string) {
+  return `meeting-import:${await sha256(importKey)}`;
 }
 
 async function importSessionAudio(sessionId: string, sourcePath: string) {
