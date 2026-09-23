@@ -1,6 +1,6 @@
 ---
 name: release-new-version
-description: Release a new desktop stable version for Anarlog. Use when asked to cut, publish, or prepare a new stable desktop release after checking and merging the changelog.
+description: Release a new stable BlackMushi desktop version from this fork's own GitHub Releases, which feed the in-app updater. Use when asked to cut, publish, or prepare a stable desktop release after checking and merging the changelog.
 metadata:
   internal: true
 ---
