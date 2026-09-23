@@ -130,7 +130,22 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+
+          # `env:` defines these even when the secret is missing and the
+          # certificate step was skipped. build-macos.sh treats an empty
+          # APPLE_SIGNING_IDENTITY as absent, but Tauri reads the environment
+          # itself, sees the variable defined, and runs `codesign -s ""`, which
+          # fails with "no identity found". Empty is not absent: drop them so
+          # the ad-hoc path is taken and notarisation is not attempted.
+          for var in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [[ -n "${!var:-}" ]] || unset "$var"
+          done
+
+          # The opposite case: a key generated without a password needs this
+          # variable to exist, or the signer looks for a TTY to prompt on.
           export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+
           ./scripts/build-macos.sh \
             --target "$TARGET" \
             --config ./src-tauri/tauri.conf.stable.json \
