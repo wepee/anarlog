@@ -33,6 +33,17 @@ use tauri_plugin_store2::Store2PluginExt;
 
 const TRAY_ID: &str = "anlg-tray";
 
+// tray-icon's macOS `set_icon` hard-codes the image as non-template, dropping
+// the flag the builder set, so the glyph stops following the menu bar's
+// appearance and stays black on a dark bar. Put it back after every swap.
+fn set_icon_as_template(tray: &tauri::tray::TrayIcon) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    tray.set_icon_as_template(true)?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = tray;
+    Ok(())
+}
+
 static IS_RECORDING: AtomicBool = AtomicBool::new(false);
 static IS_DEGRADED: AtomicBool = AtomicBool::new(false);
 static IS_UPDATE_AVAILABLE: AtomicBool = AtomicBool::new(false);
@@ -572,6 +583,7 @@ impl<'a, M: tauri::Manager<tauri::Wry>> Tray<'a, tauri::Wry, M> {
                                 && let Some(tray) = app.tray_by_id(TRAY_ID)
                             {
                                 tray.set_icon(Some(Image::from_bytes(RECORDING_FRAMES[frame])?))?;
+                                set_icon_as_template(&tray)?;
                             }
                             Ok(())
                         });
@@ -595,6 +607,7 @@ impl<'a, M: tauri::Manager<tauri::Wry>> Tray<'a, tauri::Wry, M> {
         };
 
         tray.set_icon(Some(state.to_image()?))?;
+        set_icon_as_template(&tray)?;
 
         Ok(())
     }
