@@ -10,13 +10,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EditorView } from "~/store/zustand/tabs/schema";
 
+type CapturedMenuAction = {
+  id: string;
+  text: string;
+  action: () => void;
+  disabled?: boolean;
+};
+
 type CapturedMenuItem =
-  | {
-      id: string;
-      text: string;
-      action: () => void;
-      disabled?: boolean;
-    }
+  | CapturedMenuAction
+  | { id: string; text: string; items: CapturedMenuAction[] }
   | { separator: true };
 
 const hoisted = vi.hoisted(() => ({
@@ -47,6 +50,8 @@ const hoisted = vi.hoisted(() => ({
   transcriptSegments: [{ speaker: "Speaker 1", text: "Hello transcript" }],
   isGenerating: false,
   sessionTitle: "Weekly planning",
+  sessionLanguage: "",
+  transcriptionLanguages: ["fr", "en"] as string[],
   nativeContextMenus: [] as CapturedMenuItem[][],
   userTemplates: [] as Array<{
     id: string;
@@ -241,6 +246,12 @@ vi.mock(
   }),
 );
 
+vi.mock("~/stt/session-language", () => ({
+  setSessionTranscriptLanguage: vi.fn(),
+  useSessionTranscriptLanguage: () => hoisted.sessionLanguage,
+  useTranscriptionLanguageChoices: () => hoisted.transcriptionLanguages,
+}));
+
 vi.mock("~/shared/hooks/useNativeContextMenu", () => ({
   useNativeContextMenu: (items: CapturedMenuItem[]) => {
     hoisted.nativeContextMenus.push(items);
@@ -337,6 +348,8 @@ describe("Header", () => {
     hoisted.requestMainListenerControl.mockReset();
     hoisted.deleteRecording.mockReset();
     hoisted.activeTemplateTitle = "Customer Call";
+    hoisted.sessionLanguage = "";
+    hoisted.transcriptionLanguages = ["fr", "en"];
     hoisted.audioExists = true;
     hoisted.audioExistsResolved = true;
     hoisted.hasTranscript = true;
@@ -570,22 +583,76 @@ describe("Header", () => {
       "Copy",
       "Resume listening",
       "Re-transcribe",
+      "Re-transcribe in",
       "Delete recording",
     ]);
     expect(menu.find(isMenuItem)?.disabled).toBe(false);
     expect(
       menu.find(
-        (item): item is Extract<CapturedMenuItem, { id: string }> =>
-          "id" in item && item.id === "delete-recording-session-1",
+        (item): item is CapturedMenuAction =>
+          "action" in item && item.id === "delete-recording-session-1",
       )?.disabled,
     ).toBe(false);
     menu
       .find(
-        (item): item is Extract<CapturedMenuItem, { id: string }> =>
-          "id" in item && item.id === "resume-listening-session-1",
+        (item): item is CapturedMenuAction =>
+          "action" in item && item.id === "resume-listening-session-1",
       )
       ?.action();
     expect(hoisted.startListening).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers each configured language, marking the note's own", () => {
+    hoisted.sessionLanguage = "en";
+
+    render(
+      <SessionViewSwitcher
+        sessionId="session-1"
+        editorTabs={[
+          { type: "enhanced", id: "note-1" },
+          { type: "raw" },
+          { type: "transcript" },
+        ]}
+        currentTab={{ type: "transcript" }}
+        handleTabChange={vi.fn()}
+      />,
+    );
+
+    const submenu = findContextMenu("copy-transcript-session-1").find(
+      (item): item is Extract<CapturedMenuItem, { items: unknown }> =>
+        "items" in item,
+    );
+
+    expect(submenu?.items.map((item) => item.text)).toEqual([
+      "French",
+      "English ✓",
+    ]);
+
+    submenu?.items[0]?.action();
+    expect(hoisted.regenerateTranscript).toHaveBeenCalledWith("fr");
+  });
+
+  it("hides the language submenu when only one language is configured", () => {
+    hoisted.transcriptionLanguages = ["fr"];
+
+    render(
+      <SessionViewSwitcher
+        sessionId="session-1"
+        editorTabs={[
+          { type: "enhanced", id: "note-1" },
+          { type: "raw" },
+          { type: "transcript" },
+        ]}
+        currentTab={{ type: "transcript" }}
+        handleTabChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      findContextMenu("copy-transcript-session-1").some(
+        (item) => "items" in item,
+      ),
+    ).toBe(false);
   });
 
   it("delegates transcript resume listening from standalone windows", () => {
@@ -606,8 +673,8 @@ describe("Header", () => {
 
     findContextMenu("resume-listening-session-1")
       .find(
-        (item): item is Extract<CapturedMenuItem, { id: string }> =>
-          "id" in item && item.id === "resume-listening-session-1",
+        (item): item is CapturedMenuAction =>
+          "action" in item && item.id === "resume-listening-session-1",
       )
       ?.action();
 
@@ -720,8 +787,8 @@ describe("Header", () => {
 
     menu
       .find(
-        (item): item is Extract<CapturedMenuItem, { id: string }> =>
-          "id" in item && item.id === "resume-listening-session-1",
+        (item): item is CapturedMenuAction =>
+          "action" in item && item.id === "resume-listening-session-1",
       )
       ?.action();
 
@@ -1351,8 +1418,6 @@ function findContextMenu(id: string) {
   return menu;
 }
 
-function isMenuItem(
-  item: CapturedMenuItem,
-): item is Extract<CapturedMenuItem, { id: string }> {
-  return "id" in item;
+function isMenuItem(item: CapturedMenuItem): item is CapturedMenuAction {
+  return "action" in item;
 }

@@ -5,10 +5,12 @@ import {
   AppWindow,
   ArrowsClockwise,
   CalendarBlank,
+  Check,
   ClockCounterClockwise,
   DotsThree,
   FileArrowDown,
   FileText,
+  Globe,
   PictureInPicture,
   Waveform,
 } from "@anlg/ui/components/icons";
@@ -44,9 +46,14 @@ import {
 } from "~/session/components/shared";
 import { VersionHistoryDialog } from "~/session/components/version-history-dialog";
 import { openStandaloneNoteWindow } from "~/session/window";
+import { getBaseLanguageDisplayName } from "~/settings/general/language";
 import { useConfigValue } from "~/shared/config";
 import type { EditorView } from "~/store/zustand/tabs/schema";
 import { useListener } from "~/stt/contexts";
+import {
+  useSessionTranscriptLanguage,
+  useTranscriptionLanguageChoices,
+} from "~/stt/session-language";
 import { useUploadFile } from "~/stt/useUploadFile";
 
 export function OverflowButton({
@@ -73,6 +80,9 @@ export function OverflowButton({
   const { audioExists, audioExistsResolved } = useAudioPlayer();
   const { uploadAudio, uploadTranscript } = useUploadFile(sessionId);
   const regenerateTranscript = useRegenerateTranscript(sessionId);
+  const sessionLanguage = useSessionTranscriptLanguage(sessionId);
+  const transcriptionLanguages = useTranscriptionLanguageChoices();
+  const activeLanguage = sessionLanguage || transcriptionLanguages[0] || "";
   const sessionMode = useListener((state) => state.getSessionMode(sessionId));
   const floatingBarEnabled = useConfigValue("floating_bar_enabled");
   const floatingBarSupported = isFloatingBarSupported();
@@ -118,6 +128,10 @@ export function OverflowButton({
   const handleRetranscribe = () => {
     setOpen(false);
     void regenerateTranscript();
+  };
+  const handleRetranscribeIn = (language: string) => {
+    setOpen(false);
+    void regenerateTranscript(language);
   };
   const handleOpenFloatingPanel = () => {
     setOpen(false);
@@ -197,6 +211,34 @@ export function OverflowButton({
                 <ArrowsClockwise />
                 <span>Re-transcribe</span>
               </DropdownMenuItem>
+            )}
+            {showRetranscribeAction && transcriptionLanguages.length > 1 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
+                  <Globe />
+                  <span>Re-transcribe in</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent variant="app" className="w-48">
+                    <AppFloatingPanel className={appFloatingMenuPanelClassName}>
+                      {transcriptionLanguages.map((language) => (
+                        <DropdownMenuItem
+                          key={language}
+                          onClick={() => handleRetranscribeIn(language)}
+                          className="cursor-pointer"
+                        >
+                          <span className="flex-1">
+                            {getBaseLanguageDisplayName(language)}
+                          </span>
+                          {language === activeLanguage && (
+                            <Check className="size-3.5" />
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </AppFloatingPanel>
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
             )}
             {showUploadActions && (
               <>

@@ -43,6 +43,10 @@ import {
   buildRenderTranscriptRequestFromRows,
   resolveScopedWordHumanIds,
 } from "~/stt/render-transcript";
+import {
+  readSessionTranscriptLanguage,
+  withSessionTranscriptLanguage,
+} from "~/stt/session-language";
 import type { SpeakerHintWithId, WordWithId } from "~/stt/types";
 
 type RunOptions = {
@@ -694,7 +698,10 @@ export const useRunBatch = (sessionId: string) => {
 
       const languages =
         options?.languages ??
-        getTranscriptionLanguages(aiLanguage, spokenLanguages);
+        withSessionTranscriptLanguage(
+          await readSessionTranscriptLanguage(sessionId),
+          getTranscriptionLanguages(aiLanguage, spokenLanguages),
+        );
       const currentPlatform = platform();
       const currentArch = arch();
       const selectedProviderId = options?.provider ?? conn?.provider;
