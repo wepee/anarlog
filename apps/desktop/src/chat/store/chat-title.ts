@@ -3,6 +3,9 @@ import { generateText, type LanguageModel } from "ai";
 const FALLBACK_CHAT_TITLE_MAX_LENGTH = 50;
 const GENERATED_CHAT_TITLE_MAX_LENGTH = 60;
 const INITIAL_REQUEST_MAX_LENGTH = 4000;
+// Reasoning models spend thinking tokens from this budget before emitting the
+// title; a title-sized cap returns a fragment cut off mid-word.
+const CHAT_TITLE_MAX_OUTPUT_TOKENS = 2_048;
 
 export function createFallbackChatTitle(initialRequest: string): string {
   const title = normalizeTitleText(initialRequest);
@@ -33,13 +36,15 @@ export async function generateChatTitle({
   const result = await generateText({
     model,
     maxRetries: 2,
-    maxOutputTokens: 32,
+    maxOutputTokens: CHAT_TITLE_MAX_OUTPUT_TOKENS,
     system:
       "Write a concise chat title from the user's first message. Use the same language as the request. Return only the title, with no quotes, emoji, markdown, or ending punctuation. Keep it under 6 words.",
     prompt: `Initial request:\n${request}`,
   });
 
-  return normalizeGeneratedChatTitle(result.text);
+  return result.finishReason === "length"
+    ? null
+    : normalizeGeneratedChatTitle(result.text);
 }
 
 export function normalizeGeneratedChatTitle(text: string): string | null {

@@ -6,7 +6,9 @@ import type { TaskArgsMapTransformed, TaskConfig } from ".";
 import { appendPreferredNamesGuidance } from "./preferred-names";
 
 const AI_GENERATION_MAX_RETRIES = 4;
-const TITLE_MAX_OUTPUT_TOKENS = 128;
+// Reasoning models spend thinking tokens from this budget before emitting the
+// title; a title-sized cap stops the stream mid-word and persists the fragment.
+const TITLE_MAX_OUTPUT_TOKENS = 2_048;
 
 export const titleWorkflow: Pick<
   TaskConfig<"title">,
@@ -45,6 +47,12 @@ async function* executeWorkflow(params: {
       id,
       text: chunk,
     };
+  }
+
+  // A truncated title is worse than none: it would be persisted as the session
+  // title and written into the summary heading, cut off mid-word.
+  if ((await result.finishReason) === "length") {
+    throw new Error("Title generation was cut off before it completed.");
   }
 }
 

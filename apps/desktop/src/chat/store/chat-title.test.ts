@@ -36,6 +36,20 @@ describe("chat title", () => {
     expect(normalizeGeneratedChatTitle("")).toBeNull();
   });
 
+  it("keeps a title the model was cut off mid-word out of the chat list", async () => {
+    vi.mocked(generateText).mockResolvedValue({
+      text: "Review onboarding reg",
+      finishReason: "length",
+    } as any);
+
+    await expect(
+      generateChatTitle({
+        model: {} as any,
+        initialRequest: "Can you review the onboarding flow regressions?",
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("summarizes the initial request with the title model", async () => {
     vi.mocked(generateText).mockResolvedValue({
       text: '"Review onboarding fixes."',
@@ -51,7 +65,7 @@ describe("chat title", () => {
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         model,
-        maxOutputTokens: 32,
+        maxOutputTokens: 2_048,
         prompt: expect.stringContaining(
           "Can you review the onboarding flow regressions?",
         ),
