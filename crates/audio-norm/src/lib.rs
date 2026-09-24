@@ -99,9 +99,19 @@ fn decode_with_rodio<W: Write>(
     output: W,
     on_progress: Option<&mut dyn FnMut(f64)>,
 ) -> Result<usize> {
+    // Decoding twice costs a partial pass, and saves half the file on every
+    // export whose two channels hold the same signal.
+    let downmix_to_mono = decodes_to_duplicated_channels(path);
     let file = File::open(path)?;
     let decoder = rodio::Decoder::try_from(file)?;
-    encode::encode_source_to_mp3(decoder, max_duration, output, on_progress)
+    encode::encode_source_to_mp3(decoder, max_duration, output, on_progress, downmix_to_mono)
+}
+
+fn decodes_to_duplicated_channels(path: &Path) -> bool {
+    File::open(path)
+        .ok()
+        .and_then(|file| rodio::Decoder::try_from(file).ok())
+        .is_some_and(encode::channels_are_duplicated)
 }
 
 #[cfg(test)]
