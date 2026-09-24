@@ -12,17 +12,52 @@ use audioadapter_buffers::direct::SequentialSliceOfVecs;
 use crate::Error;
 
 pub const TARGET_SAMPLE_RATE_HZ: u32 = 16_000;
+// Exports from meeting services routinely duplicate one signal across both
+// channels, which doubles the file for nothing. A real two-source capture
+// (microphone on one channel, system audio on the other) differs far more than
+// this, so it keeps its channels and stays diarisable.
+const DUPLICATE_CHANNEL_TOLERANCE: f32 = 0.02;
+const CHANNEL_ANALYSIS_SILENCE_FLOOR: f32 = 0.01;
+const CHANNEL_ANALYSIS_MAX_FRAMES: usize = 30 * TARGET_SAMPLE_RATE_HZ as usize;
 const RESAMPLE_CHUNK_SIZE: usize = 1024;
 const MONO_ENCODE_CHUNK_SIZE: usize = 4096;
 const TARGET_MP3_BYTES_PER_SECOND_MONO: usize = 64_000 / 8;
 const TARGET_MP3_BYTES_PER_SECOND_STEREO: usize = 128_000 / 8;
 const MP3_BUFFER_OVERHEAD_BYTES: usize = 4096;
 
+/// Whether both channels carry the same signal. Silence alone never decides it:
+/// without audible content the channels stay untouched.
+pub(crate) fn channels_are_duplicated<S>(source: S) -> bool
+where
+    S: Source<Item = f32>,
+{
+    if u16::from(source.channels()) != 2 {
+        return false;
+    }
+
+    let mut heard_signal = false;
+    let mut samples = source.into_iter();
+    for _ in 0..CHANNEL_ANALYSIS_MAX_FRAMES {
+        let (Some(left), Some(right)) = (samples.next(), samples.next()) else {
+            break;
+        };
+        if (left - right).abs() > DUPLICATE_CHANNEL_TOLERANCE {
+            return false;
+        }
+        if left.abs().max(right.abs()) > CHANNEL_ANALYSIS_SILENCE_FLOOR {
+            heard_signal = true;
+        }
+    }
+
+    heard_signal
+}
+
 pub(crate) fn encode_source_to_mp3<S, W>(
     source: S,
     max_duration: Option<Duration>,
     output: W,
     mut on_progress: Option<&mut dyn FnMut(f64)>,
+    downmix_to_mono: bool,
 ) -> Result<usize, Error>
 where
     S: Source<Item = f32>,
@@ -54,7 +89,7 @@ where
     });
     let mut processed_frames: usize = 0;
 
-    if channel_count == 2 {
+    if channel_count == 2 && !downmix_to_mono {
         let mut encoder =
             anlg_mp3::StereoStreamEncoder::new(TARGET_SAMPLE_RATE_HZ).map_err(mp3_err)?;
         let mut output = Mp3Output::new(
@@ -521,6 +556,65 @@ mod tests {
         rodio::buffer::SamplesBuffer::new(channels_nz, rate_nz, vec![0.5f32; total_samples])
     }
 
+    fn stereo_source(left: f32, right: f32, duration_secs: usize) -> rodio::buffer::SamplesBuffer {
+        let rate = TARGET_SAMPLE_RATE_HZ;
+        let mut samples = Vec::with_capacity(rate as usize * duration_secs * 2);
+        for _ in 0..(rate as usize * duration_secs) {
+            samples.push(left);
+            samples.push(right);
+        }
+        rodio::buffer::SamplesBuffer::new(
+            std::num::NonZeroU16::new(2).unwrap(),
+            std::num::NonZeroU32::new(rate).unwrap(),
+            samples,
+        )
+    }
+
+    #[test]
+    fn duplicated_channels_are_detected() {
+        assert!(channels_are_duplicated(stereo_source(0.5, 0.5, 1)));
+    }
+
+    #[test]
+    fn a_two_source_capture_keeps_its_channels() {
+        assert!(!channels_are_duplicated(stereo_source(0.5, -0.5, 1)));
+    }
+
+    #[test]
+    fn silence_alone_never_triggers_a_downmix() {
+        assert!(!channels_are_duplicated(stereo_source(0.0, 0.0, 1)));
+    }
+
+    #[test]
+    fn a_mono_source_is_not_a_duplicated_stereo() {
+        assert!(!channels_are_duplicated(make_source(
+            1,
+            TARGET_SAMPLE_RATE_HZ,
+            1
+        )));
+    }
+
+    #[test]
+    fn downmixing_halves_a_duplicated_stereo_file() {
+        let mut stereo = Vec::new();
+        encode_source_to_mp3(stereo_source(0.5, 0.5, 2), None, &mut stereo, None, false).unwrap();
+        let mut mono = Vec::new();
+        encode_source_to_mp3(stereo_source(0.5, 0.5, 2), None, &mut mono, None, true).unwrap();
+
+        assert_eq!(
+            decode_mp3_bytes(&mono).1,
+            1,
+            "the downmix writes one channel"
+        );
+        assert_eq!(decode_mp3_bytes(&stereo).1, 2);
+        assert!(
+            mono.len() * 3 < stereo.len() * 2,
+            "expected roughly half the bytes, got {} against {}",
+            mono.len(),
+            stereo.len()
+        );
+    }
+
     fn decode_mp3_bytes(bytes: &[u8]) -> (u32, u16, Vec<f32>) {
         let temp = assert_fs::TempDir::new().unwrap();
         let path = temp.path().join("test.mp3");
@@ -536,7 +630,7 @@ mod tests {
     fn test_encode_mono_no_resample() {
         let source = make_source(1, TARGET_SAMPLE_RATE_HZ, 2);
         let mut bytes = Vec::new();
-        let written = encode_source_to_mp3(source, None, &mut bytes, None).unwrap();
+        let written = encode_source_to_mp3(source, None, &mut bytes, None, false).unwrap();
         assert_eq!(written, bytes.len());
         assert!(bytes.len() > MIN_MP3_BYTES);
 
@@ -549,7 +643,7 @@ mod tests {
     fn test_encode_mono_with_resample() {
         let source = make_source(1, 44_100, 3);
         let mut bytes = Vec::new();
-        let written = encode_source_to_mp3(source, None, &mut bytes, None).unwrap();
+        let written = encode_source_to_mp3(source, None, &mut bytes, None, false).unwrap();
         assert_eq!(written, bytes.len());
         assert!(bytes.len() > MIN_MP3_BYTES);
 
@@ -570,7 +664,7 @@ mod tests {
     fn test_encode_stereo_no_resample() {
         let source = make_source(2, TARGET_SAMPLE_RATE_HZ, 2);
         let mut bytes = Vec::new();
-        let written = encode_source_to_mp3(source, None, &mut bytes, None).unwrap();
+        let written = encode_source_to_mp3(source, None, &mut bytes, None, false).unwrap();
         assert_eq!(written, bytes.len());
         assert!(bytes.len() > MIN_MP3_BYTES);
 
@@ -583,7 +677,7 @@ mod tests {
     fn test_encode_stereo_with_resample() {
         let source = make_source(2, 44_100, 5);
         let mut bytes = Vec::new();
-        let written = encode_source_to_mp3(source, None, &mut bytes, None).unwrap();
+        let written = encode_source_to_mp3(source, None, &mut bytes, None, false).unwrap();
         assert_eq!(written, bytes.len());
         assert!(bytes.len() > MIN_MP3_BYTES);
 
@@ -604,7 +698,7 @@ mod tests {
     fn test_encode_empty_source_returns_zero() {
         let source = make_source(1, TARGET_SAMPLE_RATE_HZ, 0);
         let mut bytes = Vec::new();
-        let written = encode_source_to_mp3(source, None, &mut bytes, None).unwrap();
+        let written = encode_source_to_mp3(source, None, &mut bytes, None, false).unwrap();
         assert_eq!(written, 0);
     }
 
@@ -613,7 +707,7 @@ mod tests {
         let source = make_source(1, 44_100, 10);
         let max = Some(Duration::from_secs(2));
         let mut bytes = Vec::new();
-        encode_source_to_mp3(source, max, &mut bytes, None).unwrap();
+        encode_source_to_mp3(source, max, &mut bytes, None, false).unwrap();
         assert!(bytes.len() > MIN_MP3_BYTES);
 
         let (_, _, samples) = decode_mp3_bytes(&bytes);
@@ -638,7 +732,7 @@ mod tests {
                 last_value = p;
                 call_count += 1;
             };
-            encode_source_to_mp3(source, None, &mut bytes, Some(&mut cb)).unwrap();
+            encode_source_to_mp3(source, None, &mut bytes, Some(&mut cb), false).unwrap();
         }
 
         assert!(call_count > 0, "progress callback was never called");

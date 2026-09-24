@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  hasDarkAppIconVariant,
+  appIconAssetName,
   normalizeAppIconPreference,
   resolveAppIconName,
   resolveDockIconName,
@@ -31,38 +31,28 @@ describe("app icon preference", () => {
     expect(resolveAppIconName("default", "com.hyprnote.dev")).toBe("dev");
   });
 
-  it("follows the system appearance for the system theme", () => {
-    expect(
-      resolveDockIconName("anagram", "system", false, "com.hyprnote.dev"),
-    ).toBe("anagram");
-    expect(
-      resolveDockIconName("anagram", "system", true, "com.hyprnote.dev"),
-    ).toBe("anagram-dark");
-    expect(
-      resolveDockIconName("staging", "system", true, "com.hyprnote.stable"),
-    ).toBe("staging-dark");
+  it("keeps the same icon whatever the system appearance is", () => {
+    expect(resolveDockIconName("anagram", "com.hyprnote.dev")).toBe("anagram");
+    expect(resolveDockIconName("staging", "com.hyprnote.stable")).toBe(
+      "staging",
+    );
+    expect(resolveDockIconName("journal", "com.hyprnote.stable")).toBe(
+      "journal",
+    );
   });
 
-  it("overrides the system appearance with an explicit theme", () => {
-    expect(
-      resolveDockIconName("anagram", "dark", false, "com.hyprnote.dev"),
-    ).toBe("anagram-dark");
-    expect(
-      resolveDockIconName("anagram", "light", true, "com.hyprnote.dev"),
-    ).toBe("anagram");
-    expect(
-      resolveDockIconName("default", "dark", false, "com.hyprnote.stable"),
-    ).toBe("stable-dark");
+  it("ships the dark artwork as the stable icon", () => {
+    expect(resolveDockIconName("default", "com.hyprnote.stable")).toBe(
+      "stable-dark",
+    );
+    expect(resolveDockIconName("stable", "com.hyprnote.dev")).toBe(
+      "stable-dark",
+    );
   });
 
-  it("keeps theme-independent icons unchanged", () => {
-    expect(
-      resolveDockIconName("journal", "system", true, "com.hyprnote.stable"),
-    ).toBe("journal");
-    expect(
-      resolveDockIconName("stone", "dark", false, "com.hyprnote.stable"),
-    ).toBe("stone");
-    expect(hasDarkAppIconVariant("anagram")).toBe(true);
-    expect(hasDarkAppIconVariant("walnut")).toBe(false);
+  it("names the preview file of each icon", () => {
+    expect(appIconAssetName("stable")).toBe("stable-dark");
+    expect(appIconAssetName("anagram")).toBe("anagram-light");
+    expect(appIconAssetName("walnut")).toBe("walnut");
   });
 });

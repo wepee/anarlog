@@ -18,11 +18,16 @@ import {
 } from "~/session/components/note-input/transcript/export-data";
 import { useSessionTranscriptRenderData } from "~/session/components/note-input/transcript/render-request-hooks";
 import { useHasTranscript } from "~/session/components/shared";
+import { getBaseLanguageDisplayName } from "~/settings/general/language";
 import {
   type MenuItemDef,
   useNativeContextMenu,
 } from "~/shared/hooks/useNativeContextMenu";
 import { useListener } from "~/stt/contexts";
+import {
+  useSessionTranscriptLanguage,
+  useTranscriptionLanguageChoices,
+} from "~/stt/session-language";
 import { useStartListeningWithBatchOverride } from "~/stt/useStartListeningWithBatchOverride";
 import {
   isMainWebviewWindow,
@@ -211,6 +216,9 @@ function HeaderViewTranscriptActive({
   };
 }) {
   const regenerate = useRegenerateTranscript(sessionId);
+  const sessionLanguage = useSessionTranscriptLanguage(sessionId);
+  const transcriptionLanguages = useTranscriptionLanguageChoices();
+  const activeLanguage = sessionLanguage || transcriptionLanguages[0] || "";
   const startListening = useStartListeningWithBatchOverride(sessionId);
   const hasTranscript = useHasTranscript(sessionId);
   const { request: transcriptExportRequest } =
@@ -295,6 +303,23 @@ function HeaderViewTranscriptActive({
           void regenerate();
         },
       });
+
+      if (transcriptionLanguages.length > 1) {
+        items.push({
+          id: `regenerate-transcript-language-${sessionId}`,
+          text: "Re-transcribe in",
+          items: transcriptionLanguages.map((language) => ({
+            id: `regenerate-transcript-${language}-${sessionId}`,
+            text:
+              language === activeLanguage
+                ? `${getBaseLanguageDisplayName(language)} ✓`
+                : getBaseLanguageDisplayName(language),
+            action: () => {
+              void regenerate(language);
+            },
+          })),
+        });
+      }
     }
 
     if (audioExists) {
@@ -318,6 +343,8 @@ function HeaderViewTranscriptActive({
     regenerate,
     sessionMode,
     sessionId,
+    activeLanguage,
+    transcriptionLanguages,
   ]);
   const showContextMenu = useNativeContextMenu(contextMenu);
 

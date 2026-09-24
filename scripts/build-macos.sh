@@ -11,6 +11,9 @@ set -euo pipefail
 #   scripts/build-macos.sh [tauri build args...]
 #   scripts/build-macos.sh --sign-only <path to .app>   # re-sign, no rebuild
 #
+# The bundle is stamped with the version in release-version.json, or with
+# APP_VERSION when it is set.
+#
 # Xcode 26+ ships a SwiftPM build system that internalizes `@_cdecl` symbols in
 # release, which breaks swift-rs linking, so pin the Command Line Tools toolchain.
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
@@ -103,6 +106,61 @@ entitlements_for() {
   fi
 }
 
+# Files this script rewrites before the build and puts back afterwards. One
+# EXIT trap owns all of them: a second `trap ... EXIT` would silently replace
+# the first rather than run alongside it.
+BACKUPS=""
+
+back_up() {
+  local path="$1"
+  local backup
+  backup="$(mktemp -t "$(basename "$path")")"
+  cp -p "$path" "$backup"
+  BACKUPS="${BACKUPS}${path}"$'\t'"${backup}"$'\n'
+}
+
+restore_backups() {
+  local path backup
+  while IFS=$'\t' read -r path backup; do
+    [[ -n "$path" ]] || continue
+    cp -p "$backup" "$path"
+    rm -f "$backup"
+  done <<<"$BACKUPS"
+}
+
+trap restore_backups EXIT
+# Without these, an interrupted build leaves the rewritten files behind.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# `tauri build` takes the bundle version from tauri.conf.json, which carries
+# none, so it falls back to the desktop crate's 0.0.0. The updater reads that
+# as the installed version and offers every published release as an upgrade,
+# on every check. Stamp the release version the way fork_release.yaml does,
+# and put the file back so the working tree stays clean.
+stamp_version() {
+  local conf="$DESKTOP_DIR/src-tauri/tauri.conf.json"
+  local version="${APP_VERSION:-}"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "Refusing to build: jq is required to stamp the version into $conf." >&2
+    exit 1
+  fi
+
+  if [[ -z "$version" ]]; then
+    version="$(jq -r '.version // empty' "$REPO_ROOT/release-version.json")"
+  fi
+
+  if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    echo "Refusing to build: \"$version\" is not a major.minor.patch version. Fix release-version.json, or set APP_VERSION." >&2
+    exit 1
+  fi
+
+  echo "Building version $version"
+  back_up "$conf"
+  (cd "$REPO_ROOT" && ./scripts/version.sh "$conf" "$version")
+}
+
 warn_local() {
   local app="$1"
 
@@ -175,10 +233,7 @@ if [[ "$kind" == "developer-id" ]]; then
   # repository, so put the original back once the bundle holds a signed copy.
   cloudsync_dylib="$REPO_ROOT/crates/cloudsync/vendor/cloudsync/macos/${target%%-*}/cloudsync.dylib"
   if [[ -f "$cloudsync_dylib" ]]; then
-    cloudsync_backup="$(mktemp -t cloudsync)"
-    cp -p "$cloudsync_dylib" "$cloudsync_backup"
-    # shellcheck disable=SC2064
-    trap "cp -p '$cloudsync_backup' '$cloudsync_dylib'; rm -f '$cloudsync_backup'" EXIT
+    back_up "$cloudsync_dylib"
 
     codesign --force --sign "$signing_identity" --timestamp --options runtime "$cloudsync_dylib"
     codesign --verify --strict --verbose=2 "$cloudsync_dylib"
@@ -192,18 +247,33 @@ elif [[ "$kind" == "local" ]]; then
   echo "Signing with: $signing_identity (local identity, set below)"
 fi
 
+stamp_version
+
 cd "$DESKTOP_DIR"
-pnpm exec tauri build "$@"
+build_status=0
+pnpm exec tauri build "$@" || build_status=$?
+
+app_bundle="$(ls -dt "$bundle_dir"/*.app 2>/dev/null | head -n 1 || true)"
+
+# Tauri only fails the whole build over the updater artifact after the .app
+# and .dmg already exist on disk (no TAURI_SIGNING_PRIVATE_KEY, which local
+# testing never needs). Treat that case as non-fatal so the bundle still gets
+# a real signature; any other failure (no bundle produced) still propagates.
+if [[ "$build_status" -ne 0 ]]; then
+  if [[ -z "$app_bundle" ]]; then
+    exit "$build_status"
+  fi
+  echo "tauri build exited $build_status after producing $app_bundle (likely the missing updater signing key, which local testing does not need); continuing to sign it." >&2
+fi
 
 # Tauri signed the app and the .dmg around it already.
 if [[ "$kind" == "developer-id" ]]; then
-  exit 0
+  exit "$build_status"
 fi
 
-app_bundle="$(ls -dt "$bundle_dir"/*.app 2>/dev/null | head -n 1 || true)"
 if [[ -z "$app_bundle" ]]; then
   echo "No .app found under $bundle_dir; skipping signing." >&2
-  exit 0
+  exit "$build_status"
 fi
 
 sign_app "$app_bundle" "$signing_identity" "$(entitlements_for "$@")"

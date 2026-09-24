@@ -23,6 +23,8 @@ const {
   useHasTranscriptMock,
   useListenerMock,
   useConfigValueMock,
+  sessionLanguage,
+  transcriptionLanguages,
   platformMock,
   windowShowMock,
 } = vi.hoisted(() => ({
@@ -38,6 +40,8 @@ const {
   useHasTranscriptMock: vi.fn(),
   useListenerMock: vi.fn(),
   useConfigValueMock: vi.fn(),
+  sessionLanguage: { value: "" },
+  transcriptionLanguages: { value: ["fr", "en"] as string[] },
   platformMock: vi.fn(() => "macos"),
   windowShowMock: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
 }));
@@ -162,6 +166,11 @@ vi.mock("~/stt/contexts", () => ({
   useListener: useListenerMock,
 }));
 
+vi.mock("~/stt/session-language", () => ({
+  useSessionTranscriptLanguage: () => sessionLanguage.value,
+  useTranscriptionLanguageChoices: () => transcriptionLanguages.value,
+}));
+
 vi.mock("~/stt/useUploadFile", () => ({
   useUploadFile: vi.fn(() => ({
     uploadAudio: uploadAudioMock,
@@ -179,6 +188,8 @@ describe("OverflowButton", () => {
     audioExists.value = false;
     audioExistsResolved.value = true;
     currentNoteContent.value = "";
+    sessionLanguage.value = "";
+    transcriptionLanguages.value = ["fr", "en"];
     useHasTranscriptMock.mockReturnValue(true);
     useConfigValueMock.mockReturnValue(false);
     platformMock.mockReturnValue("macos");
@@ -224,6 +235,44 @@ describe("OverflowButton", () => {
       screen.getByRole("button", { name: "Resume listening" }),
     ).not.toBeNull();
     expect(uploadAudioMock).not.toHaveBeenCalled();
+  });
+
+  it("re-transcribes in the language picked from the submenu", () => {
+    audioExists.value = true;
+    sessionLanguage.value = "en";
+
+    render(
+      <OverflowButton
+        sessionId="session-1"
+        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Re-transcribe in/u }),
+    ).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "French" }));
+    expect(regenerateTranscriptMock).toHaveBeenCalledWith("fr");
+  });
+
+  it("hides the language submenu when a single language is configured", () => {
+    audioExists.value = true;
+    transcriptionLanguages.value = ["fr"];
+
+    render(
+      <OverflowButton
+        sessionId="session-1"
+        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Re-transcribe" }),
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Re-transcribe in/u }),
+    ).toBeNull();
   });
 
   it("hides re-transcription until the audio lookup succeeds", () => {

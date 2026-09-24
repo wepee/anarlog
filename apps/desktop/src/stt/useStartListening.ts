@@ -26,6 +26,10 @@ import {
   getSessionParticipantHumanIds,
   useSessionParticipantHumanIds,
 } from "~/stt/queries";
+import {
+  readSessionTranscriptLanguage,
+  withSessionTranscriptLanguage,
+} from "~/stt/session-language";
 
 export {
   CLOUDSYNC_CAPTURE_LEASE_ATTEMPTS,
@@ -97,11 +101,16 @@ export function useStartListeningState(
         import("./useKeywords").then(({ getSessionKeywords }) =>
           getSessionKeywords({ sessionId, dictionaryTerms }),
         ),
-        getLiveTranscriptionConfig({
-          provider: conn?.provider,
-          model: conn?.model,
-          languages: getTranscriptionLanguages(aiLanguage, spokenLanguages),
-        }),
+        readSessionTranscriptLanguage(sessionId).then((sessionLanguage) =>
+          getLiveTranscriptionConfig({
+            provider: conn?.provider,
+            model: conn?.model,
+            languages: withSessionTranscriptLanguage(
+              sessionLanguage,
+              getTranscriptionLanguages(aiLanguage, spokenLanguages),
+            ),
+          }),
+        ),
         getSessionParticipantHumanIds(sessionId).catch((error) => {
           console.error(
             "[listener] failed to read session participants before capture",

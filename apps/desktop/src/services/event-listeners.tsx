@@ -31,6 +31,10 @@ import {
   getTranscriptionLanguages,
 } from "~/stt/capabilities";
 import { buildRenderTranscriptRequestFromRows } from "~/stt/render-transcript";
+import {
+  readSessionTranscriptLanguage,
+  withSessionTranscriptLanguage,
+} from "~/stt/session-language";
 
 type CaptureIdentitySqlRow = {
   session_id: string;
@@ -302,9 +306,12 @@ function LiveCaptureConfigSyncReady({
         return;
       }
 
-      const languages = getLiveConfigLanguages(
-        settingsValues.ai_language,
-        settingsValues.spoken_languages,
+      const languages = withSessionTranscriptLanguage(
+        await readSessionTranscriptLanguage(live.sessionId),
+        getLiveConfigLanguages(
+          settingsValues.ai_language,
+          settingsValues.spoken_languages,
+        ),
       );
       const liveConfig = await getLiveTranscriptionConfig({
         provider: settingsValues.current_stt_provider,

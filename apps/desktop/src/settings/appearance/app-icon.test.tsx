@@ -80,13 +80,9 @@ describe("AppIconSelector", () => {
     expect(
       defaultOption.querySelector("[data-app-icon-stage]")?.className,
     ).toContain("opacity-100");
-    expect(
-      defaultOption
-        .querySelector('source[media="(prefers-color-scheme: dark)"]')
-        ?.getAttribute("srcset"),
-    ).toBe("/assets/app-icons/stable-dark.png");
+    expect(defaultOption.querySelector("source")).toBeNull();
     expect(defaultOption.querySelector("img")?.getAttribute("src")).toBe(
-      "/assets/app-icons/stable-light.png",
+      "/assets/app-icons/stable-dark.png",
     );
     expect(iconOptions()).toHaveLength(9);
     expect(screen.queryByRole("radio", { name: "Production" })).toBeNull();
@@ -101,18 +97,16 @@ describe("AppIconSelector", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Blueprint" }));
 
-    expect(mocks.applyAppIconPreference).toHaveBeenCalledWith("dev", "system");
+    expect(mocks.applyAppIconPreference).toHaveBeenCalledWith("dev");
     expect(mocks.setAppIcon).toHaveBeenCalledWith("dev");
   });
 
-  it("previews both schemes for the system theme", () => {
+  it("previews one artwork per icon, whatever the theme", () => {
     render(<AppIconSelector />);
 
     expect(
-      screen
-        .getByRole("radio", { name: "Default" })
-        .querySelector('source[media="(prefers-color-scheme: dark)"]'),
-    ).not.toBeNull();
+      screen.getByRole("radio", { name: "Default" }).querySelector("source"),
+    ).toBeNull();
 
     const journalOption = screen.getByRole("radio", {
       name: "Field Journal",
@@ -132,7 +126,7 @@ describe("AppIconSelector", () => {
     expect(screen.getByRole("radio", { name: "Blueprint" })).toBeDefined();
   });
 
-  it("pins previews to an explicit theme", () => {
+  it("shows the same preview under an explicit theme", () => {
     mocks.theme = "dark";
 
     render(<AppIconSelector />);
@@ -149,7 +143,7 @@ describe("AppIconSelector", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Blueprint" }));
 
-    expect(mocks.applyAppIconPreference).toHaveBeenCalledWith("dev", "dark");
+    expect(mocks.applyAppIconPreference).toHaveBeenCalledWith("dev");
   });
 
   it("previews the current channel icon for the default option", () => {

@@ -8,7 +8,12 @@ const mocks = vi.hoisted(() => ({
   handleBatchFailed: vi.fn(),
   queueAutoEnhanceIfSummaryEmpty: vi.fn(),
   runBatch: vi.fn(),
+  setSessionTranscriptLanguage: vi.fn(),
   toastError: vi.fn(),
+}));
+
+vi.mock("~/stt/session-language", () => ({
+  setSessionTranscriptLanguage: mocks.setSessionTranscriptLanguage,
 }));
 
 vi.mock("@anlg/plugin-fs-sync", () => ({
@@ -66,6 +71,34 @@ describe("useRegenerateTranscript", () => {
       id: "transcript-regenerate-failed-session-1",
       description: "Authentication failed",
     });
+  });
+
+  it("remembers the chosen language on the note before re-transcribing", async () => {
+    mocks.runBatch.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useRegenerateTranscript("session-1"));
+
+    await act(async () => {
+      await result.current("en");
+    });
+
+    expect(mocks.setSessionTranscriptLanguage).toHaveBeenCalledWith(
+      "session-1",
+      "en",
+    );
+    expect(
+      mocks.setSessionTranscriptLanguage.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.runBatch.mock.invocationCallOrder[0]!);
+  });
+
+  it("leaves the note's language alone when none is picked", async () => {
+    mocks.runBatch.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useRegenerateTranscript("session-1"));
+
+    await act(async () => {
+      await result.current();
+    });
+
+    expect(mocks.setSessionTranscriptLanguage).not.toHaveBeenCalled();
   });
 
   it("keeps CloudSync deferred until summary scheduling settles", async () => {
