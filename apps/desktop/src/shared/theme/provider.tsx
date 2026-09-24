@@ -139,18 +139,11 @@ async function applyAppearance(
 ) {
   applyDocumentTheme(theme, systemIsDark);
   writeStoredThemePreference(theme);
-  await applyDockIcon(appIcon, theme, systemIsDark);
+  await applyDockIcon(appIcon);
 }
 
-export async function applyAppIconPreference(
-  appIcon: AppIconPreference,
-  theme: ThemePreference = "system",
-) {
-  await applyDockIcon(
-    appIcon,
-    theme,
-    theme === "system" ? await readSystemIsDark() : theme === "dark",
-  );
+export async function applyAppIconPreference(appIcon: AppIconPreference) {
+  await applyDockIcon(appIcon);
 }
 
 async function setNativeThemePreference(
@@ -183,18 +176,14 @@ function prefersDarkColorScheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-async function applyDockIcon(
-  appIcon: AppIconPreference,
-  theme: ThemePreference,
-  systemIsDark: boolean,
-) {
+async function applyDockIcon(appIcon: AppIconPreference) {
   const appIdentifier = await getIdentifier().catch(
     () => "com.blackmushi.stable",
   );
 
   try {
     const result = await iconCommands.setDockIcon(
-      resolveDockIconName(appIcon, theme, systemIsDark, appIdentifier),
+      resolveDockIconName(appIcon, appIdentifier),
     );
     if (result.status === "error") {
       console.error("[theme] failed to update Dock icon", result.error);

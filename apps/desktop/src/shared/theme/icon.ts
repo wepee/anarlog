@@ -1,5 +1,3 @@
-import { resolveIsDarkMode, type ThemePreference } from "./resolve";
-
 export type AppIconPreference =
   | "default"
   | "stable"
@@ -50,26 +48,33 @@ export function resolveAppIconName(
   return "stable";
 }
 
-/** `systemIsDark` is the Dock's appearance, used when the theme follows the system. */
+// An app icon is an identity, not a theme: switching the system between light
+// and dark must leave it alone. Icons that ship two artworks pick one here and
+// keep it, and `-dark` is only the file name of the artwork that was chosen.
+const DARK_ARTWORK_ICONS = new Set<Exclude<AppIconPreference, "default">>([
+  "stable",
+]);
+
 export function resolveDockIconName(
   icon: AppIconPreference,
-  theme: ThemePreference,
-  systemIsDark: boolean,
   appIdentifier: string,
 ): string {
   const name = resolveAppIconName(icon, appIdentifier);
-  return hasDarkAppIconVariant(name) && resolveIsDarkMode(theme, systemIsDark)
-    ? `${name}-dark`
-    : name;
+  return DARK_ARTWORK_ICONS.has(name) ? `${name}-dark` : name;
 }
 
-export function hasDarkAppIconVariant(
+export function appIconAssetName(
   name: Exclude<AppIconPreference, "default">,
-): boolean {
-  return (
-    name === "stable" ||
-    name === "anagram" ||
-    name === "dev" ||
-    name === "staging"
-  );
+): string {
+  if (DARK_ARTWORK_ICONS.has(name)) {
+    return `${name}-dark`;
+  }
+  return HAS_LIGHT_ARTWORK_FILE.has(name) ? `${name}-light` : name;
 }
+
+// These ship their preview as `<name>-light.png`; the rest as `<name>.png`.
+const HAS_LIGHT_ARTWORK_FILE = new Set<Exclude<AppIconPreference, "default">>([
+  "anagram",
+  "dev",
+  "staging",
+]);

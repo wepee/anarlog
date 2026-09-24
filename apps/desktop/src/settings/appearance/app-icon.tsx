@@ -9,12 +9,11 @@ import { useSetSettingValue } from "~/settings/queries";
 import { useConfigValue } from "~/shared/config";
 import {
   type AppIconPreference,
-  hasDarkAppIconVariant,
+  appIconAssetName,
   normalizeAppIconPreference,
   resolveAppIconName,
 } from "~/shared/theme/icon";
 import { applyAppIconPreference } from "~/shared/theme/provider";
-import type { ThemePreference } from "~/shared/theme/resolve";
 
 const APP_ICON_OPTIONS = [
   "default",
@@ -35,9 +34,6 @@ const PREVIEW_CLASS =
 export function AppIconSelector() {
   const { t } = useLingui();
   const value = normalizeAppIconPreference(useConfigValue("app_icon"));
-  const storedTheme = useConfigValue("theme") as ThemePreference;
-  const theme: ThemePreference =
-    storedTheme === "light" || storedTheme === "dark" ? storedTheme : "system";
   const setAppIcon = useSetSettingValue("app_icon");
   const { data: appIdentifier = "com.blackmushi.stable" } = useQuery({
     queryKey: ["tauri", "app-identifier"],
@@ -84,8 +80,9 @@ export function AppIconSelector() {
         {options.map((option) => {
           const selected =
             resolveAppIconName(option, appIdentifier) === selectedIconName;
-          const previewName = resolveAppIconName(option, appIdentifier);
-          const hasDarkVariant = hasDarkAppIconVariant(previewName);
+          const previewAsset = appIconAssetName(
+            resolveAppIconName(option, appIdentifier),
+          );
           return (
             <button
               key={option}
@@ -98,7 +95,7 @@ export function AppIconSelector() {
                 "group text-foreground focus-visible:ring-ring focus-visible:ring-offset-background relative flex cursor-pointer items-center justify-center rounded-[22px] bg-transparent p-0.5 pb-2.5 transition-transform duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.98] disabled:cursor-wait",
               ])}
               onClick={() => {
-                void applyAppIconPreference(option, theme);
+                void applyAppIconPreference(option);
                 setAppIcon(option);
               }}
             >
@@ -128,29 +125,12 @@ export function AppIconSelector() {
                   selected && "-translate-y-1.5",
                 ])}
               >
-                {theme === "system" && hasDarkVariant ? (
-                  <picture>
-                    <source
-                      media="(prefers-color-scheme: dark)"
-                      srcSet={`/assets/app-icons/${previewName}-dark.png`}
-                    />
-                    <img
-                      src={`/assets/app-icons/${previewName}-light.png`}
-                      alt=""
-                      draggable={false}
-                      className={PREVIEW_CLASS}
-                    />
-                  </picture>
-                ) : (
-                  <img
-                    src={`/assets/app-icons/${previewName}${
-                      hasDarkVariant ? `-${theme}` : ""
-                    }.png`}
-                    alt=""
-                    draggable={false}
-                    className={PREVIEW_CLASS}
-                  />
-                )}
+                <img
+                  src={`/assets/app-icons/${previewAsset}.png`}
+                  alt=""
+                  draggable={false}
+                  className={PREVIEW_CLASS}
+                />
               </span>
             </button>
           );
