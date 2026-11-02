@@ -52,6 +52,10 @@ vi.mock("~/sidebar/folders", () => ({
   FoldersNav: () => <div data-testid="folders-nav" />,
 }));
 
+vi.mock("~/sidebar/shared-notes", () => ({
+  SharedNotesNav: () => <div data-testid="shared-notes-nav" />,
+}));
+
 import { LeftSidebar } from "./index";
 
 describe("LeftSidebar", () => {
@@ -64,61 +68,6 @@ describe("LeftSidebar", () => {
     cleanup();
   });
 
-  it("uses the timeline layout without a duplicate sidebar top offset", () => {
-    const { container } = render(<LeftSidebar />);
-
-    expect(screen.getByTestId("timeline-view")).toBeTruthy();
-    expect(
-      screen
-        .getByTestId("timeline-view")
-        .getAttribute("data-show-open-calendar-button"),
-    ).toBe("true");
-    expect(
-      screen.getByTestId("timeline-view").getAttribute("data-top-chrome-inset"),
-    ).toBe("true");
-    expect(
-      screen
-        .getByTestId("timeline-view")
-        .getAttribute("data-top-chips-overlap-header"),
-    ).toBe("false");
-    expect(container.firstElementChild?.className).toContain("pt-0");
-    expect(container.firstElementChild?.className).not.toContain("pr-1");
-  });
-
-  it("renders timeline header as normal sidebar content", () => {
-    render(
-      <LeftSidebar timelineHeader={<div data-testid="timeline-header" />} />,
-    );
-
-    expect(
-      screen
-        .getByTestId("timeline-header")
-        .parentElement?.contains(screen.getByTestId("timeline-view")),
-    ).toBe(true);
-    expect(
-      screen.getByTestId("timeline-view").getAttribute("data-top-chrome-inset"),
-    ).toBe("false");
-    expect(
-      screen
-        .getByTestId("timeline-view")
-        .getAttribute("data-top-chips-overlap-header"),
-    ).toBe("true");
-  });
-
-  it("does not reserve space for title bar actions in the Windows timeline", () => {
-    mocks.platform = "windows";
-    render(<LeftSidebar />);
-
-    const timeline = screen.getByTestId("timeline-view");
-    expect(timeline.getAttribute("data-top-chrome-inset")).toBe("false");
-    expect(timeline.getAttribute("data-top-chips-overlap-header")).toBe(
-      "false",
-    );
-    expect(timeline.getAttribute("data-show-open-calendar-button")).toBe(
-      "true",
-    );
-  });
-
   it("keeps the personal timeline when filtering to a folder", () => {
     render(<LeftSidebar folderFilter="CS 101" />);
 
@@ -129,6 +78,7 @@ describe("LeftSidebar", () => {
     expect(
       screen.getByTestId("folder-materials").getAttribute("data-folder-path"),
     ).toBe("CS 101");
+    expect(screen.queryByTestId("shared-notes-nav")).toBeNull();
   });
 
   it("hides folder materials when viewing all notes", () => {

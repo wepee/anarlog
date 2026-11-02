@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   onOpenChange: vi.fn(),
   save: vi.fn(),
   isAppStoreBuild: vi.fn(),
-  sharedNote: undefined as { body: unknown } | undefined,
+  enhancedNote: undefined as { content: string } | undefined,
 }));
 
 vi.mock("@tauri-apps/api/path", () => ({
@@ -56,7 +56,7 @@ vi.mock("~/shared/app-store", () => ({
 }));
 vi.mock("~/session/queries", () => ({
   useSession: () => ({ title: "Project review" }),
-  useEnhancedNote: () => undefined,
+  useEnhancedNote: (id: string) => (id ? mocks.enhancedNote : undefined),
   useSessionParticipants: () => [],
 }));
 vi.mock("~/session/utils", () => ({ getSessionEvent: () => null }));
@@ -64,14 +64,6 @@ vi.mock("~/session/components/note-input/transcript/export-data", () => ({
   useTranscriptExportSegments: () => ({ data: [], isLoading: false }),
 }));
 vi.mock("~/stt/queries", () => ({ useSessionTranscriptMetadata: () => [] }));
-vi.mock("~/auth", () => ({
-  useAuth: () => ({ session: { user: { id: "viewer" } } }),
-}));
-vi.mock("~/shared-notes/cache", () => ({
-  useDurableSharedNote: (_viewer: string | null, shareId: string) => ({
-    data: shareId ? mocks.sharedNote : undefined,
-  }),
-}));
 
 import { ExportModal } from "./export-modal";
 
@@ -104,6 +96,7 @@ describe("ExportModal", () => {
     mocks.storedValues = {};
     mocks.settingsValues = {};
     mocks.settingsLoading = false;
+    mocks.enhancedNote = undefined;
     mocks.downloadDir.mockResolvedValue("/Users/test/Downloads");
     mocks.exportPdf.mockResolvedValue({ status: "ok", data: null });
     mocks.writeTextFile.mockResolvedValue({ status: "ok", data: null });
@@ -153,9 +146,9 @@ describe("ExportModal", () => {
     },
   );
 
-  it("exports the shared summary from a shared tab", async () => {
-    mocks.sharedNote = {
-      body: {
+  it("exports the summary from a summary tab", async () => {
+    mocks.enhancedNote = {
+      content: JSON.stringify({
         type: "doc",
         content: [
           {
@@ -163,9 +156,9 @@ describe("ExportModal", () => {
             content: [{ type: "text", text: "Shared decisions" }],
           },
         ],
-      },
+      }),
     };
-    renderModal({ type: "shared", id: "share-1" });
+    renderModal({ type: "enhanced", id: "note-1" });
     fireEvent.click(screen.getByRole("radio", { name: "Markdown" }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(mocks.onOpenChange).toHaveBeenCalledWith(false));
@@ -320,8 +313,8 @@ describe("ExportModal", () => {
   });
 
   it("builds the file from the submitted sections when selections change", async () => {
-    mocks.sharedNote = {
-      body: {
+    mocks.enhancedNote = {
+      content: JSON.stringify({
         type: "doc",
         content: [
           {
@@ -329,9 +322,9 @@ describe("ExportModal", () => {
             content: [{ type: "text", text: "Shared decisions" }],
           },
         ],
-      },
+      }),
     };
-    renderModal({ type: "shared", id: "share-1" });
+    renderModal({ type: "enhanced", id: "note-1" });
     fireEvent.click(screen.getByRole("radio", { name: "TXT" }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Summary" }));
@@ -393,6 +386,7 @@ describe("ExportModal", () => {
     const view = renderModal();
     expect(screen.queryByRole("button", { name: "Export" })).toBeNull();
     mocks.settingsLoading = false;
+    mocks.enhancedNote = undefined;
     view.reload();
     expect(
       (screen.getByRole("radio", { name: "Markdown" }) as HTMLInputElement)

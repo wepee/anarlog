@@ -1155,7 +1155,7 @@ describe("ListenerProvider detect events", () => {
           },
           footer: {
             text: "Ignore Zoom?",
-            actionLabel: "Yes",
+            actionLabel: "Ignore it",
             icon: {
               type: "path",
               path: "/resources/notification-icons/zoom.svg",
@@ -1278,7 +1278,7 @@ describe("ListenerProvider detect events", () => {
           },
           footer: {
             text: "Ignore iPhone Call?",
-            actionLabel: "Yes",
+            actionLabel: "Ignore it",
             icon: {
               type: "path",
               path: "/resources/notification-icons/phone.png",
@@ -1340,7 +1340,7 @@ describe("ListenerProvider detect events", () => {
           options: null,
           footer: {
             text: "Ignore Google Meet?",
-            actionLabel: "Yes",
+            actionLabel: "Ignore it",
             icon: {
               type: "path",
               path: "/resources/notification-icons/google-meet.svg",
@@ -2326,7 +2326,9 @@ describe("ListenerProvider detect events", () => {
         start_time: null,
         participants: null,
         event_details: null,
+        action: null,
         action_label: "Stop",
+        action_menu: null,
         action_variant: "destructive",
         options: null,
         footer: null,

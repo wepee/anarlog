@@ -310,20 +310,10 @@ describe("OverflowButton", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    audioExists.value = false;
-    audioExistsResolved.value = true;
-    currentNoteContent.value = "";
+    exportModalMounts.value = 0;
     sessionLanguage.value = "";
     transcriptionLanguages.value = ["fr", "en"];
-    useHasTranscriptMock.mockReturnValue(true);
-    useConfigValueMock.mockReturnValue(false);
-    platformMock.mockReturnValue("macos");
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "inactive",
-        stop: vi.fn(),
-      }),
-    );
+    arrange({});
   });
 
   it.each<
@@ -552,7 +542,7 @@ describe("OverflowButton", () => {
     },
   );
 
-  it("renders one separator when meeting actions are disabled", () => {
+  it("omits the recording-actions separator when meeting actions are disabled", () => {
     useHasTranscriptMock.mockReturnValue(false);
     currentNoteContent.value = "Existing content";
 
@@ -564,7 +554,9 @@ describe("OverflowButton", () => {
       />,
     );
 
-    expect(container.querySelectorAll("hr")).toHaveLength(2);
+    // Version history, Export and window actions each close a group; the
+    // recording-actions group is absent, so it adds no separator of its own.
+    expect(container.querySelectorAll("hr")).toHaveLength(3);
   });
 
   it("offers resume and re-transcribe when recorded audio exists", () => {

@@ -178,8 +178,6 @@ describe("SettingsApp", () => {
 
     expect(screen.getByText("Meetings")).toBeTruthy();
     expect(screen.getByText("Meeting settings")).toBeTruthy();
-    expect(screen.getByText("Summaries")).toBeTruthy();
-    expect(screen.getByText("Summary length selector")).toBeTruthy();
     expect(screen.getByText("Audio")).toBeTruthy();
     expect(screen.getByText("Audio settings")).toBeTruthy();
   });

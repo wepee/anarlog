@@ -32,7 +32,9 @@ describe("getLiveTranscriptPausedMessage", () => {
     });
 
     expect(upstream).toMatch(/our speech-to-text provider is having an outage/);
-    expect(server).toMatch(/Anarlog's transcription server is having issues/);
+    expect(server).toMatch(
+      /BlackMushi's transcription server is having issues/,
+    );
   });
 
   it("blames the connection when offline", () => {
@@ -52,7 +54,7 @@ describe("getLiveTranscriptPausedMessage", () => {
         sttProvider: "deepgram",
         online: true,
       }),
-    ).toMatch(/Anarlog can't reach Deepgram/);
+    ).toMatch(/BlackMushi can't reach Deepgram/);
   });
 
   it("does not blame the network for on-device models", () => {
