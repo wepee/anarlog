@@ -3,7 +3,6 @@ import { useLingui } from "@lingui/react/macro";
 import {
   Bell,
   BookOpen,
-  Buildings,
   CalendarDots,
   ChartLineUp,
   Code,
@@ -64,14 +63,12 @@ export function useSettingsNavGroups(): SettingsNavGroup[] {
           id: "dictation",
           label: t`Dictation`,
           icon: Microphone,
-          requiresPro: true,
         },
         { id: "intelligence", label: t`Intelligence`, icon: Sparkle },
         {
           id: "dictionary",
           label: t`Dictionary`,
           icon: BookOpen,
-          requiresPro: true,
         },
       ],
     },
@@ -108,16 +105,12 @@ export function useSettingsNavGroups(): SettingsNavGroup[] {
           label: t`Automations`,
           icon: Lightning,
           destination: { type: "automations" },
-          requiresPro: true,
         },
       ],
     },
     {
       label: t`Data`,
-      items: [
-        { id: "imports", label: t`Imports`, icon: DownloadSimple },
-        { id: "crm", label: t`CRM`, icon: Buildings },
-      ],
+      items: [{ id: "imports", label: t`Imports`, icon: DownloadSimple }],
     },
     {
       label: t`Advanced`,

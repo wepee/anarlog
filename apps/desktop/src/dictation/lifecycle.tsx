@@ -162,7 +162,7 @@ function ActiveDictation({
         target = unwrap(await dictation.captureTarget());
         const apiKey = conn?.apiKey;
         const preview =
-          livePreview && conn && (!isCloudModel || apiKey)
+          conn && (!isCloudModel || apiKey)
             ? {
                 provider: conn.provider,
                 baseUrl: conn.baseUrl,

@@ -69,7 +69,10 @@ const _PROVIDERS = [
     displayName: "BlackMushi",
     badge: "Recommended",
     icon: <AnarlogProviderIcon />,
-    baseUrl: new URL("/llm", env.VITE_API_URL).toString(),
+    baseUrl: new URL(
+      "/llm",
+      env.VITE_AI_API_URL ?? env.VITE_API_URL,
+    ).toString(),
     requirements: [{ kind: "requires_config", fields: ["api_key"] }],
   },
   {

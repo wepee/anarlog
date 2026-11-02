@@ -385,7 +385,7 @@ export const useRunBatch = (sessionId: string) => {
         );
       }
 
-      if (!shouldUseSelectedTarget && !options?.recovery) {
+      if (!shouldUseSelectedTarget && !options?.recovery && !options?.resume) {
         toast.warning("Using a batch transcription provider", {
           description: `${
             selectedTarget

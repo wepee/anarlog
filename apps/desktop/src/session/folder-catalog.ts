@@ -61,14 +61,6 @@ export async function renameNamedFolder(
   });
 
   try {
-  } catch (error) {
-    console.error(
-      "[folder-catalog] failed to remap folder default access rules",
-      error,
-    );
-  }
-
-  try {
     await remapSeriesFolderRules(oldPath, newPath);
   } catch (error) {
     console.error(
@@ -122,14 +114,6 @@ export async function deleteNamedFolder(folderPath: string): Promise<void> {
     !String(deleted.error).includes("folder_source_missing")
   ) {
     throw new Error(deleted.error);
-  }
-
-  try {
-  } catch (error) {
-    console.error(
-      "[folder-catalog] failed to clear folder default access rules",
-      error,
-    );
   }
 
   try {
