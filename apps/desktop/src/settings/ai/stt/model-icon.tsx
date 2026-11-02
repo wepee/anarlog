@@ -23,7 +23,7 @@ export function getLocalModelIcon(model: string): ModelIconSpec | null {
   if (value === "cloud") {
     return {
       label: "A",
-      title: "BlackMushi Pro",
+      title: "Anarlog Pro",
       imageSrc: ANARLOG_ICON_SRC,
     };
   }

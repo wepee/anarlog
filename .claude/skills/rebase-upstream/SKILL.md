@@ -41,7 +41,7 @@ Les commits du fork sont thématiques, ce qui permet de les traiter séparément
 | `build: retirer les plugins inutilisés` | Réappliquer, **sauf si upstream monte de nouveaux plugins** (voir piège ci-dessous). |
 | `feat: déverrouiller les fonctions Pro` | Réappliquer. Une seule ligne : `isPro: true` dans `apps/desktop/src/auth/billing.tsx`. |
 | `chore: retirer le site web et l'app mobile` | Conflits « supprimé par nous / modifié par eux » : `git rm -r apps/web apps/mobile` et continuer. |
-| Renommage BlackMushi | La plus grosse surface de conflit. Résoudre en gardant la version renommée. |
+| Renommage Anarlog | La plus grosse surface de conflit. Résoudre en gardant la version renommée. |
 
 ## Pièges connus
 

@@ -20,7 +20,7 @@ impl CapturePolicy {
             workspace_id: workspace_id.into(),
             capture_enabled: false,
             allowed_providers: vec![CaptureProviderKind::Anarlog],
-            bot_name: "BlackMushi Notetaker".into(),
+            bot_name: "Anarlog Notetaker".into(),
             disclosure_text: None,
             skip_if_desktop_capture: true,
         }

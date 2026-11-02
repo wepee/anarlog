@@ -82,7 +82,7 @@ it.each([false, true])(
 );
 
 describe("normalizeLLMProviderId", () => {
-  it("maps the legacy hosted provider id to BlackMushi", () => {
+  it("maps the legacy hosted provider id to Anarlog", () => {
     expect(normalizeLLMProviderId("hyprnote")).toBe("anarlog");
   });
 

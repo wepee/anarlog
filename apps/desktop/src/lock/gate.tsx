@@ -116,9 +116,9 @@ export function AppLockGate({ children }: { children: ReactNode }) {
       {locked ? (
         <div className="absolute inset-0">
           <LockScreen
-            title={t`BlackMushi is Locked`}
+            title={t`Anarlog is Locked`}
             description={hint}
-            action={t`View BlackMushi`}
+            action={t`View Anarlog`}
             authenticating={authenticating}
             onUnlock={() => {
               promptedRef.current = true;

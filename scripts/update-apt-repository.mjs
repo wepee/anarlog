@@ -94,15 +94,15 @@ export function buildRepository({ date, packages, version }) {
     );
   }
 
-  const release = `Origin: BlackMushi
-Label: BlackMushi
+  const release = `Origin: Anarlog
+Label: Anarlog
 Suite: stable
 Codename: stable
 Version: ${version}
 Date: ${publishedAt.toUTCString()}
 Architectures: amd64 arm64
 Components: main
-Description: BlackMushi stable desktop releases
+Description: Anarlog stable desktop releases
 MD5Sum:
 ${checksumRows(files, "md5")}
 SHA1:

@@ -1,4 +1,4 @@
-# BlackMushi documentation
+# Anarlog documentation
 
 This Mintlify project is published at [docs.anarlog.so](https://docs.anarlog.so).
 

@@ -31,7 +31,7 @@ describe("ChatCTA", () => {
     render(<ChatCTA />);
 
     const button = screen.getByRole("button", {
-      name: "Ask BlackMushi anything",
+      name: "Ask Anarlog anything",
     });
 
     fireEvent.click(button);
@@ -43,7 +43,7 @@ describe("ChatCTA", () => {
     render(<ChatCTA />);
 
     const button = screen.getByRole("button", {
-      name: "Ask BlackMushi anything",
+      name: "Ask Anarlog anything",
     });
     const surface = button.querySelector("[data-chat-cta-surface]");
     const label = screen.getByText("Ask anything");
@@ -118,7 +118,7 @@ describe("ChatCTA", () => {
     render(<FloatingChatCTA />);
 
     const hoverZone = screen.getByRole("button", {
-      name: "Ask BlackMushi anything",
+      name: "Ask Anarlog anything",
     }).parentElement?.parentElement;
 
     expect(hoverZone?.className).toContain("h-10");
@@ -133,7 +133,7 @@ describe("ChatCTA", () => {
     render(<ChatCTA />);
 
     expect(
-      screen.queryByRole("button", { name: "Ask BlackMushi anything" }),
+      screen.queryByRole("button", { name: "Ask Anarlog anything" }),
     ).toBeNull();
   });
 
@@ -143,7 +143,7 @@ describe("ChatCTA", () => {
     render(<ChatCTA />);
 
     expect(
-      screen.queryByRole("button", { name: "Ask BlackMushi anything" }),
+      screen.queryByRole("button", { name: "Ask Anarlog anything" }),
     ).toBeNull();
   });
 });

@@ -42,9 +42,9 @@ pub async fn register(app: tauri::AppHandle, key: Shortcut) -> Result<Registrati
             .bind_shortcuts(
                 &session,
                 &[
-                    NewShortcut::new("dictate", "Dictate with BlackMushi")
+                    NewShortcut::new("dictate", "Dictate with Anarlog")
                         .preferred_trigger(trigger.as_str()),
-                    NewShortcut::new("cancel-dictation", "Cancel BlackMushi dictation")
+                    NewShortcut::new("cancel-dictation", "Cancel Anarlog dictation")
                         .preferred_trigger("CTRL+ALT+Escape"),
                 ],
                 None,

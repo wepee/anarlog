@@ -77,10 +77,10 @@ final class NotificationManagerTests: XCTestCase {
 
   func testActionButtonKeepsTitleWidth() {
     let button = CompactActionButton()
-    button.title = "Open BlackMushi"
+    button.title = "Open Anarlog"
     button.font = NSFont.systemFont(ofSize: Fonts.buttonSize, weight: Fonts.buttonWeight)
 
-    let textWidth = ("Open BlackMushi" as NSString).size(
+    let textWidth = ("Open Anarlog" as NSString).size(
       withAttributes: [.font: button.font!]
     ).width
 

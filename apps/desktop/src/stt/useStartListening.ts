@@ -145,7 +145,7 @@ export function useStartListeningState(
       }
       await releaseCloudsyncDeferral();
       sonnerToast.error(
-        "BlackMushi could not safely start recording. Please try again.",
+        "Anarlog could not safely start recording. Please try again.",
         { id: "capture-state-persist-failed" },
       );
       return;
@@ -189,7 +189,7 @@ export function useStartListeningState(
         await releaseCloudsyncDeferral();
       }
       sonnerToast.error(
-        "BlackMushi could not safely start recording. Please try again.",
+        "Anarlog could not safely start recording. Please try again.",
         { id: "capture-state-persist-failed" },
       );
       return;
@@ -205,7 +205,7 @@ export function useStartListeningState(
       } catch (error) {
         console.error("[listener] failed to clean up capture state", error);
         sonnerToast.error(
-          "BlackMushi could not safely start recording. Please try again.",
+          "Anarlog could not safely start recording. Please try again.",
           { id: "capture-state-persist-failed" },
         );
       } finally {
@@ -262,7 +262,7 @@ export function useStartListeningState(
         excludedTexts: [MEETING_DISCLOSURE_MESSAGE],
         onParticipantDeclined: () => {
           sonnerToast.warning(
-            "A participant declined recording. BlackMushi stopped listening.",
+            "A participant declined recording. Anarlog stopped listening.",
             { id: "meeting-consent-declined", duration: Infinity },
           );
           stop();

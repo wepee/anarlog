@@ -355,7 +355,7 @@ describe("SettingsDevelopers", () => {
     expect(mocks.installAgentSkill).not.toHaveBeenCalledWith("cursor");
     await waitFor(() =>
       expect(mocks.toastSuccess).toHaveBeenCalledWith(
-        "BlackMushi skill added to 3 agents",
+        "Anarlog skill added to 3 agents",
       ),
     );
   });
@@ -410,7 +410,7 @@ describe("SettingsDevelopers", () => {
     );
     await waitFor(() =>
       expect(mocks.toastSuccess).toHaveBeenCalledWith(
-        "BlackMushi skill added to Codex",
+        "Anarlog skill added to Codex",
       ),
     );
   });

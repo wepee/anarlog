@@ -96,7 +96,7 @@ private struct PairingView: View {
         systemImage: "iphone.and.arrow.forward.inward"
       )
     } description: {
-      Text("Open BlackMushi on iPhone to sync.")
+      Text("Open Anarlog on iPhone to sync.")
     } actions: {
       if syncController.activationState == .notActivated {
         ProgressView()
@@ -171,7 +171,7 @@ private struct AccountSettingsView: View {
               .multilineTextAlignment(.trailing)
           }
         } else {
-          Text("Connected to BlackMushi")
+          Text("Connected to Anarlog")
         }
 
         connectionStatus

@@ -117,7 +117,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("created by a newer version of BlackMushi")
+                .contains("created by a newer version of Anarlog")
         );
 
         let recorded: Vec<i64> =
@@ -155,7 +155,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("created by a newer version of BlackMushi")
+                .contains("created by a newer version of Anarlog")
         );
     }
 

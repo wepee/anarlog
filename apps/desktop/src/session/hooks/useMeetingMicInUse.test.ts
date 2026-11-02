@@ -7,10 +7,10 @@ describe("micAppsShowInUse", () => {
     expect(micAppsShowInUse([{ id: "us.zoom.xos", name: "Zoom" }])).toBe(true);
   });
 
-  it("ignores BlackMushi itself", () => {
+  it("ignores Anarlog itself", () => {
     expect(
       micAppsShowInUse([
-        { id: "com.anarlog.app", name: "BlackMushi" },
+        { id: "com.anarlog.app", name: "Anarlog" },
         { id: "com.hyprnote.app", name: "Hyprnote" },
       ]),
     ).toBe(false);

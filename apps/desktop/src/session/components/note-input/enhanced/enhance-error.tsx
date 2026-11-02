@@ -56,7 +56,7 @@ export function EnhanceError({
         <p className="text-muted-foreground text-sm leading-relaxed">
           {isUnauthenticated ? (
             <Trans>
-              BlackMushi could not generate this summary because you were not
+              Anarlog could not generate this summary because you were not
               signed in. Sign in, then try again.
             </Trans>
           ) : (

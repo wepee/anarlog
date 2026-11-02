@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=BlackMushi
+Name=Anarlog
 GenericName=AI Meeting Notes
 Comment=The AI notepad for private meetings
 Exec=anarlog %U

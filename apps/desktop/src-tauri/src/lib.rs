@@ -111,7 +111,7 @@ pub fn main() {
     startup::apply_linux_webkit_workarounds();
     // Sentry minidump reporting re-execs this binary with --crash-reporter-server.
     // That helper must reach minidump::init instead of the launch lock, or it
-    // shows "BlackMushi is already starting" on every launch and never serves dumps.
+    // shows "Anarlog is already starting" on every launch and never serves dumps.
     if startup::is_crash_reporter_process() {
         run_crash_reporter_process();
     }
@@ -505,7 +505,7 @@ pub fn main() {
 }
 
 fn startup_failure_message(error: &impl std::fmt::Display) -> String {
-    format!("BlackMushi failed to start: {error}")
+    format!("Anarlog failed to start: {error}")
 }
 
 fn exit_after_startup_failure(identifier: &str, error: &impl std::fmt::Display) -> ! {
@@ -519,11 +519,11 @@ fn exit_after_startup_failure(identifier: &str, error: &impl std::fmt::Display) 
         // Startup can fail before the database is reachable, so the alert text
         // is fixed per failure class instead of embedding the error.
         let alert = if db::is_transient_lock_error(error) {
-            "display alert \"BlackMushi is not ready yet\" message \"Another BlackMushi process is still using your data, possibly finishing an update. Your existing data was left unchanged. Please wait a moment and open BlackMushi again.\" as critical buttons {\"OK\"} default button \"OK\""
+            "display alert \"Anarlog is not ready yet\" message \"Another Anarlog process is still using your data, possibly finishing an update. Your existing data was left unchanged. Please wait a moment and open Anarlog again.\" as critical buttons {\"OK\"} default button \"OK\""
         } else if db::is_newer_schema_error(error) {
-            "display alert \"BlackMushi needs an update\" message \"Your data was updated by a newer version of BlackMushi, such as BlackMushi Nightly, and this version cannot open it yet. Your existing data was left unchanged. Install the latest version of BlackMushi, or keep using the newer app until this version catches up.\" as critical buttons {\"OK\"} default button \"OK\""
+            "display alert \"Anarlog needs an update\" message \"Your data was updated by a newer version of Anarlog, such as Anarlog Nightly, and this version cannot open it yet. Your existing data was left unchanged. Install the latest version of Anarlog, or keep using the newer app until this version catches up.\" as critical buttons {\"OK\"} default button \"OK\""
         } else {
-            "display alert \"BlackMushi could not start\" message \"Your existing data was left unchanged. Please restart the app. If the problem continues, contact support.\" as critical buttons {\"OK\"} default button \"OK\""
+            "display alert \"Anarlog could not start\" message \"Your existing data was left unchanged. Please restart the app. If the problem continues, contact support.\" as critical buttons {\"OK\"} default button \"OK\""
         };
         let _ = std::process::Command::new("/usr/bin/osascript")
             .args(["-e", alert])
@@ -662,7 +662,7 @@ mod test {
 
         assert_eq!(
             message,
-            "BlackMushi failed to start: legacy import did not pass parity verification"
+            "Anarlog failed to start: legacy import did not pass parity verification"
         );
     }
 

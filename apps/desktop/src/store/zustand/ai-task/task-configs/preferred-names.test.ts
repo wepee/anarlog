@@ -7,11 +7,11 @@ import {
 
 describe("preferred names guidance", () => {
   it("formats dictionary terms as exact-spelling instructions", () => {
-    expect(formatPreferredNamesGuidance(["BlackMushi", "Char", "blackmushi"])).toBe(
+    expect(formatPreferredNamesGuidance(["Anarlog", "Char", "blackmushi"])).toBe(
       `# Preferred Names
 
 Use these names and terms exactly when they appear, even if the transcript or notes spell them differently:
-- BlackMushi
+- Anarlog
 - Char`,
     );
   });
@@ -22,13 +22,13 @@ Use these names and terms exactly when they appear, even if the transcript or no
   });
 
   it("appends preferred names after the rendered prompt", () => {
-    expect(appendPreferredNamesGuidance("Base prompt", ["BlackMushi"])).toBe(
+    expect(appendPreferredNamesGuidance("Base prompt", ["Anarlog"])).toBe(
       `Base prompt
 
 # Preferred Names
 
 Use these names and terms exactly when they appear, even if the transcript or notes spell them differently:
-- BlackMushi`,
+- Anarlog`,
     );
   });
 });

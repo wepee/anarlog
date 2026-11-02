@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "BlackMushi Staging",
+  "productName": "Anarlog Staging",
   "mainBinaryName": "anarlog-staging",
   "identifier": "com.blackmushi.staging",
   "plugins": {

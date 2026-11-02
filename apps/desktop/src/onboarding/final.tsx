@@ -107,10 +107,10 @@ export function FinalSection({
         {status === "loading" ? (
           <span className="flex items-center gap-2">
             <CircleNotch className="size-4 animate-spin" />
-            <Trans>Open BlackMushi</Trans>
+            <Trans>Open Anarlog</Trans>
           </span>
         ) : (
-          <Trans>Open BlackMushi</Trans>
+          <Trans>Open Anarlog</Trans>
         )}
       </OnboardingButton>
       {status === "error" && (

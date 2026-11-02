@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "BlackMushi Nightly",
+  "productName": "Anarlog Nightly",
   "mainBinaryName": "anarlog-nightly",
   "identifier": "com.blackmushi.nightly",
   "plugins": {

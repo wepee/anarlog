@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-/** The BlackMushi mark: a snail whose shell doubles as a receiver horn.
+/** The Anarlog mark: a snail whose shell doubles as a receiver horn.
  * The spiral is punched out with a mask rather than painted, so the mark
  * carries whatever is behind it and works on light and dark surfaces alike.
  *

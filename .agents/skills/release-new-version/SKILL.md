@@ -1,6 +1,6 @@
 ---
 name: release-new-version
-description: Cut and publish a stable BlackMushi desktop release from this fork's own GitHub Releases, which feed the in-app updater. Covers the version bump, the changelog gate, the CI gates that pull requests do not run, the fork_release workflow, and verifying the published update feed.
+description: Cut and publish a stable Anarlog desktop release from this fork's own GitHub Releases, which feed the in-app updater. Covers the version bump, the changelog gate, the CI gates that pull requests do not run, the fork_release workflow, and verifying the published update feed.
 metadata:
   internal: true
 ---
@@ -199,7 +199,7 @@ State these rather than implying the release is more complete than it is.
   `apps/desktop/src/changelog/source.ts` points at
   `raw.githubusercontent.com/fastrepl/anarlog`, so versions other than the
   bundled latest one show upstream's notes. The release notes in `latest.json`
-  are currently just `BlackMushi <version>` and do not use the changelog file.
+  are currently just `Anarlog <version>` and do not use the changelog file.
 
 ## Final checks
 

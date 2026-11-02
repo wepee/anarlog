@@ -409,16 +409,16 @@ msgid "Ask anything"
 msgstr "Ask anything"
 
 #: src/settings/general/notification.tsx
-msgid "Ask before stopping when a meeting may have ended. When alerts are off, BlackMushi keeps listening."
-msgstr "Ask before stopping when a meeting may have ended. When alerts are off, BlackMushi keeps listening."
+msgid "Ask before stopping when a meeting may have ended. When alerts are off, Anarlog keeps listening."
+msgstr "Ask before stopping when a meeting may have ended. When alerts are off, Anarlog keeps listening."
 
 #: src/composer/index.tsx
-msgid "Ask BlackMushi AI anything"
-msgstr "Ask BlackMushi AI anything"
+msgid "Ask Anarlog AI anything"
+msgstr "Ask Anarlog AI anything"
 
 #: src/shared/chat-cta.tsx
-msgid "Ask BlackMushi anything"
-msgstr "Ask BlackMushi anything"
+msgid "Ask Anarlog anything"
+msgstr "Ask Anarlog anything"
 
 #: src/task/resource-view.tsx
 msgid "Assignees:"
@@ -429,8 +429,8 @@ msgid "Attach Markdown or text"
 msgstr "Attach Markdown or text"
 
 #: src/templates/auto-format-examples-dialog.tsx
-msgid "Attach up to three past summaries you like. BlackMushi will learn how you prefer meeting notes to be structured and written."
-msgstr "Attach up to three past summaries you like. BlackMushi will learn how you prefer meeting notes to be structured and written."
+msgid "Attach up to three past summaries you like. Anarlog will learn how you prefer meeting notes to be structured and written."
+msgstr "Attach up to three past summaries you like. Anarlog will learn how you prefer meeting notes to be structured and written."
 
 #: src/settings/general/index.tsx
 #: src/settings/general/permissions.tsx
@@ -531,63 +531,63 @@ msgstr "Beta"
 
 #. placeholder {0}: update.version
 #: src/sidebar/toast/registry.tsx
-msgid "BlackMushi {0} is available"
-msgstr "BlackMushi {0} is available"
+msgid "Anarlog {0} is available"
+msgstr "Anarlog {0} is available"
 
 #. placeholder {0}: update.version
 #: src/sidebar/toast/registry.tsx
-msgid "BlackMushi {0} is ready to install"
-msgstr "BlackMushi {0} is ready to install"
+msgid "Anarlog {0} is ready to install"
+msgstr "Anarlog {0} is ready to install"
 
 #: src/onboarding/permissions.tsx
-msgid "BlackMushi can hear others"
-msgstr "BlackMushi can hear others"
+msgid "Anarlog can hear others"
+msgstr "Anarlog can hear others"
 
 #: src/onboarding/permissions.tsx
-msgid "BlackMushi can hear your voice"
-msgstr "BlackMushi can hear your voice"
+msgid "Anarlog can hear your voice"
+msgstr "Anarlog can hear your voice"
 
 #: src/onboarding/permissions.tsx
-msgid "BlackMushi can read meeting details"
-msgstr "BlackMushi can read meeting details"
+msgid "Anarlog can read meeting details"
+msgstr "Anarlog can read meeting details"
 
 #: src/settings/developers/cli.tsx
-msgid "BlackMushi CLI"
-msgstr "BlackMushi CLI"
+msgid "Anarlog CLI"
+msgstr "Anarlog CLI"
 
 #: src/session/components/note-input/enhanced/enhance-error.tsx
-msgid "BlackMushi could not generate this summary because you were not signed in. Sign in, then try again."
-msgstr "BlackMushi could not generate this summary because you were not signed in. Sign in, then try again."
+msgid "Anarlog could not generate this summary because you were not signed in. Sign in, then try again."
+msgstr "Anarlog could not generate this summary because you were not signed in. Sign in, then try again."
 
 #: src/lock/gate.tsx
-msgid "BlackMushi is Locked"
-msgstr "BlackMushi is Locked"
+msgid "Anarlog is Locked"
+msgstr "Anarlog is Locked"
 
 #: src/onboarding/index.tsx
-msgid "BlackMushi needs access to your microphone and system audio to record and transcribe your meetings"
-msgstr "BlackMushi needs access to your microphone and system audio to record and transcribe your meetings"
+msgid "Anarlog needs access to your microphone and system audio to record and transcribe your meetings"
+msgstr "Anarlog needs access to your microphone and system audio to record and transcribe your meetings"
 
 #: src/onboarding/index.tsx
-msgid "BlackMushi needs microphone and system audio to transcribe your meetings, plus Accessibility to read meeting controls, visible chat."
-msgstr "BlackMushi needs microphone and system audio to transcribe your meetings, plus Accessibility to read meeting controls, visible chat."
+msgid "Anarlog needs microphone and system audio to transcribe your meetings, plus Accessibility to read meeting controls, visible chat."
+msgstr "Anarlog needs microphone and system audio to transcribe your meetings, plus Accessibility to read meeting controls, visible chat."
 
 #. placeholder {0}: statuses[0].displayName
 #: src/settings/developers/skills.tsx
-msgid "BlackMushi skill added to {0}"
-msgstr "BlackMushi skill added to {0}"
+msgid "Anarlog skill added to {0}"
+msgstr "Anarlog skill added to {0}"
 
 #. placeholder {0}: statuses.length
 #: src/settings/developers/skills.tsx
-msgid "BlackMushi skill added to {0} agents"
-msgstr "BlackMushi skill added to {0} agents"
+msgid "Anarlog skill added to {0} agents"
+msgstr "Anarlog skill added to {0} agents"
 
 #: src/settings/general/storage/legacy-cleanup.tsx
-msgid "BlackMushi will retry automatically. This does not affect your notes."
-msgstr "BlackMushi will retry automatically. This does not affect your notes."
+msgid "Anarlog will retry automatically. This does not affect your notes."
+msgstr "Anarlog will retry automatically. This does not affect your notes."
 
 #: src/onboarding/index.tsx
-msgid "BlackMushi will sync your calendar to get meeting reminders"
-msgstr "BlackMushi will sync your calendar to get meeting reminders"
+msgid "Anarlog will sync your calendar to get meeting reminders"
+msgstr "Anarlog will sync your calendar to get meeting reminders"
 
 #: src/settings/general/notification.tsx
 msgid "Bloom"
@@ -826,12 +826,12 @@ msgid "Choose how Auto structures and styles your summaries."
 msgstr "Choose how Auto structures and styles your summaries."
 
 #: src/settings/appearance/app-icon.tsx
-msgid "Choose how BlackMushi appears in the Dock."
-msgstr "Choose how BlackMushi appears in the Dock."
+msgid "Choose how Anarlog appears in the Dock."
+msgstr "Choose how Anarlog appears in the Dock."
 
 #: src/settings/appearance/theme.tsx
-msgid "Choose how BlackMushi looks on this device."
-msgstr "Choose how BlackMushi looks on this device."
+msgid "Choose how Anarlog looks on this device."
+msgstr "Choose how Anarlog looks on this device."
 
 #: src/settings/general/audio-settings.tsx
 msgid "Choose how long recordings stay on this device."
@@ -1033,8 +1033,8 @@ msgid "Connect your integration"
 msgstr "Connect your integration"
 
 #: src/imports/screen.tsx
-msgid "Connected · New meetings are imported automatically while BlackMushi is running."
-msgstr "Connected · New meetings are imported automatically while BlackMushi is running."
+msgid "Connected · New meetings are imported automatically while Anarlog is running."
+msgstr "Connected · New meetings are imported automatically while Anarlog is running."
 
 #. placeholder {0}: subscriptionProvider.displayName
 #: src/settings/ai/shared/index.tsx
@@ -1249,8 +1249,8 @@ msgid "Create your account"
 msgstr "Create your account"
 
 #: src/settings/stats/badge-collection.tsx
-msgid "Create your BlackMushi account. A place for your conversations to call home."
-msgstr "Create your BlackMushi account. A place for your conversations to call home."
+msgid "Create your Anarlog account. A place for your conversations to call home."
+msgstr "Create your Anarlog account. A place for your conversations to call home."
 
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Created"
@@ -1411,8 +1411,8 @@ msgid "Dictation shortcut"
 msgstr "Dictation shortcut"
 
 #: src/settings/dictation.tsx
-msgid "Dictation uses your microphone, transcription provider, languages, and dictionary. Temporary audio is deleted after transcription. Your last transcript stays in memory until dictation is disabled or BlackMushi closes."
-msgstr "Dictation uses your microphone, transcription provider, languages, and dictionary. Temporary audio is deleted after transcription. Your last transcript stays in memory until dictation is disabled or BlackMushi closes."
+msgid "Dictation uses your microphone, transcription provider, languages, and dictionary. Temporary audio is deleted after transcription. Your last transcript stays in memory until dictation is disabled or Anarlog closes."
+msgstr "Dictation uses your microphone, transcription provider, languages, and dictionary. Temporary audio is deleted after transcription. Your last transcript stays in memory until dictation is disabled or Anarlog closes."
 
 #: src/settings/dictation.tsx
 #: src/settings/dictionary/index.tsx
@@ -1470,8 +1470,8 @@ msgstr "Downloading {downloadingModel}"
 
 #. placeholder {0}: update.version
 #: src/sidebar/toast/registry.tsx
-msgid "Downloading BlackMushi {0}{progress}"
-msgstr "Downloading BlackMushi {0}{progress}"
+msgid "Downloading Anarlog {0}{progress}"
+msgstr "Downloading Anarlog {0}{progress}"
 
 #: src/sidebar/toast/registry.tsx
 msgid "Downloading model"
@@ -1786,8 +1786,8 @@ msgid "Get started"
 msgstr "Get started"
 
 #: src/settings/general/notification.tsx
-msgid "Get your attention when BlackMushi finishes work in the background."
-msgstr "Get your attention when BlackMushi finishes work in the background."
+msgid "Get your attention when Anarlog finishes work in the background."
+msgstr "Get your attention when Anarlog finishes work in the background."
 
 #: src/sidebar/timeline/index.tsx
 msgid "Go back to now"
@@ -1838,8 +1838,8 @@ msgid "Hands-free dictation"
 msgstr "Hands-free dictation"
 
 #: src/settings/general/app-settings.tsx
-msgid "Have BlackMushi ready when you sign in."
-msgstr "Have BlackMushi ready when you sign in."
+msgid "Have Anarlog ready when you sign in."
+msgstr "Have Anarlog ready when you sign in."
 
 #: src/calendar/components/apple/permission.tsx
 msgid "Having trouble?"
@@ -1850,32 +1850,32 @@ msgid "Having trouble? Paste the redirect URL"
 msgstr "Having trouble? Paste the redirect URL"
 
 #: src/settings/stats/badge-collection.tsx
-msgid "Hello, BlackMushi"
-msgstr "Hello, BlackMushi"
+msgid "Hello, Anarlog"
+msgstr "Hello, Anarlog"
 
 #: src/main/windows-title-bar.tsx
 msgid "Help"
 msgstr "Help"
 
 #: src/onboarding/permissions.tsx
-msgid "Help BlackMushi listen to others"
-msgstr "Help BlackMushi listen to others"
+msgid "Help Anarlog listen to others"
+msgstr "Help Anarlog listen to others"
 
 #: src/onboarding/permissions.tsx
-msgid "Help BlackMushi listen to you"
-msgstr "Help BlackMushi listen to you"
+msgid "Help Anarlog listen to you"
+msgstr "Help Anarlog listen to you"
 
 #: src/onboarding/permissions.tsx
-msgid "Help BlackMushi read meeting activity"
-msgstr "Help BlackMushi read meeting activity"
+msgid "Help Anarlog read meeting activity"
+msgstr "Help Anarlog read meeting activity"
 
 #: src/settings/general/app-settings.tsx
-msgid "Help improve BlackMushi with anonymous usage data."
-msgstr "Help improve BlackMushi with anonymous usage data."
+msgid "Help improve Anarlog with anonymous usage data."
+msgstr "Help improve Anarlog with anonymous usage data."
 
 #: src/chat/components/body/empty.tsx
-msgid "Hi, I'm BlackMushi AI. Set up a language model and I'll be ready to help."
-msgstr "Hi, I'm BlackMushi AI. Set up a language model and I'll be ready to help."
+msgid "Hi, I'm Anarlog AI. Set up a language model and I'll be ready to help."
+msgstr "Hi, I'm Anarlog AI. Set up a language model and I'll be ready to help."
 
 #: src/settings/general/notification.tsx
 msgid "Hide all notification panels, Dock alerts, and completion sounds."
@@ -2050,8 +2050,8 @@ msgid "Join scheduled meetings"
 msgstr "Join scheduled meetings"
 
 #: src/settings/dictation.tsx
-msgid "Keep BlackMushi running to use your shortcut in other apps."
-msgstr "Keep BlackMushi running to use your shortcut in other apps."
+msgid "Keep Anarlog running to use your shortcut in other apps."
+msgstr "Keep Anarlog running to use your shortcut in other apps."
 
 #: src/session/components/note-conflict-banner.tsx
 msgid "Keep this version"
@@ -2209,8 +2209,8 @@ msgid "Low-light canvas"
 msgstr "Low-light canvas"
 
 #: src/settings/ai/shared/index.tsx
-msgid "macOS cannot access your login Keychain. Repairing briefly locks it and asks for your Mac password before BlackMushi retries this API key."
-msgstr "macOS cannot access your login Keychain. Repairing briefly locks it and asks for your Mac password before BlackMushi retries this API key."
+msgid "macOS cannot access your login Keychain. Repairing briefly locks it and asks for your Mac password before Anarlog retries this API key."
+msgstr "macOS cannot access your login Keychain. Repairing briefly locks it and asks for your Mac password before Anarlog retries this API key."
 
 #: src/settings/general/main-language.tsx
 msgid "Main language"
@@ -2321,8 +2321,8 @@ msgid "Merged"
 msgstr "Merged"
 
 #: src/composer/index.tsx
-msgid "Message BlackMushi AI"
-msgstr "Message BlackMushi AI"
+msgid "Message Anarlog AI"
+msgstr "Message Anarlog AI"
 
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Metadata"
@@ -2704,12 +2704,12 @@ msgstr "Open AI Settings"
 #: src/services/enhancer/summary-notification.ts
 #: src/services/event-notification/index.ts
 #: src/store/zustand/listener/general-batch.ts
-msgid "Open BlackMushi"
-msgstr "Open BlackMushi"
+msgid "Open Anarlog"
+msgstr "Open Anarlog"
 
 #: src/settings/general/app-settings.tsx
-msgid "Open BlackMushi from the menu bar."
-msgstr "Open BlackMushi from the menu bar."
+msgid "Open Anarlog from the menu bar."
+msgstr "Open Anarlog from the menu bar."
 
 #: src/sidebar/timeline/index.tsx
 msgid "Open calendar"
@@ -2755,13 +2755,13 @@ msgstr "Opening…"
 
 #. placeholder {0}: accessibilityGuidance.paneTitle ?? "Privacy"
 #: src/onboarding/permissions.tsx
-msgid "Opens System Settings and guides you to add BlackMushi to the {0} list"
-msgstr "Opens System Settings and guides you to add BlackMushi to the {0} list"
+msgid "Opens System Settings and guides you to add Anarlog to the {0} list"
+msgstr "Opens System Settings and guides you to add Anarlog to the {0} list"
 
 #. placeholder {0}: accessibilityGuidance.paneTitle ?? "Privacy"
 #: src/settings/general/permissions.tsx
-msgid "Opens System Settings and guides you to add BlackMushi to the {0} list."
-msgstr "Opens System Settings and guides you to add BlackMushi to the {0} list."
+msgid "Opens System Settings and guides you to add Anarlog to the {0} list."
+msgstr "Opens System Settings and guides you to add Anarlog to the {0} list."
 
 #: src/calendar/components/apple/permission.tsx
 #: src/settings/ai/shared/index.tsx
@@ -2889,8 +2889,8 @@ msgid "Press a key combination here, or type one such as Control+Alt+D."
 msgstr "Press a key combination here, or type one such as Control+Alt+D."
 
 #: src/settings/dictation.tsx
-msgid "Press Escape to cancel. Dictation stops after five minutes and pauses while BlackMushi records a meeting."
-msgstr "Press Escape to cancel. Dictation stops after five minutes and pauses while BlackMushi records a meeting."
+msgid "Press Escape to cancel. Dictation stops after five minutes and pauses while Anarlog records a meeting."
+msgstr "Press Escape to cancel. Dictation stops after five minutes and pauses while Anarlog records a meeting."
 
 #: src/settings/dictation.tsx
 msgid "Press your shortcut to start, then press it again to finish."
@@ -3407,8 +3407,8 @@ msgid "Show Apple Calendar events in BlackMushi."
 msgstr "Show Apple Calendar events in BlackMushi."
 
 #: src/settings/general/app-settings.tsx
-msgid "Show BlackMushi in the Dock and app switcher."
-msgstr "Show BlackMushi in the Dock and app switcher."
+msgid "Show Anarlog in the Dock and app switcher."
+msgstr "Show Anarlog in the Dock and app switcher."
 
 #: src/sidebar/timeline/index.tsx
 msgid "Show Deleted Events"
@@ -3494,8 +3494,8 @@ msgid "Sign in with ChatGPT Plus or Pro, then paste the redirect URL from your b
 msgstr "Sign in with ChatGPT Plus or Pro, then paste the redirect URL from your browser."
 
 #: src/settings/ai/llm/subscriptions/connect.tsx
-msgid "Sign in with ChatGPT Plus or Pro. We'll open BlackMushi and finish connecting."
-msgstr "Sign in with ChatGPT Plus or Pro. We'll open BlackMushi and finish connecting."
+msgid "Sign in with ChatGPT Plus or Pro. We'll open Anarlog and finish connecting."
+msgstr "Sign in with ChatGPT Plus or Pro. We'll open Anarlog and finish connecting."
 
 #: src/settings/ai/llm/subscriptions/connect.tsx
 msgid "Sign in with GitHub Copilot and enter the code below."
@@ -3580,8 +3580,8 @@ msgid "Start a Pro trial or add your own LLM API key to generate a summary from 
 msgstr "Start a Pro trial or add your own LLM API key to generate a summary from this transcript."
 
 #: src/settings/general/app-settings.tsx
-msgid "Start BlackMushi at login"
-msgstr "Start BlackMushi at login"
+msgid "Start Anarlog at login"
+msgstr "Start Anarlog at login"
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Start listening when a scheduled meeting begins."
@@ -3644,8 +3644,8 @@ msgid "Starting…"
 msgstr "Starting…"
 
 #: src/settings/general/app-settings.tsx
-msgid "Stay current with updates installed the next time BlackMushi opens."
-msgstr "Stay current with updates installed the next time BlackMushi opens."
+msgid "Stay current with updates installed the next time Anarlog opens."
+msgstr "Stay current with updates installed the next time Anarlog opens."
 
 #: src/settings/automations/index.tsx
 msgid "Steps run from top to bottom."
@@ -3787,8 +3787,8 @@ msgid "Tags"
 msgstr "Tags"
 
 #: src/settings/developers/skills.tsx
-msgid "Teach coding agents when and how to use the BlackMushi CLI and MCP"
-msgstr "Teach coding agents when and how to use the BlackMushi CLI and MCP"
+msgid "Teach coding agents when and how to use the Anarlog CLI and MCP"
+msgstr "Teach coding agents when and how to use the Anarlog CLI and MCP"
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Tell participants when listening starts; this does not confirm consent."
@@ -3860,8 +3860,8 @@ msgid "This edit is no longer pending."
 msgstr "This edit is no longer pending."
 
 #: src/session/components/outer-header/index.tsx
-msgid "This is a prerecorded demo, so your camera stays off. Click Join & record to see BlackMushi in action."
-msgstr "This is a prerecorded demo, so your camera stays off. Click Join & record to see BlackMushi in action."
+msgid "This is a prerecorded demo, so your camera stays off. Click Join & record to see Anarlog in action."
+msgstr "This is a prerecorded demo, so your camera stays off. Click Join & record to see Anarlog in action."
 
 #: src/session/components/note-conflict-banner.tsx
 msgid "This note was edited on another device at the same time. The later edit was kept."
@@ -3886,8 +3886,8 @@ msgid "Tip: Add teammate names, acronyms, company jargon, and product terms."
 msgstr "Tip: Add teammate names, acronyms, company jargon, and product terms."
 
 #: src/session/components/note-input/enhanced/streaming.tsx
-msgid "Tip: The BlackMushi team loves our users!"
-msgstr "Tip: The BlackMushi team loves our users!"
+msgid "Tip: The Anarlog team loves our users!"
+msgstr "Tip: The Anarlog team loves our users!"
 
 #: src/sidebar/timeline/utils/index.ts
 msgid "Today"
@@ -3966,8 +3966,8 @@ msgid "Try the demo"
 msgstr "Try the demo"
 
 #: src/calendar/components/apple/permission.tsx
-msgid "Turn on BlackMushi in System Settings → Privacy & Security → Calendars, then return here."
-msgstr "Turn on BlackMushi in System Settings → Privacy & Security → Calendars, then return here."
+msgid "Turn on Anarlog in System Settings → Privacy & Security → Calendars, then return here."
+msgstr "Turn on Anarlog in System Settings → Privacy & Security → Calendars, then return here."
 
 #: src/settings/appearance/app-icon.tsx
 msgid "Typewriter Key"
@@ -4008,8 +4008,8 @@ msgid "Unlock sync"
 msgstr "Unlock sync"
 
 #: src/settings/ai/shared/index.tsx
-msgid "Unlock your login Keychain in the macOS prompt. BlackMushi will retry saving this API key automatically."
-msgstr "Unlock your login Keychain in the macOS prompt. BlackMushi will retry saving this API key automatically."
+msgid "Unlock your login Keychain in the macOS prompt. Anarlog will retry saving this API key automatically."
+msgstr "Unlock your login Keychain in the macOS prompt. Anarlog will retry saving this API key automatically."
 
 #: src/contacts/details.tsx
 #: src/contacts/organization-details.tsx
@@ -4130,8 +4130,8 @@ msgid "View"
 msgstr "View"
 
 #: src/lock/gate.tsx
-msgid "View BlackMushi"
-msgstr "View BlackMushi"
+msgid "View Anarlog"
+msgstr "View Anarlog"
 
 #: src/contacts/organization-details.tsx
 msgid "View LinkedIn profile"
@@ -4142,8 +4142,8 @@ msgid "View Note"
 msgstr "View Note"
 
 #: src/chat/components/input/use-dictation.ts
-msgid "Voice input is unavailable while BlackMushi is recording a meeting."
-msgstr "Voice input is unavailable while BlackMushi is recording a meeting."
+msgid "Voice input is unavailable while Anarlog is recording a meeting."
+msgstr "Voice input is unavailable while Anarlog is recording a meeting."
 
 #: src/settings/general/notification.tsx
 msgid "Wait before treating microphone activity as a meeting."
@@ -4175,8 +4175,8 @@ msgid "Weekly streak: {0}"
 msgstr "Weekly streak: {0}"
 
 #: src/onboarding/index.tsx
-msgid "Welcome to BlackMushi"
-msgstr "Welcome to BlackMushi"
+msgid "Welcome to Anarlog"
+msgstr "Welcome to Anarlog"
 
 #: src/chat/components/body/empty.tsx
 msgid "What are my action items from this meeting?"
@@ -4264,8 +4264,8 @@ msgid "Your insights"
 msgstr "Your insights"
 
 #: src/settings/general/e2ee-setup.tsx
-msgid "Your recovery key encrypts synced notes before they leave this device. BlackMushi cannot read or recover it."
-msgstr "Your recovery key encrypts synced notes before they leave this device. BlackMushi cannot read or recover it."
+msgid "Your recovery key encrypts synced notes before they leave this device. Anarlog cannot read or recover it."
+msgstr "Your recovery key encrypts synced notes before they leave this device. Anarlog cannot read or recover it."
 
 #: src/services/enhancer/summary-notification.ts
 msgid "Your summary is ready."

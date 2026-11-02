@@ -170,9 +170,9 @@ describe("getSessionKeywords", () => {
     await expect(
       getSessionKeywords({
         sessionId: "session-1",
-        dictionaryTerms: ["BlackMushi"],
+        dictionaryTerms: ["Anarlog"],
       }),
-    ).resolves.toEqual(expect.arrayContaining(["BlackMushi", "Launch"]));
+    ).resolves.toEqual(expect.arrayContaining(["Anarlog", "Launch"]));
   });
 
   it("prioritizes mapped participants and attached event attendees", async () => {
@@ -200,10 +200,10 @@ describe("getSessionKeywords", () => {
 
     const result = await getSessionKeywords({
       sessionId: "session-1",
-      dictionaryTerms: ["BlackMushi"],
+      dictionaryTerms: ["Anarlog"],
     });
 
-    expect(result.slice(0, 3)).toEqual(["Alice Kim", "Mina Park", "BlackMushi"]);
+    expect(result.slice(0, 3)).toEqual(["Alice Kim", "Mina Park", "Anarlog"]);
     expect(result).toEqual(expect.arrayContaining(["Launch"]));
     expect(result).not.toContain("John Jeong");
   });
@@ -237,30 +237,30 @@ describe("buildKeywords", () => {
 describe("dictionary term helpers", () => {
   it("parses stored JSON dictionary terms", () => {
     expect(
-      parseDictionaryTermsJson(JSON.stringify(["BlackMushi", "Char"])),
-    ).toEqual(["BlackMushi", "Char"]);
-    expect(parseDictionaryTermsJson(["BlackMushi", " blackmushi "])).toEqual([
-      "BlackMushi",
+      parseDictionaryTermsJson(JSON.stringify(["Anarlog", "Char"])),
+    ).toEqual(["Anarlog", "Char"]);
+    expect(parseDictionaryTermsJson(["Anarlog", " blackmushi "])).toEqual([
+      "Anarlog",
     ]);
     expect(parseDictionaryTermsJson("not-json")).toEqual([]);
   });
 
   it("parses newline and comma separated terms", () => {
     expect(
-      parseDictionaryTermsText("BlackMushi\nFastConformer, Parakeet TDT"),
-    ).toEqual(["BlackMushi", "FastConformer", "Parakeet TDT"]);
+      parseDictionaryTermsText("Anarlog\nFastConformer, Parakeet TDT"),
+    ).toEqual(["Anarlog", "FastConformer", "Parakeet TDT"]);
   });
 
   it("normalizes duplicate terms while preserving first spelling", () => {
-    expect(normalizeKeywordList(["BlackMushi", " blackmushi ", "Parakeet"])).toEqual([
-      "BlackMushi",
+    expect(normalizeKeywordList(["Anarlog", " blackmushi ", "Parakeet"])).toEqual([
+      "Anarlog",
       "Parakeet",
     ]);
   });
 
   it("formats stored terms one per line", () => {
-    expect(formatDictionaryTerms(["BlackMushi", "Parakeet TDT"])).toBe(
-      "BlackMushi\nParakeet TDT",
+    expect(formatDictionaryTerms(["Anarlog", "Parakeet TDT"])).toBe(
+      "Anarlog\nParakeet TDT",
     );
   });
 });

@@ -206,7 +206,7 @@ function OnboardingScreenContent({
         ])}
       >
         <h1 className="font-display text-foreground text-4xl leading-none font-semibold tracking-normal">
-          <Trans>Welcome to BlackMushi</Trans>
+          <Trans>Welcome to Anarlog</Trans>
         </h1>
       </div>
 
@@ -218,13 +218,13 @@ function OnboardingScreenContent({
             description={
               currentPlatform === "macos" ? (
                 <Trans>
-                  BlackMushi needs microphone and system audio to transcribe
+                  Anarlog needs microphone and system audio to transcribe
                   your meetings, plus Accessibility to read meeting controls,
                   visible chat.
                 </Trans>
               ) : (
                 <Trans>
-                  BlackMushi needs access to your microphone and system audio to
+                  Anarlog needs access to your microphone and system audio to
                   record and transcribe your meetings
                 </Trans>
               )
@@ -241,7 +241,7 @@ function OnboardingScreenContent({
             title={<Trans>Connect calendar</Trans>}
             description={
               <Trans>
-                BlackMushi will sync your calendar to get meeting reminders
+                Anarlog will sync your calendar to get meeting reminders
               </Trans>
             }
             completedTitle={<Trans>Calendar connected</Trans>}
