@@ -2,7 +2,7 @@
 pub enum Error {
     #[error("{0} not found")]
     NotFound(String),
-    #[error("Anarlog database not found at {0}; start Anarlog once or pass --db-path")]
+    #[error("BlackMushi database not found at {0}; start BlackMushi once or pass --db-path")]
     DatabaseNotFound(std::path::PathBuf),
     #[error("output file already exists at {0}; pass --force to overwrite it")]
     OutputExists(std::path::PathBuf),
@@ -21,9 +21,7 @@ impl From<anlg_agent_access::Error> for Error {
     fn from(error: anlg_agent_access::Error) -> Self {
         match error {
             anlg_agent_access::Error::NotFound(what) => Self::NotFound(what),
-            anlg_agent_access::Error::Invalid(reason) => {
-                Self::operation("validate proposal", reason)
-            }
+            anlg_agent_access::Error::Invalid(reason) => Self::operation("validate input", reason),
             anlg_agent_access::Error::Conflict(reason) => {
                 Self::operation("update proposal", reason)
             }

@@ -14,6 +14,7 @@ const activeInspection = {
   accessibilityTrusted: true,
   windowTitle: "Meet - abc-defg-hij",
   pageUrl: "https://meet.google.com/abc-defg-hij",
+  remoteScreenShare: false,
   warnings: [],
 };
 

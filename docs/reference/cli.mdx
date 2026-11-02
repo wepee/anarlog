@@ -1,6 +1,6 @@
 ---
 title: "CLI reference"
-description: "Commands and global options available in the Anarlog CLI."
+description: "Commands and global options available in the BlackMushi CLI."
 ---
 
 ## Global syntax
@@ -15,7 +15,7 @@ anarlog [--base DIR] [--db-path FILE] [--json] <command>
 | `--db-path FILE` | `ANARLOG_DB_PATH` | Use an explicit SQLite file. |
 | `--json` | — | Emit a versioned JSON response or machine-readable JSON error. |
 
-`--db-path` takes precedence over `--base`. Without either option, the CLI uses Anarlog's platform application-data directory and recognized legacy locations.
+`--db-path` takes precedence over `--base`. Without either option, the CLI uses BlackMushi's platform application-data directory and recognized legacy locations.
 
 The installed command is `anarlog` on DEB, AppImage, macOS, Windows, and Settings-installed builds.
 
@@ -27,11 +27,11 @@ anarlog auth status
 anarlog auth logout
 ```
 
-`auth login` prints a URL that can be opened in any browser, including one on another device. Sign in, choose **Copy URL** on the completion page, then paste the `anarlog://auth/callback` link into the hidden CLI prompt. The CLI verifies the session with Anarlog before saving it in the same local auth store as the desktop app.
+`auth login` prints a URL that can be opened in any browser, including one on another device. Sign in, choose **Copy URL** on the completion page, then paste the `anarlog://auth/callback` link into the hidden CLI prompt. The CLI verifies the session with BlackMushi before saving it in the same local auth store as the desktop app.
 
 With `--json`, the login URL and instructions are printed to stderr. The callback URL is read from stdin. JSON appears on stdout only after login completes.
 
-On Linux, the CLI uses Secret Service when it is available. Headless systems without Secret Service fall back to `auth.cli.json` in Anarlog's local application-data directory with permissions limited to the current user. The desktop app reconciles that file into Secret Service when it becomes available. On Windows, the CLI stores sessions with DPAPI in the desktop app's secure auth file. `auth logout` removes the local session; it does not delete the Anarlog account.
+On Linux, the CLI uses Secret Service when it is available. Headless systems without Secret Service fall back to `auth.cli.json` in BlackMushi's local application-data directory with permissions limited to the current user. The desktop app reconciles that file into Secret Service when it becomes available. On Windows, the CLI stores sessions with DPAPI in the desktop app's secure auth file. `auth logout` removes the local session; it does not delete the BlackMushi account.
 
 `auth status` reports the signed-in account and whether the current access token has expired. The stored refresh token lets the desktop app refresh an expired access token when it starts.
 
@@ -44,20 +44,23 @@ anarlog meetings --source cloud list
 anarlog meetings --source auto get MEETING_ID
 ```
 
-`local` is the default and reads Anarlog's database on this computer. `cloud` reads the opted-in hosted snapshots using the account saved by `anarlog auth login`. `auto` uses the local database when it exists and falls back to Cloud when it does not. Set `ANARLOG_SOURCE` to choose the same behavior without a flag.
+`local` is the default and reads BlackMushi's database on this computer. `cloud` reads the opted-in hosted snapshots using the account saved by `anarlog auth login`. `auto` uses the local database when it exists and falls back to Cloud when it does not. Set `ANARLOG_SOURCE` to choose the same behavior without a flag.
 
-All meeting read commands support all three sources. `--base`, `--db-path`, and `doctor` apply only to local data. Proposals and `anarlog mcp` remain local because hosted Cloud access is read-only.
+Ordinary meeting reads support all three sources except `meetings folders` and `meetings list --folder`. Managed capture, hold preservation, and pilot usage commands require local data. `--base`, `--db-path`, and `doctor` apply only to local data. Proposals and `anarlog mcp` remain local because hosted Cloud access is read-only.
 
 ## Meeting commands
 
 | Command | Options | Result |
 | --- | --- | --- |
-| `meetings list` | `-q, --query TEXT`, `--series-id ID`, `--limit 1..200`, `--offset NUMBER` | Meetings ordered by the application query layer. Defaults to 20 results. |
+| `meetings list` | `-q, --query TEXT`, `--series-id ID`, `--folder PATH`, `--limit 1..200`, `--offset NUMBER` | Meetings ordered by the application query layer. Defaults to 20 results. `--folder` includes subfolders and is local only. Each meeting includes `folder_path`, or `null` outside a folder. |
+| `meetings folders` | `-q, --query TEXT`, `--limit 1..200`, `--offset NUMBER` | Local folder paths with `path`, `name`, and `parent_path`, including empty and parent folders. Defaults to 100 results. |
 | `meetings get ID` | — | Metadata, canonical memo, summaries, participants, and action items. |
 | `meetings note ID` | `--kind note\|summary\|all` | The selected note documents. Defaults to `note`. |
 | `meetings transcript ID` | `--limit 1..500`, `--offset NUMBER` | A bounded transcript word page. Defaults to 200 words from offset 0. |
 | `meetings history ID` | `--limit 1..200`, `--offset NUMBER` | A page of meetings from the same recurring series. Defaults to 20 from offset 0. |
 | `meetings export ID` | `--format markdown\|json`, `-o, --output FILE`, `--force` | A complete meeting export, including transcripts. Defaults to Markdown on stdout. Existing files require `--force`. |
+
+Markdown exports include speaker-labeled transcript paragraphs when word-level speaker information is available. Exports without that information retain the flat transcript text. JSON exports can include a `speakers` field with the names used for rendering.
 
 ## Proposal commands
 
@@ -112,3 +115,38 @@ anarlog meetings --help
 anarlog meetings list --help
 anarlog --version
 ```
+
+
+### Managed local capture
+
+`anarlog meetings capabilities` reports managed-settings, calendar-identity, recording-attachment, capture-completion, hold-inventory (including parentless history and files without database rows), pilot-usage, and conditional-delete support without opening a database.
+
+`anarlog meetings delete` permanently removes a completed local meeting, its document history, transcripts, recordings, and derived search index. It requires `--source local`, `--if-export-sha256` (the SHA-256 of the complete JSON export, either as printed to stdout with its final newline or as saved with `--output`), and `--require-transcription-complete`. Close the desktop app first. A changed export, unfinished transcript, cloud attachment, or shared record prevents deletion. An interrupted file removal can be resumed with the same meeting ID and hash.
+
+A version 1 `managed_settings.json` beside the active `app.db` contains a `settings` object. Only supported capture settings are accepted, and secrets are rejected. Managed rows override user changes; malformed policy prevents database startup. `intelligence_disabled: true` disables all model connections, including local models. Transcription credentials remain in the OS credential store.
+
+`meetings initialize-managed` (`anarlog --json meetings --source local initialize-managed`) creates or migrates the local database before first desktop launch. An existing `managed_settings.json` that disables intelligence is required; the desktop must be closed. No recording or permission prompt is started.
+
+`meetings hold-list` (`anarlog --json meetings --source local hold-list`) enumerates local meeting IDs retained by sessions, child/history rows, capture-recovery markers and encrypted session revisions, including soft-deleted or missing parent rows and identities retained only by recording or legacy meeting files, in ID order. Filesystem traversal stays within the recorder sessions directory, refuses links and fails rather than truncating an oversized or unreadable inventory. Use `--limit 1..200` and `--after ID` for keyset pagination; an empty `data.ids` array ends the inventory. Managed preservation agents can use `--database-only` to page database-owned identities while separately walking and preserving recording files with durable checkpoints. This mode skips filesystem discovery; its pages alone do not establish a complete hold inventory.
+
+`meetings hold-export` (`anarlog --json meetings --source local hold-export MEETING_ID`) streams meeting-owned database cells and retained revisions from one read transaction as NDJSON. Each bounded cell frame carries the table, row key, column, SQLite storage type, byte offset, total length, and base64 bytes. Integer and REAL cells use round-trip text; TEXT and BLOB bytes remain exact. The header identifies the meeting and schema and lists `recording_locations` relative to the recorder sessions directory; sequences and the final SHA-256 cover every preceding line including its newline. An absent end frame means an incomplete snapshot. The archive includes tombstoned documents, live transcript deltas, per-session raw capture-recovery memos and related encrypted sync revisions. A parent session row is not required when owned records or meeting files remain. A files-only archive has no database cell frames; its header still identifies every discovered location, including moved copies. It excludes global settings, provider credentials and unrelated meetings. Recording files are preserved separately by the managed agent. With `--database-only`, the archive skips filesystem discovery and sets `recording_files_separate: true` with an empty `recording_locations` array. The agent must complete its separate file inventory and verify each catalogued attachment before treating preservation as complete. This local preservation archive is separate from normal meeting export and must not enter knowledge intake.
+
+`meetings pilot-usage` requires `--json` and `--source local`. Supply `--from-ms` and `--until-ms` as Unix milliseconds for a half-open UTC window of at most 366 days. The command reads capture intervals from the native stop registry's locally persisted measurement ledger. It returns clocks, requested-live and live-at-stop flags, and coverage counts without meeting identifiers, text, titles, invitees, or provider credentials. The ledger is recorded for managed capture with intelligence disabled; it survives deletion of meeting content. Pauses are separate intervals. Older recordings, interrupted persistence, and pending sessions can leave coverage incomplete; inspect `unmeasured_stops`, `invalid_metadata_records`, `pending_sessions`, and `legacy_sessions_without_measurement`. Empty results do not prove no calls occurred. Capture durations and requested-live overlap measure recorder use, not provider billing or successful Teams capture. No report is uploaded automatically.
+
+## Import a recording (local only)
+
+```bash
+anarlog --json meetings --source local import ./webinar.mp3 --title "Webinar" --folder "Research" --request-key webinar-2026-10 --wait
+anarlog --json meetings import-status JOB_ID
+anarlog --json meetings get MEETING_ID
+```
+
+The updated desktop app must be open on the same local database. Import creates a meeting immediately and queues the desktop's Upload audio pipeline, using its current speech-to-text and Intelligence configuration. Provider charges and audio-retention settings apply. Audio may be sent to the configured provider. Cloud and auto sources are rejected; this command is not a headless transcription service.
+
+Supported extensions: WAV, MP3, OGG, MP4, M4A, FLAC, WebM, AAC. The file must be nonempty and readable on the machine running the CLI. `--folder` must name an existing folder. `--title` defaults to the filename without extension. Subtitle/transcript files are not supported by this command.
+
+The result contains `meeting_id`, `job_id`, `processing_status`, `summary_status`, and nullable `error`. Processing progresses through `queued`, `importing`, `transcribing`, `summarizing`, then `done` or `failed`. A skipped summary is reported as `skipped_no_model` or `skipped_too_short`; `done` alone does not promise a generated summary. Local `meetings get` also exposes `processing_status` and `recording_import` (null for ordinary meetings).
+
+`--wait` waits for a terminal result. `--timeout SECONDS` defaults to 3600 (range 1–86400). Exit status is 0 for successful submission/completion, 1 for failure, and 2 for a wait timeout. A timeout or interruption of the CLI does not cancel the desktop job. Poll `import-status` to continue observing it. JSON command identifiers are `meetings.import` and `meetings.import_status`.
+
+Reuse `--request-key` only for retries of the same logical import. It returns the original job and meeting, including after failure, rather than starting another paid transcription. A new import needs a new key. The source is copied privately before submission, so moving the original afterwards is safe; the desktop removes this temporary copy after the job finishes. Interrupted running jobs are marked failed when the desktop is available again; completed transcript/meeting data is preserved. Inspect the meeting before explicitly submitting a new import.

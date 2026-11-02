@@ -6,12 +6,16 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>Anarlog</title>
+    <title>BlackMushi</title>
     <script src="/theme-boot.js"></script>
     <style>
       html, body, #root {
         background: transparent !important;
         background-color: transparent !important;
+      }
+      html[data-rounded-window] #boot-splash,
+      html[data-rounded-window] #root {
+        clip-path: inset(0 round 10px);
       }
       #boot-splash {
         position: fixed;

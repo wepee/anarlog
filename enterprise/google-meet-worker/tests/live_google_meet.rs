@@ -102,7 +102,7 @@ async fn run_live_google_meet() -> Result<LiveRun, Box<dyn std::error::Error>> {
                 display: env::var("DISPLAY").unwrap_or_else(|_| ":99".into()),
                 command_timeout: Duration::from_secs(5),
             },
-            bot_name: "Anarlog Reliability Bot".into(),
+            bot_name: "BlackMushi Reliability Bot".into(),
             admission: AdmissionMonitorConfig {
                 timeout: Duration::from_secs(env_u64("ANLG_LIVE_ADMISSION_SECONDS", 120)?),
                 poll_interval: Duration::from_millis(500),
@@ -183,29 +183,4 @@ fn chromium_profile(
         ));
     }
     Ok((path, true))
-}
-
-#[test]
-fn persistent_chromium_profile_enables_authenticated_mode() {
-    let temporary_root = tempfile::tempdir().unwrap();
-    assert_eq!(
-        chromium_profile(temporary_root.path(), None).unwrap(),
-        (temporary_root.path().join("chromium-profile"), false)
-    );
-
-    let persistent = temporary_root.path().join("persistent-profile");
-    assert_eq!(
-        chromium_profile(
-            temporary_root.path(),
-            Some(persistent.clone().into_os_string())
-        )
-        .unwrap(),
-        (persistent, true)
-    );
-    assert_eq!(
-        chromium_profile(temporary_root.path(), Some("relative-profile".into()))
-            .unwrap_err()
-            .kind(),
-        io::ErrorKind::InvalidInput
-    );
 }

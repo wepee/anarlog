@@ -212,6 +212,124 @@ describe("createReadOnlyPlugin", () => {
     expect(onCommentSelection).toHaveBeenCalledOnce();
   });
 
+  it("hides the format toolbar during IME composition", async () => {
+    let view: EditorView | null = null;
+    render(
+      createElement(NoteEditor, {
+        initialContent: {
+          type: "doc",
+          content: [
+            {
+              type: "heading",
+              attrs: { level: 1 },
+              content: [{ type: "text", text: "t" }],
+            },
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "compose" }],
+            },
+          ],
+        },
+        onViewReady: (nextView) => {
+          view = nextView;
+        },
+      }),
+    );
+
+    await waitFor(() => expect(view).not.toBeNull());
+    vi.spyOn(view!, "coordsAtPos").mockReturnValue({
+      bottom: 20,
+      left: 0,
+      right: 40,
+      top: 0,
+    });
+
+    // An IME makes the DOM selection cover the composing text; the state
+    // selection follows it, but that range is not a user selection.
+    fireEvent.compositionStart(view!.dom);
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 5, 9)),
+      );
+    });
+    expect(screen.queryByRole("toolbar")).toBeNull();
+
+    // The composition ends and an unrelated transaction arrives before
+    // ProseMirror applies the final caret; keeping the provisional range
+    // means it must not release the gate.
+    fireEvent.compositionEnd(view!.dom);
+    act(() => {
+      view?.dispatch(view.state.tr.setMeta("meta-only", true));
+    });
+    expect(screen.queryByRole("toolbar")).toBeNull();
+
+    // The settle update collapses the selection to a caret, so the gate
+    // releases but the toolbar still has no real selection to show for.
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 6)),
+      );
+    });
+    expect(screen.queryByRole("toolbar")).toBeNull();
+
+    // A real selection after composition still opens the toolbar.
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 5, 9)),
+      );
+    });
+    await screen.findByRole("toolbar");
+
+    // If the settle leaves the provisional range in place and no selection
+    // change ever arrives, the gate still must not hold forever: after
+    // ProseMirror's settle window the same range counts as a real
+    // selection. Return to a caret first so the stale jsdom DOM selection
+    // cannot reconcile the previous range into a deletion.
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 6)),
+      );
+    });
+    fireEvent.compositionStart(view!.dom);
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 5, 9)),
+      );
+    });
+    fireEvent.compositionEnd(view!.dom);
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    await screen.findByRole("toolbar");
+
+    // A composition that starts inside the settle window must not be
+    // released by the previous composition's pending timer.
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 6)),
+      );
+    });
+    fireEvent.compositionStart(view!.dom);
+    fireEvent.compositionEnd(view!.dom);
+    fireEvent.compositionStart(view!.dom);
+    act(() => {
+      view?.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 5, 9)),
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(screen.queryByRole("toolbar")).toBeNull();
+
+    fireEvent.compositionEnd(view!.dom);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    await screen.findByRole("toolbar");
+  });
+
   it("hides attachment mutation controls in read-only documents", async () => {
     const rendered = render(
       createElement(NoteEditor, {
@@ -251,6 +369,69 @@ describe("createReadOnlyPlugin", () => {
 });
 
 describe("browser-safe editor controls", () => {
+  it("keeps newly typed lines above a floating composer", async () => {
+    const ref = createRef<NoteEditorRef>();
+    const scroller = document.createElement("div");
+    scroller.style.position = "fixed";
+    document.body.appendChild(scroller);
+    const rendered = render(
+      createElement(NoteEditor, {
+        ref,
+        initialContent: baseDoc,
+        enforceTitleHeading: false,
+        scrollBottomInset: 80,
+      }),
+      { container: scroller },
+    );
+    await waitFor(() => expect(ref.current?.view).not.toBeNull());
+    const view = ref.current!.view!;
+
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(
+      function () {
+        return this === scroller ? 600 : 1200;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function () {
+        return this === scroller ? 600 : 1200;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(800);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function () {
+        return new DOMRect(0, 0, 800, this === scroller ? 600 : 1200);
+      },
+    );
+    vi.spyOn(view, "coordsAtPos").mockImplementation(() => {
+      const bottom =
+        540 + (view.state.doc.childCount - 1) * 28 - scroller.scrollTop;
+      return { top: bottom - 20, bottom, left: 12, right: 12 };
+    });
+    act(() => {
+      view.focus();
+      view.dispatch(
+        view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)),
+      );
+    });
+
+    for (let line = 0; line < 5; line++) {
+      act(() => {
+        view.dispatch(
+          view.state.tr
+            .split(view.state.selection.head)
+            .insertText("new line")
+            .scrollIntoView(),
+        );
+      });
+      expect(
+        view.coordsAtPos(view.state.selection.head).bottom,
+      ).toBeLessThanOrEqual(520);
+    }
+    rendered.unmount();
+    scroller.remove();
+  });
+
   it("reports document changes before debounced persistence", async () => {
     const ref = createRef<NoteEditorRef>();
     const handleChange = vi.fn();
@@ -283,39 +464,6 @@ describe("browser-safe editor controls", () => {
       ],
     });
     expect(handleChange).not.toHaveBeenCalled();
-  });
-
-  it("reuses immediate document serialization for persistence", async () => {
-    const ref = createRef<NoteEditorRef>();
-    const handleChange = vi.fn();
-    const onDocumentChange = vi.fn();
-    render(
-      createElement(NoteEditor, {
-        ref,
-        initialContent: baseDoc,
-        handleChange,
-        onDocumentChange,
-        enforceTitleHeading: false,
-      }),
-    );
-    await waitFor(() => expect(ref.current?.view).not.toBeNull());
-    vi.useFakeTimers();
-    const toJSON = vi.spyOn(PMNode.prototype, "toJSON");
-
-    act(() => {
-      const view = ref.current?.view;
-      view?.dispatch(view.state.tr.insertText("!", 4));
-    });
-
-    const rootSerializationCount = () =>
-      toJSON.mock.instances.filter((node) => node.type.name === "doc").length;
-    expect(rootSerializationCount()).toBe(1);
-    await act(() => vi.advanceTimersByTimeAsync(500));
-    expect(rootSerializationCount()).toBe(1);
-    expect(handleChange).toHaveBeenCalledWith(
-      onDocumentChange.mock.calls[0]?.[0],
-    );
-    toJSON.mockRestore();
   });
 
   it("defers serialization when no immediate listener is registered", async () => {
@@ -700,4 +848,45 @@ describe("browser-safe editor controls", () => {
 
     expect(rendered.queryByText("Commands")).toBeNull();
   });
+});
+
+it("keeps a pasted YouTube Shorts URL visible and editable instead of replacing it with a blank clip", async () => {
+  let view: EditorView | null = null;
+  const url = "https://www.youtube.com/shorts/515J0QD9p6w";
+  render(
+    createElement(NoteEditor, {
+      initialContent: { type: "doc", content: [{ type: "paragraph" }] },
+      onViewReady: (nextView) => {
+        view = nextView;
+      },
+    }),
+  );
+  await waitFor(() => expect(view).not.toBeNull());
+  act(() => {
+    const event = new Event("paste") as ClipboardEvent;
+    Object.defineProperty(event, "clipboardData", {
+      value: {
+        getData: (type: string) => (type === "text/plain" ? url : ""),
+      },
+    });
+    view!.pasteText(url, event);
+  });
+  expect(view!.state.doc.textContent).toBe(url);
+  expect(screen.getByRole("link", { name: url }).getAttribute("href")).toBe(
+    url,
+  );
+});
+
+it("shows a link when reopening an existing YouTube clip", async () => {
+  const src = "https://www.youtube.com/embed/515J0QD9p6w";
+  render(
+    createElement(NoteEditor, {
+      initialContent: {
+        type: "doc",
+        content: [{ type: "clip", attrs: { src } }],
+      },
+    }),
+  );
+  const link = await screen.findByRole("link", { name: src });
+  expect(link.getAttribute("href")).toBe(src);
 });

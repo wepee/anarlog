@@ -13,7 +13,7 @@ import {
   Sparkle,
   X,
 } from "@anlg/ui/components/icons";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 import { cn } from "@anlg/utils";
 
 import { useLanguageModel } from "~/ai/hooks";
@@ -100,7 +100,7 @@ export function ComposerScreen() {
               }
               onStop={sessionProps.stop}
               onSendMessage={sendMessage}
-              title={currentChatGroup?.title || t`Ask Anarlog AI anything`}
+              title={currentChatGroup?.title || t`Ask BlackMushi AI anything`}
             />
           ) : (
             <ComposerSettingsCard />
@@ -226,7 +226,7 @@ function ComposerInput({
             ])}
           >
             <ArrowUpRight className="size-3.5" />
-            {t`Open Anarlog`}
+            {t`Open BlackMushi`}
           </button>
           <button
             type="button"
@@ -245,7 +245,7 @@ function ComposerInput({
 
       <ChatEditor
         ref={editorRef}
-        onAttachmentError={(message) => sonnerToast.error(message)}
+        onAttachmentError={(message) => toast.error(message)}
         className={cn([
           "text-primary-foreground max-h-[88px] min-h-[34px] overflow-y-auto text-[15px] leading-6",
           "[&_.ProseMirror]:min-h-[34px] [&_.ProseMirror]:outline-none",
@@ -307,7 +307,7 @@ function ComposerInput({
 
 const composerPlaceholder: PlaceholderFunction = ({ node, pos }) => {
   if (node.type.name === "paragraph" && pos === 0) {
-    return t`Message Anarlog AI`;
+    return t`Message BlackMushi AI`;
   }
 
   return "";

@@ -13,14 +13,20 @@ BlackMushi gives agents three ways to access meeting context. The BlackMushi plu
 
 ## Recommended agent flow
 
-1. List recent meetings on Cloud MCP, or search by a short title fragment.
-2. If Cloud has no match, search again with the local CLI.
+1. Honor an explicit source request. Otherwise, use local MCP or check local CLI readiness with `anarlog --json doctor`; use Cloud when local access is unavailable.
+2. List recent meetings or search by a short title fragment. If a meeting is missing, check an already-connected alternate source unless the user restricted access.
 3. Use a returned meeting ID. Never infer or invent one.
 4. Fetch the meeting detail before requesting transcript text.
 5. Fetch recurring history only when earlier meetings are relevant.
 6. Read transcript pages only until the task has enough evidence.
 
-Prefer connected Cloud MCP because each tool carries its input schema. Fill gaps with the CLI. Optional local MCP is for agents that stay fully on-device.
+Keep each meeting's reads on the source where it was found and label the source in the answer. Report database errors instead of silently falling back to Cloud.
+
+## Freshness
+
+Local reads work offline and include unsynced changes. They do not require Cloud Sync to finish. Cloud Sync is encrypted; Cloud API & Connectors uploads a separate readable snapshot after opt-in. Sync completion does not establish snapshot freshness.
+
+Report freshness only when an interface provides it. A meeting's `updated_at` records a content change, not a completed sync or snapshot upload. If freshness matters and cannot be verified, say it is unknown.
 
 ## Safety boundary
 

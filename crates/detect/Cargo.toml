@@ -11,11 +11,9 @@ list = []
 app = []
 zoom = []
 sleep = []
+screen = ["dep:xcap", "dep:image"]
 
 [dependencies]
-isolang = { workspace = true }
-lazy_static = { workspace = true }
-regex = { workspace = true }
 sysinfo = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
@@ -28,6 +26,8 @@ specta = { workspace = true, features = ["derive"] }
 sys-locale = { workspace = true }
 
 anlg-language = { workspace = true }
+
+image = { workspace = true, features = ["jpeg"], optional = true }
 
 [target."cfg(target_os = \"macos\")".dependencies]
 anlg-bundle = { workspace = true }
@@ -46,6 +46,10 @@ macos-accessibility-client = { workspace = true }
 [[example]]
 name = "detector"
 required-features = ["mic", "list", "zoom", "sleep", "app", "language"]
+
+# xcap's Linux backend links libgbm/EGL/PipeWire; Linux capture is not supported yet.
+[target."cfg(any(target_os = \"macos\", target_os = \"windows\"))".dependencies]
+xcap = { workspace = true, optional = true }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 libpulse-binding = "2.30"

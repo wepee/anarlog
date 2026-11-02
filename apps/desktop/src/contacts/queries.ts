@@ -1,7 +1,9 @@
 import { useRef } from "react";
 
+import { commands as calendarCommands } from "@anlg/plugin-calendar";
+
 import { trackAnalyticsEvent } from "~/analytics";
-import { executeTransaction, liveQueryClient, useLiveQuery } from "~/db";
+import { liveQueryClient, useLiveQuery } from "~/db";
 import { enqueueDatabaseWrite } from "~/db/write-queue";
 import { DEFAULT_USER_ID, id } from "~/shared/utils";
 
@@ -20,11 +22,13 @@ type HumanSqlRow = {
   pin_order: number | null;
   avatar_data_url: string | null;
   contact_summary_json: string | null;
+  additional_emails_json?: string | null;
 };
 
 export type ContactSummaryRecord = {
   facts: string[];
   sourceHash: string;
+  promptKey: string;
   generatedAt: string;
   sources: Array<{ id: string; updatedAt: string }>;
 };
@@ -44,6 +48,7 @@ export type HumanRecord = {
   pinOrder: number | null;
   avatarDataUrl: string | null;
   summary: ContactSummaryRecord | null;
+  additionalEmails: string[];
 };
 
 type HumanDisplaySqlRow = {
@@ -69,6 +74,7 @@ type OrganizationSqlRow = {
   pinned: boolean | number;
   pin_order: number | null;
   avatar_data_url: string | null;
+  team_workspace: boolean | number | null;
 };
 
 export type OrganizationRecord = {
@@ -80,6 +86,7 @@ export type OrganizationRecord = {
   pinned: boolean;
   pinOrder: number | null;
   avatarDataUrl: string | null;
+  teamWorkspace: boolean;
 };
 
 type OrganizationDisplaySqlRow = {
@@ -101,6 +108,25 @@ const CONTACT_SUMMARY_SQL = `CASE
   WHEN json_valid(metadata_json)
   THEN json_extract(metadata_json, '$.contactSummary')
 END AS contact_summary_json`;
+
+const ADDITIONAL_EMAILS_SQL = `CASE
+  WHEN json_valid(metadata_json)
+    AND json_type(metadata_json, '$.additionalEmails') = 'array'
+  THEN json_extract(metadata_json, '$.additionalEmails')
+END AS additional_emails_json`;
+
+const ADDITIONAL_EMAILS_JSON_EACH_SQL = `json_each(CASE
+  WHEN json_valid(humans.metadata_json)
+    AND json_type(humans.metadata_json, '$.additionalEmails') = 'array'
+  THEN json_extract(humans.metadata_json, '$.additionalEmails')
+  ELSE '[]'
+END)`;
+
+const TEAM_WORKSPACE_SQL = `CASE
+  WHEN json_valid(metadata_json)
+  THEN COALESCE(json_extract(metadata_json, '$.teamWorkspace'), 0)
+  ELSE 0
+END AS team_workspace`;
 
 type HumanSessionSqlRow = {
   id: string;
@@ -159,7 +185,8 @@ export function useHumans(): HumanRecord[] {
         pinned,
         pin_order,
         ${AVATAR_SQL},
-        ${CONTACT_SUMMARY_SQL}
+        ${CONTACT_SUMMARY_SQL},
+        ${ADDITIONAL_EMAILS_SQL}
       FROM humans
       WHERE deleted_at IS NULL
       ORDER BY name, email, id
@@ -176,7 +203,8 @@ export function useOrganizations(): OrganizationRecord[] {
   >({
     sql: `
       SELECT id, owner_user_id, created_at, name, memo, pinned, pin_order,
-        ${AVATAR_SQL}
+        ${AVATAR_SQL},
+        ${TEAM_WORKSPACE_SQL}
       FROM organizations
       WHERE deleted_at IS NULL
       ORDER BY name, id
@@ -268,7 +296,8 @@ export async function loadHumansByIds(
         pinned,
         pin_order,
         ${AVATAR_SQL},
-        ${CONTACT_SUMMARY_SQL}
+        ${CONTACT_SUMMARY_SQL},
+        ${ADDITIONAL_EMAILS_SQL}
       FROM humans
       WHERE id IN (${uniqueIds.map(() => "?").join(", ")})
         AND deleted_at IS NULL
@@ -286,7 +315,8 @@ export async function loadOrganization(
   const rows = await liveQueryClient.execute<OrganizationSqlRow>(
     `
       SELECT id, owner_user_id, created_at, name, memo, pinned, pin_order,
-        ${AVATAR_SQL}
+        ${AVATAR_SQL},
+        ${TEAM_WORKSPACE_SQL}
       FROM organizations
       WHERE id = ? AND deleted_at IS NULL
       LIMIT 1
@@ -381,7 +411,11 @@ export async function searchContacts(
             humans.phone || char(10) ||
             humans.job_title || char(10) ||
             humans.memo || char(10) ||
-            COALESCE(organizations.name, '')
+            COALESCE(organizations.name, '') || char(10) ||
+            COALESCE((
+              SELECT group_concat(additional_email.value, char(10))
+              FROM ${ADDITIONAL_EMAILS_JSON_EACH_SQL} AS additional_email
+            ), '')
           ) LIKE '%' || ? || '%'
         )
       ORDER BY humans.created_at DESC, humans.id
@@ -412,36 +446,17 @@ export function createHuman({
   entryPoint?: "contacts" | "session_participants" | "speaker_assignment";
 }): Promise<string> {
   const humanId = id();
-  const now = new Date().toISOString();
 
   return enqueueDatabaseWrite(`human:${humanId}`, async () => {
-    await executeTransaction([
-      {
-        sql: `
-          INSERT INTO humans (
-            id, workspace_id, owner_user_id, organization_id, name, email,
-            phone, job_title, linkedin_username, memo, pinned, pin_order,
-            metadata_json, created_at, updated_at, deleted_at
-          ) VALUES (
-            ?, NULLIF((
-              SELECT json_extract(value_json, '$.workspace_id')
-              FROM app_settings
-              WHERE id = 'cloudsync_workspace_binding'
-            ), ''), COALESCE(
-              (SELECT library_workspace_id FROM local_library_connections WHERE active = 1),
-              NULLIF(NULLIF(?, ''), '${DEFAULT_USER_ID}'),
-              NULLIF((
-                SELECT json_extract(value_json, '$.workspace_id')
-                FROM app_settings
-                WHERE id = 'cloudsync_workspace_binding'
-              ), ''),
-              '${DEFAULT_USER_ID}'
-            ), '', ?, ?, '', '', '', '', 0, NULL, '{}', ?, ?, NULL
-          )
-        `,
-        params: [humanId, ownerUserId, name, email, now, now],
-      },
-    ]);
+    const result = await calendarCommands.createHuman({
+      id: humanId,
+      owner_user_id: ownerUserId,
+      name,
+      email,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
     trackAnalyticsEvent("contact_created", {
       entry_point: entryPoint,
       has_email: Boolean(email),
@@ -458,42 +473,24 @@ export function createOrganization({
   name: string;
 }): Promise<string> {
   const organizationId = id();
-  const now = new Date().toISOString();
 
   return enqueueDatabaseWrite(`organization:${organizationId}`, async () => {
-    await executeTransaction([
-      {
-        sql: `
-          INSERT INTO organizations (
-            id, workspace_id, owner_user_id, name, memo, pinned, pin_order,
-            metadata_json, created_at, updated_at, deleted_at
-          ) VALUES (
-            ?, NULLIF((
-              SELECT json_extract(value_json, '$.workspace_id')
-              FROM app_settings
-              WHERE id = 'cloudsync_workspace_binding'
-            ), ''), COALESCE(
-              (SELECT library_workspace_id FROM local_library_connections WHERE active = 1),
-              NULLIF(NULLIF(?, ''), '${DEFAULT_USER_ID}'),
-              NULLIF((
-                SELECT json_extract(value_json, '$.workspace_id')
-                FROM app_settings
-                WHERE id = 'cloudsync_workspace_binding'
-              ), ''),
-              '${DEFAULT_USER_ID}'
-            ), ?, '', 0, NULL, '{}', ?, ?, NULL
-          )
-        `,
-        params: [organizationId, ownerUserId, name, now, now],
-      },
-    ]);
+    const result = await calendarCommands.createOrganization({
+      id: organizationId,
+      owner_user_id: ownerUserId,
+      name,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
     return organizationId;
   });
 }
 
 export function usePersonalContact(humanId: string) {
   return useLiveQuery<HumanSqlRow, HumanRecord | null>({
-    sql: `SELECT *, ${AVATAR_SQL}, ${CONTACT_SUMMARY_SQL}
+    sql: `SELECT *, ${AVATAR_SQL}, ${CONTACT_SUMMARY_SQL},
+        ${ADDITIONAL_EMAILS_SQL}
       FROM humans WHERE id = ? AND deleted_at IS NULL`,
     params: [humanId],
     mapRows: (rows) => (rows[0] ? mapHumanRow(rows[0]) : null),
@@ -511,56 +508,25 @@ export function savePersonalContact(
     | "linkedinUsername"
     | "memo"
     | "organizationId"
-    | "avatarDataUrl"
-  >,
+  > & { avatarDataUrl?: string | null },
 ): Promise<void> {
   return enqueueDatabaseWrite(`human:${humanId}`, async () => {
-    const now = new Date().toISOString();
-    const hasAvatar = values.avatarDataUrl !== null;
-    const validMetadata =
-      "CASE WHEN json_valid(humans.metadata_json) THEN humans.metadata_json ELSE '{}' END";
-    await executeTransaction([
-      {
-        sql: `
-        INSERT INTO humans (
-          id, workspace_id, owner_user_id, name, email, phone, job_title,
-          linkedin_username, memo, organization_id, metadata_json, created_at, updated_at, deleted_at
-        ) VALUES (
-          ?, NULLIF((SELECT json_extract(value_json, '$.workspace_id') FROM app_settings
-            WHERE id = 'cloudsync_workspace_binding'), ''),
-          COALESCE((SELECT library_workspace_id FROM local_library_connections WHERE active = 1), ?),
-          ?, ?, ?, ?, ?, ?, ?, ${
-            hasAvatar ? "json_object('avatarDataUrl', ?)" : "'{}'"
-          }, ?, ?, NULL
-        )
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name, email = excluded.email, phone = excluded.phone,
-          job_title = excluded.job_title, linkedin_username = excluded.linkedin_username,
-          memo = excluded.memo, organization_id = excluded.organization_id,
-          metadata_json = ${
-            hasAvatar
-              ? `json_set(${validMetadata}, '$.avatarDataUrl', ?)`
-              : `json_remove(${validMetadata}, '$.avatarDataUrl')`
-          },
-          updated_at = excluded.updated_at, deleted_at = NULL
-      `,
-        params: [
-          humanId,
-          humanId,
-          values.name,
-          values.email,
-          values.phone,
-          values.jobTitle,
-          values.linkedinUsername,
-          values.memo,
-          values.organizationId,
-          ...(hasAvatar ? [values.avatarDataUrl] : []),
-          now,
-          now,
-          ...(hasAvatar ? [values.avatarDataUrl] : []),
-        ],
-      },
-    ]);
+    const result = await calendarCommands.savePersonalContact({
+      human_id: humanId,
+      name: values.name,
+      email: values.email,
+      phone: values.phone,
+      job_title: values.jobTitle,
+      linkedin_username: values.linkedinUsername,
+      memo: values.memo,
+      organization_id: values.organizationId,
+      avatar_data_url:
+        typeof values.avatarDataUrl === "string" ? values.avatarDataUrl : null,
+      remove_avatar: values.avatarDataUrl === null,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -576,40 +542,27 @@ export function updateHuman(
       | "linkedinUsername"
       | "memo"
       | "organizationId"
+      | "additionalEmails"
     >
   >,
 ): Promise<void> {
-  const columns = {
-    name: "name",
-    email: "email",
-    phone: "phone",
-    jobTitle: "job_title",
-    linkedinUsername: "linkedin_username",
-    memo: "memo",
-    organizationId: "organization_id",
-  } as const;
-  const assignments: string[] = [];
-  const params: unknown[] = [];
-
-  for (const [key, value] of Object.entries(changes) as Array<
-    [keyof typeof columns, string]
-  >) {
-    assignments.push(`${columns[key]} = ?`);
-    params.push(value);
-  }
-  if (assignments.length === 0) return Promise.resolve();
+  if (Object.keys(changes).length === 0) return Promise.resolve();
 
   return enqueueDatabaseWrite(`human:${humanId}`, async () => {
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE humans
-          SET ${assignments.join(", ")}, updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [...params, new Date().toISOString(), humanId],
-      },
-    ]);
+    const result = await calendarCommands.updateHuman({
+      human_id: humanId,
+      name: changes.name ?? null,
+      email: changes.email ?? null,
+      phone: changes.phone ?? null,
+      job_title: changes.jobTitle ?? null,
+      linkedin_username: changes.linkedinUsername ?? null,
+      memo: changes.memo ?? null,
+      organization_id: changes.organizationId ?? null,
+      additional_emails: changes.additionalEmails ?? null,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -617,38 +570,28 @@ export function updateOrganization(
   organizationId: string,
   changes: Partial<Pick<OrganizationRecord, "name" | "memo">>,
 ): Promise<void> {
-  const assignments: string[] = [];
-  const params: unknown[] = [];
-  if (changes.name !== undefined) {
-    assignments.push("name = ?");
-    params.push(changes.name);
+  if (changes.name === undefined && changes.memo === undefined) {
+    return Promise.resolve();
   }
-  if (changes.memo !== undefined) {
-    assignments.push("memo = ?");
-    params.push(changes.memo);
-  }
-  if (assignments.length === 0) return Promise.resolve();
 
   return enqueueDatabaseWrite(`organization:${organizationId}`, async () => {
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE organizations
-          SET ${assignments.join(", ")}, updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [...params, new Date().toISOString(), organizationId],
-      },
-    ]);
+    const result = await calendarCommands.updateOrganization({
+      organization_id: organizationId,
+      name: changes.name ?? null,
+      memo: changes.memo ?? null,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
 export function deleteHuman(humanId: string): Promise<void> {
-  return softDeleteContact("humans", humanId);
+  return softDeleteContact("human", humanId);
 }
 
 export function deleteOrganization(organizationId: string): Promise<void> {
-  return softDeleteContact("organizations", organizationId);
+  return softDeleteContact("organization", organizationId);
 }
 
 export function updateContactAvatar(
@@ -657,28 +600,15 @@ export function updateContactAvatar(
   avatarDataUrl: string | null,
 ): Promise<void> {
   const table = type === "human" ? "humans" : "organizations";
-  const validMetadata =
-    "CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END";
   return enqueueDatabaseWrite(`${table}:${contactId}`, async () => {
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE ${table}
-          SET
-            metadata_json = ${
-              avatarDataUrl === null
-                ? `json_remove(${validMetadata}, '$.avatarDataUrl')`
-                : `json_set(${validMetadata}, '$.avatarDataUrl', ?)`
-            },
-            updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params:
-          avatarDataUrl === null
-            ? [new Date().toISOString(), contactId]
-            : [avatarDataUrl, new Date().toISOString(), contactId],
-      },
-    ]);
+    const result = await calendarCommands.updateContactAvatar({
+      kind: type,
+      contact_id: contactId,
+      avatar_data_url: avatarDataUrl,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -686,25 +616,14 @@ export function updateHumanContactSummary(
   humanId: string,
   summary: ContactSummaryRecord,
 ): Promise<void> {
-  const validMetadata =
-    "CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END";
   return enqueueDatabaseWrite(`human:${humanId}`, async () => {
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE humans
-          SET
-            metadata_json = json_set(
-              ${validMetadata},
-              '$.contactSummary',
-              json(?)
-            ),
-            updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [JSON.stringify(summary), new Date().toISOString(), humanId],
-      },
-    ]);
+    const result = await calendarCommands.updateHumanContactSummary({
+      human_id: humanId,
+      summary_json: JSON.stringify(summary),
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -712,31 +631,14 @@ export function toggleContactPin(
   type: "human" | "organization",
   contactId: string,
 ): Promise<void> {
-  const table = type === "human" ? "humans" : "organizations";
   return enqueueDatabaseWrite("contacts:pin-order", async () => {
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE ${table}
-          SET
-            pin_order = CASE
-              WHEN pinned = 1 THEN NULL
-              ELSE COALESCE((
-                SELECT MAX(pin_order)
-                FROM (
-                  SELECT pin_order FROM humans WHERE deleted_at IS NULL
-                  UNION ALL
-                  SELECT pin_order FROM organizations WHERE deleted_at IS NULL
-                )
-              ), 0) + 1
-            END,
-            pinned = CASE WHEN pinned = 1 THEN 0 ELSE 1 END,
-            updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [new Date().toISOString(), contactId],
-      },
-    ]);
+    const result = await calendarCommands.toggleContactPin({
+      kind: type,
+      contact_id: contactId,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -744,17 +646,12 @@ export function reorderPinnedContacts(
   contacts: Array<{ type: "human" | "organization"; id: string }>,
 ): Promise<void> {
   return enqueueDatabaseWrite("contacts:pin-order", async () => {
-    const now = new Date().toISOString();
-    await executeTransaction(
-      contacts.map((contact, index) => ({
-        sql: `
-          UPDATE ${contact.type === "human" ? "humans" : "organizations"}
-          SET pin_order = ?, updated_at = ?
-          WHERE id = ? AND pinned = 1 AND deleted_at IS NULL
-        `,
-        params: [index, now, contact.id],
-      })),
-    );
+    const result = await calendarCommands.reorderPinnedContacts({
+      contacts: contacts.map(({ type, id }) => ({ kind: type, id })),
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -763,88 +660,13 @@ export function mergeHumans(
   duplicateHumanId: string,
 ): Promise<void> {
   return enqueueDatabaseWrite("contacts:merge", async () => {
-    const rows = await liveQueryClient.execute<HumanSqlRow>(
-      `
-        SELECT
-          id, owner_user_id, created_at, organization_id, name, email, phone,
-          job_title, linkedin_username, memo, pinned, pin_order
-        FROM humans
-        WHERE id IN (?, ?) AND deleted_at IS NULL
-      `,
-      [selectedHumanId, duplicateHumanId],
-    );
-    const selfHumanId =
-      rows.find((row) => row.id === row.owner_user_id)?.id ??
-      (duplicateHumanId === DEFAULT_USER_ID
-        ? duplicateHumanId
-        : selectedHumanId);
-    const primaryId =
-      selfHumanId === duplicateHumanId ? duplicateHumanId : selectedHumanId;
-    const duplicateId =
-      primaryId === selectedHumanId ? duplicateHumanId : selectedHumanId;
-    const primary = rows.find((row) => row.id === primaryId);
-    const duplicate = rows.find((row) => row.id === duplicateId);
-    if (!primary || !duplicate) {
-      throw new Error("Both contacts must exist before they can be merged");
+    const result = await calendarCommands.mergeHumans({
+      selected_human_id: selectedHumanId,
+      duplicate_human_id: duplicateHumanId,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
     }
-
-    const now = new Date().toISOString();
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE session_participants AS duplicate_mapping
-          SET deleted_at = ?, updated_at = ?
-          WHERE duplicate_mapping.human_id = ?
-            AND duplicate_mapping.deleted_at IS NULL
-            AND EXISTS (
-              SELECT 1
-              FROM session_participants AS primary_mapping
-              WHERE primary_mapping.session_id = duplicate_mapping.session_id
-                AND primary_mapping.human_id = ?
-                AND primary_mapping.deleted_at IS NULL
-            )
-        `,
-        params: [now, now, duplicateId, primaryId],
-      },
-      {
-        sql: `
-          UPDATE session_participants
-          SET human_id = ?, updated_at = ?
-          WHERE human_id = ? AND deleted_at IS NULL
-        `,
-        params: [primaryId, now, duplicateId],
-      },
-      {
-        sql: `
-          UPDATE humans
-          SET
-            job_title = ?,
-            linkedin_username = ?,
-            phone = ?,
-            memo = ?,
-            organization_id = ?,
-            updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [
-          mergeText(primary.job_title, duplicate.job_title),
-          mergeText(primary.linkedin_username, duplicate.linkedin_username),
-          mergeText(primary.phone, duplicate.phone),
-          mergeText(primary.memo, duplicate.memo),
-          primary.organization_id || duplicate.organization_id,
-          now,
-          primaryId,
-        ],
-      },
-      {
-        sql: `
-          UPDATE humans
-          SET deleted_at = ?, updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [now, now, duplicateId],
-      },
-    ]);
     trackAnalyticsEvent("contact_merged", {
       entry_point: "contact_details",
     });
@@ -859,124 +681,37 @@ export function applyContactEnhancement({
 }: {
   humanId: string;
   ownerUserId: string;
-  changes: { name?: string; email?: string; companyName?: string };
+  changes: {
+    name?: string;
+    email?: string;
+    companyName?: string;
+    jobTitle?: string;
+    phone?: string;
+    linkedinUsername?: string;
+  };
   createIfMissing?: boolean;
 }): Promise<void> {
   return enqueueDatabaseWrite(`human:${humanId}`, async () => {
-    const now = new Date().toISOString();
-    const statements: Array<{ sql: string; params: unknown[] }> = [];
-
     if (createIfMissing) {
-      statements.push({
-        sql: `
-          INSERT INTO humans (
-            id, workspace_id, owner_user_id, organization_id, name, email,
-            phone, job_title, linkedin_username, memo, pinned, pin_order,
-            metadata_json, created_at, updated_at, deleted_at
-          ) VALUES (
-            ?, NULLIF((
-              SELECT json_extract(value_json, '$.workspace_id')
-              FROM app_settings
-              WHERE id = 'cloudsync_workspace_binding'
-            ), ''), COALESCE(
-              (SELECT library_workspace_id FROM local_library_connections WHERE active = 1),
-              NULLIF(NULLIF(?, ''), '${DEFAULT_USER_ID}'),
-              NULLIF((
-                SELECT json_extract(value_json, '$.workspace_id')
-                FROM app_settings
-                WHERE id = 'cloudsync_workspace_binding'
-              ), ''),
-              '${DEFAULT_USER_ID}'
-            ), '', ?, ?, '', '', '', '', 0, NULL, '{}', ?, ?, NULL
-          )
-          ON CONFLICT(id) DO UPDATE SET
-            deleted_at = NULL,
-            updated_at = excluded.updated_at
-          WHERE humans.deleted_at IS NOT NULL
-        `,
-        params: [
-          humanId,
-          ownerUserId,
-          changes.name ?? "",
-          changes.email ?? "",
-          now,
-          now,
-        ],
-      });
       trackAnalyticsEvent("contact_created", {
         entry_point: "session_participants",
         has_email: Boolean(changes.email),
       });
     }
-
-    if (changes.companyName) {
-      const organizationId = id();
-      statements.push({
-        sql: `
-          INSERT INTO organizations (
-            id, workspace_id, owner_user_id, name, memo, pinned, pin_order,
-            metadata_json, created_at, updated_at, deleted_at
-          )
-          SELECT ?, NULLIF((
-            SELECT json_extract(value_json, '$.workspace_id')
-            FROM app_settings
-            WHERE id = 'cloudsync_workspace_binding'
-          ), ''), COALESCE((SELECT library_workspace_id FROM local_library_connections WHERE active = 1), ?), ?, '', 0, NULL, '{}', ?, ?, NULL
-          WHERE NOT EXISTS (
-            SELECT 1
-            FROM organizations
-            WHERE lower(name) = lower(?) AND deleted_at IS NULL
-          )
-        `,
-        params: [
-          organizationId,
-          ownerUserId,
-          changes.companyName,
-          now,
-          now,
-          changes.companyName,
-        ],
-      });
+    const result = await calendarCommands.applyContactEnhancement({
+      human_id: humanId,
+      owner_user_id: ownerUserId,
+      create_if_missing: createIfMissing,
+      name: changes.name ?? null,
+      email: changes.email ?? null,
+      company_name: changes.companyName ?? null,
+      job_title: changes.jobTitle ?? null,
+      phone: changes.phone ?? null,
+      linkedin_username: changes.linkedinUsername ?? null,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
     }
-
-    const assignments: string[] = [];
-    const params: unknown[] = [];
-    if (changes.name !== undefined) {
-      assignments.push("name = ?");
-      params.push(changes.name);
-    }
-    if (changes.email !== undefined) {
-      assignments.push("email = ?");
-      params.push(changes.email);
-    }
-    if (changes.companyName) {
-      assignments.push(`
-        organization_id = CASE
-          WHEN organization_id = '' THEN COALESCE((
-            SELECT id
-            FROM organizations
-            WHERE lower(name) = lower(?) AND deleted_at IS NULL
-            ORDER BY created_at, id
-            LIMIT 1
-          ), organization_id)
-          ELSE organization_id
-        END
-      `);
-      params.push(changes.companyName);
-    }
-
-    if (assignments.length > 0) {
-      statements.push({
-        sql: `
-          UPDATE humans
-          SET ${assignments.join(", ")}, updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [...params, now, humanId],
-      });
-    }
-
-    if (statements.length > 0) await executeTransaction(statements);
   });
 }
 
@@ -1012,7 +747,22 @@ function mapHumanRow(row: HumanSqlRow): HumanRecord {
     pinOrder: row.pin_order,
     avatarDataUrl: row.avatar_data_url ?? null,
     summary: parseContactSummary(row.contact_summary_json),
+    additionalEmails: parseAdditionalEmails(row.additional_emails_json),
   };
+}
+
+function parseAdditionalEmails(value: string | null | undefined): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (email): email is string => typeof email === "string" && !!email.trim(),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function parseContactSummary(value: string | null | undefined) {
@@ -1044,6 +794,7 @@ function parseContactSummary(value: string | null | undefined) {
     return {
       facts,
       sourceHash: parsed.sourceHash,
+      promptKey: typeof parsed.promptKey === "string" ? parsed.promptKey : "",
       generatedAt: parsed.generatedAt,
       sources,
     };
@@ -1062,29 +813,22 @@ function mapOrganizationRow(row: OrganizationSqlRow): OrganizationRecord {
     pinned: Boolean(row.pinned),
     pinOrder: row.pin_order,
     avatarDataUrl: row.avatar_data_url ?? null,
+    teamWorkspace: Boolean(row.team_workspace),
   };
 }
 
 function softDeleteContact(
-  table: "humans" | "organizations",
+  type: "human" | "organization",
   contactId: string,
 ): Promise<void> {
+  const table = type === "human" ? "humans" : "organizations";
   return enqueueDatabaseWrite(`${table}:${contactId}`, async () => {
-    const now = new Date().toISOString();
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE ${table}
-          SET deleted_at = ?, updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [now, now, contactId],
-      },
-    ]);
+    const result = await calendarCommands.softDeleteContact({
+      kind: type,
+      contact_id: contactId,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
-}
-
-function mergeText(primary: string, duplicate: string): string {
-  if (!duplicate) return primary;
-  return primary ? `${primary}, ${duplicate}` : duplicate;
 }

@@ -1,6 +1,10 @@
 import { useLingui } from "@lingui/react/macro";
 import { useCallback, useMemo, useState } from "react";
 
+import {
+  commands as windowsCommands,
+  getCurrentWebviewWindowLabel,
+} from "@anlg/plugin-windows";
 import { CaretRight, Check, Folder, Plus } from "@anlg/ui/components/icons";
 import {
   Command,
@@ -30,6 +34,7 @@ import {
   useSession,
   useUpdateSession,
 } from "~/session/queries";
+import { foldersNavigationEvent } from "~/shared/folders-navigation";
 import { useTabs } from "~/store/zustand/tabs";
 import { TemplateIconGlyph } from "~/templates/template-icon";
 
@@ -106,22 +111,26 @@ export function FolderPicker({
   );
 }
 
-function FolderPickerContent({
+export function FolderPickerContent({
   sessionId,
   onClose,
+  selectedPath,
+  onSelectFolder,
 }: {
-  sessionId: string;
+  sessionId?: string;
   onClose: () => void;
+  selectedPath?: string;
+  onSelectFolder?: (folderPath: string) => void | Promise<void>;
 }) {
   const { t } = useLingui();
   const [query, setQuery] = useState("");
-  const folderId = useSession(sessionId)?.folder_id ?? "";
+  const folderId = useSession(sessionId ?? "")?.folder_id ?? "";
   const folderPaths = useFolderPaths();
   const folderIcons = useFolderIcons();
-  const updateSession = useUpdateSession(sessionId);
+  const updateSession = useUpdateSession(sessionId ?? "");
   const openNew = useTabs((state) => state.openNew);
   const setSelectedPath = useFolderSelection((state) => state.setSelectedPath);
-  const currentPath = normalizeFolderPath(folderId) ?? "";
+  const currentPath = normalizeFolderPath(selectedPath ?? folderId) ?? "";
   const [highlighted, setHighlighted] = useState(currentPath);
   const folders = useMemo(() => {
     if (currentPath && !folderPaths.includes(currentPath)) {
@@ -143,7 +152,7 @@ function FolderPickerContent({
       }
 
       onClose();
-      if (normalized === folderId) {
+      if (normalized === currentPath) {
         return;
       }
 
@@ -153,21 +162,36 @@ function FolderPickerContent({
             await createNamedFolder(normalized);
             setSelectedPath(normalized);
           }
-          await updateSession({ folder_id: normalized });
+          if (onSelectFolder) {
+            await onSelectFolder(normalized);
+          } else if (sessionId) {
+            await updateSession({ folder_id: normalized });
+          }
         } catch (error) {
           console.error("[folder-picker] failed to update folder", error);
         }
       })();
     },
-    [folderId, folderPaths, onClose, setSelectedPath, updateSession],
+    [
+      currentPath,
+      folderPaths,
+      onClose,
+      onSelectFolder,
+      setSelectedPath,
+      updateSession,
+    ],
   );
 
   const handleSeeAllFolders = useCallback(() => {
     onClose();
-    if (currentPath) {
-      setSelectedPath(currentPath);
+    if (getCurrentWebviewWindowLabel() === "main") {
+      if (currentPath) {
+        setSelectedPath(currentPath);
+      }
+      openNew({ type: "folders" });
+      return;
     }
-    openNew({ type: "folders" });
+    void openFoldersInMainWindow(currentPath);
   }, [currentPath, onClose, openNew, setSelectedPath]);
 
   return (
@@ -246,6 +270,29 @@ function FolderPickerContent({
       </button>
     </div>
   );
+}
+
+async function openFoldersInMainWindow(folderPath: string) {
+  const event = foldersNavigationEvent(folderPath);
+  const shown = await windowsCommands.windowShow({ type: "main" });
+  if (shown.status === "error") {
+    console.error("[folder-picker] failed to show main window", shown.error);
+    return;
+  }
+  await emitFoldersNavigation(event);
+}
+
+async function emitFoldersNavigation(event: {
+  path: string;
+  search: { path: string } | null;
+}) {
+  const emitted = await windowsCommands.windowEmitNavigate(
+    { type: "main" },
+    event,
+  );
+  if (emitted.status === "error") {
+    console.error("[folder-picker] failed to open folders", emitted.error);
+  }
 }
 
 function collectWithCurrent(folderPaths: string[], currentPath: string) {

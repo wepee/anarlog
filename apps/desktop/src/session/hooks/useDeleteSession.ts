@@ -4,7 +4,7 @@ import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 import { useCallback, useEffect } from "react";
 
 import { getCurrentWebviewWindowLabel } from "@anlg/plugin-windows";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 
 import { useIgnoredEvents } from "~/calendar/ignored-events";
 import { trackPendingSoftDelete } from "~/session/pending-soft-deletes";
@@ -155,7 +155,7 @@ export function useDeleteSession() {
                 .getState()
                 .openCurrent({ type: "sessions", id: sessionId });
             }
-            sonnerToast.error(t`Could not delete this note. Please try again.`);
+            toast.error(t`Could not delete this note. Please try again.`);
           } else {
             // The delete committed but main never learned about it, so its
             // finalize-time cleanup will not run. Finalize here.

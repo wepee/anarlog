@@ -170,6 +170,7 @@ pub enum NotificationIcon {
 pub struct NotificationContext {
     pub key: String,
     pub source: Option<NotificationSource>,
+    pub action: Option<NotificationAction>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
@@ -177,6 +178,22 @@ pub struct NotificationContext {
 pub enum NotificationActionVariant {
     Default,
     Destructive,
+}
+
+/// An explicit calendar reminder action. These are intentionally semantic so the
+/// app can decide whether foregrounding its window is appropriate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationAction {
+    JoinAndRecord,
+    OpenMeeting,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationActionMenu {
+    pub label: String,
+    pub action: NotificationAction,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
@@ -191,6 +208,8 @@ pub struct Notification {
     pub event_details: Option<EventDetails>,
     pub action_label: Option<String>,
     pub action_variant: Option<NotificationActionVariant>,
+    pub action: Option<NotificationAction>,
+    pub action_menu: Option<NotificationActionMenu>,
     pub options: Option<Vec<String>>,
     pub footer: Option<NotificationFooter>,
     pub icon: Option<NotificationIcon>,
@@ -294,6 +313,10 @@ impl Notification {
             .is_some_and(|options| !options.is_empty())
     }
 
+    pub fn has_action_menu(&self) -> bool {
+        self.action_menu.is_some()
+    }
+
     pub fn has_expandable_content(&self) -> bool {
         if matches!(self.source, Some(NotificationSource::CalendarEvent { .. })) {
             return false;
@@ -306,7 +329,7 @@ impl Notification {
     }
 
     pub fn default_action_label(&self) -> &str {
-        self.action_label.as_deref().unwrap_or("Open Anarlog")
+        self.action_label.as_deref().unwrap_or("Open BlackMushi")
     }
 
     pub fn expanded_action_label(&self) -> &str {
@@ -382,7 +405,7 @@ pub fn expanded_schedule_text(remaining: Duration) -> String {
 
 pub fn stop_countdown_text(remaining: Duration) -> String {
     let seconds = remaining.as_secs_f64().ceil() as u64;
-    format!("Anarlog will stop listening in {seconds} seconds.")
+    format!("BlackMushi will stop listening in {seconds} seconds.")
 }
 
 impl NotificationSource {
@@ -450,6 +473,8 @@ pub struct NotificationBuilder {
     event_details: Option<EventDetails>,
     action_label: Option<String>,
     action_variant: Option<NotificationActionVariant>,
+    action: Option<NotificationAction>,
+    action_menu: Option<NotificationActionMenu>,
     options: Option<Vec<String>>,
     footer: Option<NotificationFooter>,
     icon: Option<NotificationIcon>,
@@ -506,6 +531,19 @@ impl NotificationBuilder {
         self
     }
 
+    pub fn action(mut self, action: NotificationAction) -> Self {
+        self.action = Some(action);
+        self
+    }
+
+    pub fn action_menu(mut self, label: impl Into<String>, action: NotificationAction) -> Self {
+        self.action_menu = Some(NotificationActionMenu {
+            label: label.into(),
+            action,
+        });
+        self
+    }
+
     pub fn options(mut self, options: Vec<String>) -> Self {
         self.options = Some(options);
         self
@@ -538,6 +576,8 @@ impl NotificationBuilder {
             event_details: self.event_details,
             action_label: self.action_label,
             action_variant: self.action_variant,
+            action: self.action,
+            action_menu: self.action_menu,
             options: self.options,
             footer: self.footer,
             icon,
@@ -581,16 +621,6 @@ mod tests {
     }
 
     #[test]
-    fn system_symbol_icons_are_supported() {
-        assert_eq!(
-            NotificationIcon::system_symbol("phone.fill"),
-            NotificationIcon::SystemSymbol {
-                name: "phone.fill".to_string(),
-            }
-        );
-    }
-
-    #[test]
     fn windows_and_unc_paths_are_path_icons() {
         assert_eq!(
             NotificationIcon::from_app_id(r"C:\Program Files\Zoom\Zoom.exe"),
@@ -625,8 +655,8 @@ mod tests {
     }
 
     #[test]
-    fn notifications_fill_in_source_default_icon_when_missing() {
-        let notification = Notification::builder()
+    fn notifications_use_explicit_icon_or_source_default() {
+        let default_icon_notification = Notification::builder()
             .title("Title")
             .message("Message")
             .source(NotificationSource::MicDetected {
@@ -637,16 +667,13 @@ mod tests {
             .build();
 
         assert_eq!(
-            notification.icon,
+            default_icon_notification.icon,
             Some(NotificationIcon::Path {
                 path: "/Applications/Zoom.app".to_string(),
             })
         );
-    }
 
-    #[test]
-    fn notifications_keep_explicit_icon() {
-        let notification = Notification::builder()
+        let explicit_icon_notification = Notification::builder()
             .title("Title")
             .message("Message")
             .source(NotificationSource::CalendarEvent {
@@ -655,33 +682,15 @@ mod tests {
             .icon(NotificationIcon::Hidden)
             .build();
 
-        assert_eq!(notification.icon, Some(NotificationIcon::Hidden));
-    }
-
-    #[test]
-    fn notifications_preserve_footer() {
-        let notification = Notification::builder()
-            .title("Title")
-            .message("")
-            .footer(NotificationFooter {
-                text: "Ignore this app?".to_string(),
-                action_label: "YES".to_string(),
-                icon: None,
-            })
-            .build();
-
         assert_eq!(
-            notification
-                .footer
-                .as_ref()
-                .map(|footer| footer.action_label.as_str()),
-            Some("YES")
+            explicit_icon_notification.icon,
+            Some(NotificationIcon::Hidden)
         );
     }
 
     #[test]
-    fn calendar_events_are_not_expandable() {
-        let notification = Notification::builder()
+    fn only_session_notifications_with_event_details_expand() {
+        let calendar_notification = Notification::builder()
             .title("Standup")
             .message("Starting soon")
             .source(NotificationSource::CalendarEvent {
@@ -699,12 +708,9 @@ mod tests {
             })
             .build();
 
-        assert!(!notification.has_expandable_content());
-    }
+        assert!(!calendar_notification.has_expandable_content());
 
-    #[test]
-    fn session_notifications_expand_when_event_details_are_present() {
-        let notification = Notification::builder()
+        let session_notification = Notification::builder()
             .title("Design sync")
             .message("")
             .source(NotificationSource::Session {
@@ -717,8 +723,8 @@ mod tests {
             })
             .build();
 
-        assert!(notification.has_expandable_content());
-        assert_eq!(notification.expanded_title(), "Design sync");
+        assert!(session_notification.has_expandable_content());
+        assert_eq!(session_notification.expanded_title(), "Design sync");
     }
 
     #[test]
@@ -737,10 +743,30 @@ mod tests {
     }
 
     #[test]
+    fn semantic_action_menu_keeps_the_primary_action() {
+        let notification = Notification::builder()
+            .title("Design sync")
+            .message("Starting soon")
+            .action_label("Join & record")
+            .action(NotificationAction::JoinAndRecord)
+            .action_menu("Open meeting", NotificationAction::OpenMeeting)
+            .build();
+
+        assert!(notification.has_action_menu());
+        assert_eq!(
+            notification.primary_action(),
+            PrimaryAction::Accept {
+                label: "Join & record",
+                destructive: false
+            }
+        );
+    }
+
+    #[test]
     fn stop_countdown_copy_matches_macos() {
         let notification = Notification::builder()
             .title("Did your meeting end?")
-            .message("Anarlog will stop listening soon.")
+            .message("BlackMushi will stop listening soon.")
             .action_label("Stop")
             .action_variant(NotificationActionVariant::Destructive)
             .timeout(Duration::from_secs(30))
@@ -749,7 +775,7 @@ mod tests {
         assert!(notification.shows_stop_countdown());
         assert_eq!(
             notification.compact_message(Some(Duration::from_secs_f64(4.2))),
-            "Anarlog will stop listening in 5 seconds."
+            "BlackMushi will stop listening in 5 seconds."
         );
         assert_eq!(
             compact_schedule_text(Duration::from_secs(90)),

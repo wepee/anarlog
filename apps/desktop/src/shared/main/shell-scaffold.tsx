@@ -1,10 +1,9 @@
 import { platform } from "@tauri-apps/plugin-os";
-import { Fragment } from "react";
 
 import { cn } from "@anlg/utils";
 
 import { SyncProvider } from "~/calendar/components/context";
-import { useTabs } from "~/store/zustand/tabs";
+import { usesWindowsStyleTitleBar } from "~/shared/hooks/useWindowControlsGutter";
 
 export type MainSurfaceChrome = "default" | "top" | "top-borderless" | "left";
 
@@ -17,12 +16,9 @@ export function MainShellScaffold({
   edgeToEdge?: boolean;
   mainSurfaceChrome?: MainSurfaceChrome;
 }) {
-  const currentTab = useTabs((state) => state.currentTab);
-  const isCalendarMode = currentTab?.type === "calendar";
   const runtimePlatform = platform();
   const isMacos = runtimePlatform === "macos";
-  const isWindows = runtimePlatform === "windows";
-  const SyncWrapper = isCalendarMode ? SyncProvider : Fragment;
+  const hasCustomTitleBar = usesWindowsStyleTitleBar();
   const resolvedMainSurfaceChrome =
     mainSurfaceChrome ?? (edgeToEdge ? "top" : "default");
   const hasTopMainSurfaceChrome =
@@ -30,7 +26,7 @@ export function MainShellScaffold({
     resolvedMainSurfaceChrome === "top-borderless";
 
   return (
-    <SyncWrapper>
+    <SyncProvider>
       <div
         className={cn([
           "bg-background flex h-full gap-1 overflow-hidden",
@@ -39,7 +35,7 @@ export function MainShellScaffold({
             isMacos && "[&_[data-chat-floating-anchor]]:rounded-t-xl",
             "[&_[data-chat-floating-anchor]]:rounded-b-none",
             "[&_[data-chat-floating-anchor]]:border-x-0",
-            resolvedMainSurfaceChrome === "top" || isWindows
+            resolvedMainSurfaceChrome === "top" || hasCustomTitleBar
               ? "[&_[data-chat-floating-anchor]]:border-t"
               : "[&_[data-chat-floating-anchor]]:!border-t-0",
             "[&_[data-chat-floating-anchor]]:border-b-0",
@@ -48,7 +44,7 @@ export function MainShellScaffold({
             isMacos && "[&_[data-chat-floating-anchor]]:rounded-l-xl",
             !isMacos && "[&_[data-chat-floating-anchor]]:rounded-tl-xl",
             "[&_[data-chat-floating-anchor]]:rounded-r-none",
-            isWindows
+            hasCustomTitleBar
               ? [
                   "[&_[data-chat-floating-anchor]]:border-t",
                   "[&_[data-chat-floating-anchor]]:border-b-0",
@@ -65,6 +61,6 @@ export function MainShellScaffold({
       >
         {children}
       </div>
-    </SyncWrapper>
+    </SyncProvider>
   );
 }

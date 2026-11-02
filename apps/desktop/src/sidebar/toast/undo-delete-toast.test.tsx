@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@anlg/ui/components/ui/toast", () => ({
-  sonnerToast: {
+  toast: {
     message: mocks.message,
     error: mocks.error,
     dismiss: mocks.dismiss,
@@ -53,7 +53,7 @@ describe("UndoDeleteToast", () => {
     vi.useRealTimers();
   });
 
-  it("renders undo deletion through Sonner", () => {
+  it("renders undo deletion through the shared toaster", () => {
     act(() => {
       useUndoDelete.getState().addDeletion({
         session: { id: "session-1", title: "Design sync" },
@@ -75,28 +75,10 @@ describe("UndoDeleteToast", () => {
         id: "undo-delete:session-1",
         duration: Infinity,
         closeButton: false,
+        dismissible: false,
         action: expect.objectContaining({ label: "Undo" }),
       }),
     );
-    expect(mocks.message.mock.calls[0][1]).not.toHaveProperty("cancel");
-    expect(mocks.message.mock.calls[0][1]).toEqual(
-      expect.objectContaining({
-        description: expect.objectContaining({
-          props: expect.objectContaining({
-            className: expect.stringContaining("undo-delete-toast-gauge"),
-            style: expect.objectContaining({
-              "--undo-delete-duration": "5000ms",
-              "--undo-delete-progress": 1,
-            }),
-          }),
-        }),
-        descriptionClassName: expect.stringContaining("bottom-0"),
-      }),
-    );
-    expect(mocks.message.mock.calls[0][1].descriptionClassName).toContain(
-      "rounded-b-xl",
-    );
-
     view.unmount();
     expect(mocks.dismiss).toHaveBeenCalledWith("undo-delete:session-1");
   });

@@ -23,24 +23,8 @@ vi.mock("~/sidebar/folder-materials", () => ({
 }));
 
 vi.mock("~/sidebar/timeline", () => ({
-  TimelineView: ({
-    folderFilter = null,
-    showOpenCalendarButton = true,
-    topChipsOverlapHeader = false,
-    topChromeInset = false,
-  }: {
-    folderFilter?: string | null;
-    showOpenCalendarButton?: boolean;
-    topChipsOverlapHeader?: boolean;
-    topChromeInset?: boolean;
-  }) => (
-    <div
-      data-testid="timeline-view"
-      data-folder-filter={folderFilter ?? ""}
-      data-show-open-calendar-button={String(showOpenCalendarButton)}
-      data-top-chips-overlap-header={String(topChipsOverlapHeader)}
-      data-top-chrome-inset={String(topChromeInset)}
-    />
+  TimelineView: ({ folderFilter = null }: { folderFilter?: string | null }) => (
+    <div data-testid="timeline-view" data-folder-filter={folderFilter ?? ""} />
   ),
 }));
 
@@ -160,18 +144,12 @@ describe("LeftSidebar", () => {
     ["templates", "templates-nav"],
     ["automations", "automations-nav"],
     ["folders", "folders-nav"],
-  ])(
-    "lets the %s nav place its own header in the chrome row",
-    (type, testId) => {
-      mocks.currentTab = { type };
+  ])("shows the %s nav instead of the timeline", (type, testId) => {
+    mocks.currentTab = { type };
 
-      const { container } = render(<LeftSidebar />);
-      const classList = container.firstElementChild?.className.split(" ") ?? [];
+    render(<LeftSidebar />);
 
-      expect(screen.getByTestId(testId)).toBeTruthy();
-      expect(classList).toContain("pt-0");
-      expect(classList).toContain("pr-1");
-      expect(classList).not.toContain("pt-11");
-    },
-  );
+    expect(screen.getByTestId(testId)).toBeTruthy();
+    expect(screen.queryByTestId("timeline-view")).toBeNull();
+  });
 });

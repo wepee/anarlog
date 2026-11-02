@@ -1,6 +1,9 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { platform } from "@tauri-apps/plugin-os";
 import { useState } from "react";
 
+import { commands as fsSyncCommands } from "@anlg/plugin-fs-sync";
+import { commands as openerCommands } from "@anlg/plugin-opener2";
 import {
   AppWindow,
   ArrowsClockwise,
@@ -10,6 +13,7 @@ import {
   DotsThree,
   FileArrowDown,
   FileText,
+  FolderOpen,
   Globe,
   PictureInPicture,
   Waveform,
@@ -28,15 +32,19 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@anlg/ui/components/ui/dropdown-menu";
+import { toast } from "@anlg/ui/components/ui/toast";
 
 import { MetadataPanelContent } from "../metadata";
+import { AlwaysOnTop } from "./always-on-top";
 import { DeleteNote } from "./delete";
 import { ExportModal } from "./export-modal";
 import { Listening } from "./listening";
 import { LockNote } from "./lock-note";
-import { ShowInFolder } from "./misc";
 
 import { useAudioPlayer } from "~/audio-player";
+import { DEVICE_AUTH_REASON } from "~/lock/auth";
+import { isLockedFlag } from "~/lock/flag";
+import { useAppLock } from "~/lock/store";
 import { openFloatingMeetingPanel } from "~/meeting-float/host";
 import { isFloatingBarSupported } from "~/meeting-float/support";
 import { useRegenerateTranscript } from "~/session/components/note-input/transcript/actions";
@@ -45,6 +53,7 @@ import {
   useHasTranscript,
 } from "~/session/components/shared";
 import { VersionHistoryDialog } from "~/session/components/version-history-dialog";
+import { useSession } from "~/session/queries";
 import { openStandaloneNoteWindow } from "~/session/window";
 import { getBaseLanguageDisplayName } from "~/settings/general/language";
 import { useConfigValue } from "~/shared/config";
@@ -67,9 +76,11 @@ export function OverflowButton({
   sessionId: string;
   currentView: EditorView;
 }) {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [hasOpenedExportModal, setHasOpenedExportModal] = useState(false);
+  const [exportOpenCount, setExportOpenCount] = useState(0);
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const [hasOpenedVersionHistory, setHasOpenedVersionHistory] = useState(false);
   const hasTranscript = useHasTranscript(sessionId);
@@ -77,6 +88,8 @@ export function OverflowButton({
     sessionId,
     currentView,
   );
+  const session = useSession(sessionId);
+  const noteLocked = session == null || isLockedFlag(session.locked);
   const { audioExists, audioExistsResolved } = useAudioPlayer();
   const { uploadAudio, uploadTranscript } = useUploadFile(sessionId);
   const regenerateTranscript = useRegenerateTranscript(sessionId);
@@ -97,19 +110,27 @@ export function OverflowButton({
     !hasTranscript &&
     !currentNoteHasContent &&
     !isMeetingInProgress;
+  const showAudioInFolder = audioExistsResolved && audioExists;
+  const showAudioLabel =
+    platform() === "macos"
+      ? t`Show Audio in Finder`
+      : platform() === "windows"
+        ? t`Show Audio in Explorer`
+        : t`Show Audio in Folder`;
   const canOpenFloatingPanel =
     floatingBarSupported &&
     allowListening &&
     floatingBarEnabled &&
     sessionMode === "active";
-  const hasMeetingActions =
+  const hasRecordingActions =
     showListeningAction ||
     showRetranscribeAction ||
     showUploadActions ||
-    canOpenFloatingPanel;
+    showAudioInFolder;
   const openExportModal = () => {
     setOpen(false);
     setHasOpenedExportModal(true);
+    setExportOpenCount((count) => count + 1);
     requestAnimationFrame(() => setIsExportModalOpen(true));
   };
   const openVersionHistory = () => {
@@ -132,6 +153,26 @@ export function OverflowButton({
   const handleRetranscribeIn = (language: string) => {
     setOpen(false);
     void regenerateTranscript(language);
+  };
+  const handleShowAudioInFolder = async () => {
+    setOpen(false);
+    if (noteLocked) {
+      const ok = await useAppLock
+        .getState()
+        .authenticate(DEVICE_AUTH_REASON.openApp);
+      if (!ok) return;
+    }
+    const exists = await fsSyncCommands.audioExist(sessionId);
+    if (exists.status !== "ok" || !exists.data) {
+      toast.error(t`Recording not found. It may have been deleted.`, {
+        id: `show-audio-missing-${sessionId}`,
+      });
+      return;
+    }
+    const dir = await fsSyncCommands.sessionDir(sessionId);
+    if (dir.status === "ok") {
+      await openerCommands.openPath(dir.data, null);
+    }
   };
   const handleOpenFloatingPanel = () => {
     setOpen(false);
@@ -177,16 +218,6 @@ export function OverflowButton({
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>
             </DropdownMenuSub>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={openExportModal}
-              className="cursor-pointer"
-            >
-              <FileArrowDown />
-              <span>
-                <Trans>Export</Trans>
-              </span>
-            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={openVersionHistory}
               className="cursor-pointer"
@@ -262,18 +293,26 @@ export function OverflowButton({
                 </DropdownMenuItem>
               </>
             )}
-            {canOpenFloatingPanel && (
+            {showAudioInFolder && (
               <DropdownMenuItem
-                onClick={handleOpenFloatingPanel}
+                onClick={handleShowAudioInFolder}
                 className="cursor-pointer"
               >
-                <PictureInPicture />
-                <span>
-                  <Trans>Open floating panel</Trans>
-                </span>
+                <FolderOpen />
+                <span>{showAudioLabel}</span>
               </DropdownMenuItem>
             )}
-            {hasMeetingActions && <DropdownMenuSeparator />}
+            {hasRecordingActions && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onClick={openExportModal}
+              className="cursor-pointer"
+            >
+              <FileArrowDown />
+              <span>
+                <Trans>Export</Trans>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {!standaloneWindow && (
               <DropdownMenuItem
                 onClick={handleOpenStandaloneWindow}
@@ -285,7 +324,19 @@ export function OverflowButton({
                 </span>
               </DropdownMenuItem>
             )}
-            <ShowInFolder sessionId={sessionId} />
+            {canOpenFloatingPanel && (
+              <DropdownMenuItem
+                onClick={handleOpenFloatingPanel}
+                className="cursor-pointer"
+              >
+                <PictureInPicture />
+                <span>
+                  <Trans>Open floating panel</Trans>
+                </span>
+              </DropdownMenuItem>
+            )}
+            <AlwaysOnTop />
+            <DropdownMenuSeparator />
             <LockNote sessionId={sessionId} />
             <DeleteNote sessionId={sessionId} />
           </AppFloatingPanel>
@@ -293,6 +344,7 @@ export function OverflowButton({
       </DropdownMenu>
       {hasOpenedExportModal && (
         <ExportModal
+          key={exportOpenCount}
           sessionId={sessionId}
           currentView={currentView}
           open={isExportModalOpen}

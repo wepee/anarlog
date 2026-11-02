@@ -318,16 +318,6 @@ fn current_time_ms() -> i64 {
         .unwrap_or(0)
 }
 
-#[cfg(test)]
-pub(super) async fn load_dirty_rows_page(
-    pool: &SqlitePool,
-    keys: &HashMap<String, WorkspaceKeyring>,
-    max_rows: i64,
-    defer_active_captures: bool,
-) -> E2eeReplicaResult<(Vec<DirtyRow>, bool)> {
-    load_dirty_rows_page_after(pool, keys, max_rows, defer_active_captures, None).await
-}
-
 async fn load_dirty_rows_page_after(
     pool: &SqlitePool,
     keys: &HashMap<String, WorkspaceKeyring>,
@@ -919,6 +909,7 @@ pub(super) async fn persist_prepared_dirty_row_cancellable(
                 return Err(E2eeReplicaError::RollbackDetected);
             }
         }
+        super::authority::enqueue(&mut transaction, &field.state).await?;
         upsert_local_state(&mut transaction, &field.state).await?;
         if let Err(error) = check_e2ee_cancellation(is_cancelled) {
             transaction.rollback().await?;

@@ -3,8 +3,9 @@ use std::sync::Arc;
 use crate::cli::{DocumentKind, ExportFormat, MeetingCommand, MeetingSource};
 use crate::{Args, Error, Result, cloud::CloudClient, db, output};
 use anlg_agent_access::{
-    Document, GetMeetingInput, GetMeetingTranscriptInput, GetRecurringMeetingHistoryInput,
-    ListMeetingsInput, Meeting, MeetingExport, MeetingListItem, MeetingPage, TranscriptPage,
+    Document, Folder, FolderPage, GetMeetingInput, GetMeetingTranscriptInput,
+    GetRecurringMeetingHistoryInput, ListFoldersInput, ListMeetingsInput, Meeting, MeetingExport,
+    MeetingListItem, MeetingPage, TranscriptPage,
 };
 
 pub enum DataSource {
@@ -33,7 +34,17 @@ impl DataSource {
             Self::Local(db) => anlg_agent_access::list_meetings(db.pool(), input)
                 .await
                 .map_err(Into::into),
+            Self::Cloud(_) if input.folder_path.is_some() => Err(local_only("--folder")),
             Self::Cloud(client) => client.list_meetings(input).await,
+        }
+    }
+
+    async fn list_folders(&self, input: ListFoldersInput) -> Result<FolderPage> {
+        match self {
+            Self::Local(db) => anlg_agent_access::list_folders(db.pool(), input)
+                .await
+                .map_err(Into::into),
+            Self::Cloud(_) => Err(local_only("meetings folders")),
         }
     }
 
@@ -82,9 +93,38 @@ impl DataSource {
 
 pub async fn run(source: &DataSource, command: MeetingCommand, json: bool) -> Result<()> {
     match command {
+        MeetingCommand::Import { .. } | MeetingCommand::ImportStatus { .. } => {
+            unreachable!("handled before opening read-only source")
+        }
+        MeetingCommand::PilotUsage { from_ms, until_ms } => match source {
+            DataSource::Local(db) if json => super::meeting_pilot::run(db, from_ms, until_ms).await,
+            _ => Err(local_only("JSON meetings pilot-usage")),
+        },
+        MeetingCommand::HoldList {
+            after,
+            limit,
+            database_only,
+        } => match source {
+            DataSource::Local(db) if json => {
+                super::meeting_hold::list(db, &after, limit, database_only).await
+            }
+            _ => Err(local_only("JSON meetings hold-list")),
+        },
+        MeetingCommand::HoldExport { id, database_only } => match source {
+            DataSource::Local(db) if json => {
+                super::meeting_hold::export(db, &id, database_only).await
+            }
+            _ => Err(local_only("JSON meetings hold-export")),
+        },
+        MeetingCommand::Delete { .. }
+        | MeetingCommand::Capabilities
+        | MeetingCommand::InitializeManaged => {
+            unreachable!("handled before opening a data source")
+        }
         MeetingCommand::List {
             query,
             series_id,
+            folder,
             limit,
             offset,
         } => {
@@ -92,6 +132,7 @@ pub async fn run(source: &DataSource, command: MeetingCommand, json: bool) -> Re
                 .list_meetings(ListMeetingsInput {
                     query,
                     series_id,
+                    folder_path: folder,
                     limit: Some(limit),
                     offset: Some(offset),
                 })
@@ -104,12 +145,39 @@ pub async fn run(source: &DataSource, command: MeetingCommand, json: bool) -> Re
             output::emit(&rendered);
             Ok(())
         }
+        MeetingCommand::Folders {
+            query,
+            limit,
+            offset,
+        } => {
+            let page = source
+                .list_folders(ListFoldersInput {
+                    query,
+                    limit: Some(limit),
+                    offset: Some(offset),
+                })
+                .await?;
+            let rendered = if json {
+                output::json("meetings.folders", &page.folders, Some(&page.pagination))?
+            } else {
+                render_folders(&page.folders)
+            };
+            output::emit(&rendered);
+            Ok(())
+        }
         MeetingCommand::Get { id } => {
             let meeting = source
                 .get_meeting(GetMeetingInput { meeting_id: id })
                 .await?;
             let rendered = if json {
-                output::json("meetings.get", &meeting, None)?
+                match &source {
+                    DataSource::Local(db) => output::json(
+                        "meetings.get",
+                        &anlg_agent_access::local_meeting(db.pool(), meeting).await?,
+                        None,
+                    )?,
+                    DataSource::Cloud(_) => output::json("meetings.get", &meeting, None)?,
+                }
             } else {
                 meeting.to_markdown()
             };
@@ -200,6 +268,17 @@ pub async fn run(source: &DataSource, command: MeetingCommand, json: bool) -> Re
             output: path,
             force,
         } => {
+            if matches!(format, ExportFormat::Json)
+                && let DataSource::Local(db) = source
+            {
+                let meeting = anlg_agent_access::get_local_meeting_export(db.pool(), id).await?;
+                let content = if json {
+                    output::json("meetings.export", &meeting, None)?
+                } else {
+                    output::raw_json(&meeting)?
+                };
+                return output::write_or_emit(&content, path.as_deref(), force);
+            }
             let meeting = source.get_meeting_export(id).await?;
             let content = match (format, json) {
                 (ExportFormat::Markdown, false) => meeting.to_markdown(),
@@ -230,7 +309,23 @@ fn render_list(meetings: &[MeetingListItem]) -> String {
         .max()
         .unwrap_or(0)
         .clamp(5, 48);
-    let mut lines = vec![format!("{:<24}  {:<title_width$}  ID", "DATE", "TITLE")];
+    let folder_width = meetings
+        .iter()
+        .filter_map(|meeting| meeting.folder_path.as_deref())
+        .map(|path| path.chars().count())
+        .max()
+        .map(|width| width.clamp(6, 32));
+    let folder_column = |value: &str| {
+        folder_width
+            .map(|width| format!("{:<width$}  ", truncate(value, width)))
+            .unwrap_or_default()
+    };
+    let mut lines = vec![format!(
+        "{:<24}  {:<title_width$}  {}ID",
+        "DATE",
+        "TITLE",
+        folder_column("FOLDER")
+    )];
     for meeting in meetings {
         let occurred_at = if meeting.started_at.is_empty() {
             &meeting.created_at
@@ -238,7 +333,7 @@ fn render_list(meetings: &[MeetingListItem]) -> String {
             &meeting.started_at
         };
         lines.push(format!(
-            "{:<24}  {:<title_width$}  {}",
+            "{:<24}  {:<title_width$}  {}{}",
             truncate(occurred_at, 24),
             truncate(
                 if meeting.title.is_empty() {
@@ -248,10 +343,29 @@ fn render_list(meetings: &[MeetingListItem]) -> String {
                 },
                 title_width,
             ),
+            folder_column(meeting.folder_path.as_deref().unwrap_or_default()),
             meeting.id,
         ));
     }
     lines.join("\n")
+}
+
+fn render_folders(folders: &[Folder]) -> String {
+    if folders.is_empty() {
+        return "No folders found.".to_string();
+    }
+    folders
+        .iter()
+        .map(|folder| folder.path.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn local_only(feature: &str) -> Error {
+    Error::cloud(
+        "invalid_request",
+        format!("{feature} is only available for local meetings; use --source local"),
+    )
 }
 
 fn render_documents(documents: &[Document]) -> String {
@@ -299,8 +413,34 @@ mod tests {
             started_at: String::new(),
             ended_at: String::new(),
             series_id: String::new(),
+            folder_path: None,
         }]);
         assert!(rendered.contains("meeting-1"));
         assert!(rendered.contains('…'));
+        assert!(!rendered.contains("FOLDER"));
+    }
+
+    #[test]
+    fn list_render_shows_folders_when_present() {
+        let meeting = |id: &str, folder_path: Option<&str>| MeetingListItem {
+            id: id.to_string(),
+            title: "Planning".to_string(),
+            kind: "meeting".to_string(),
+            status: "active".to_string(),
+            created_at: "2026-07-13T09:00:00Z".to_string(),
+            updated_at: "2026-07-13T09:00:00Z".to_string(),
+            started_at: String::new(),
+            ended_at: String::new(),
+            series_id: String::new(),
+            folder_path: folder_path.map(str::to_string),
+        };
+        let rendered = render_list(&[
+            meeting("meeting-1", Some("Clients/ACME")),
+            meeting("meeting-2", None),
+        ]);
+        let lines = rendered.lines().collect::<Vec<_>>();
+        assert!(lines[0].contains("FOLDER"));
+        assert!(lines[1].contains("Clients/ACME  meeting-1"));
+        assert!(lines[2].ends_with("meeting-2"));
     }
 }

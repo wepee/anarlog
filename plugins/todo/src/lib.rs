@@ -63,7 +63,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 }
 
 fn get_api_base_url() -> String {
-    // L'API Anarlog a été retirée : exiger cette variable à la compilation
+    // L'API BlackMushi a été retirée : exiger cette variable à la compilation
     // rendait toute construction en release impossible hors CI. Les appels qui
     // l'utilisent sont de toute façon inopérants sans compte.
     option_env!("VITE_API_URL")

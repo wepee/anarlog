@@ -18,7 +18,7 @@ import {
 import { useScheduleTaskRunCallback } from "~/services/task-scheduler";
 import { subscribeThenDrainDeepLinks } from "~/shared/deeplink";
 import { useLatestRef } from "~/shared/hooks/useLatestRef";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { useTabs } from "~/store/zustand/tabs";
 
 export function useDeeplinkHandler() {

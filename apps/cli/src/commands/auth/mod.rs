@@ -117,7 +117,7 @@ fn emit_status(command: &'static str, status: AuthStatus, json: bool) -> Result<
     });
     if status.expired {
         output::emit(&format!(
-            "Signed in as {identity}. The access token has expired; open Anarlog or run the login command again to refresh it."
+            "Signed in as {identity}. The access token has expired; open BlackMushi or run the login command again to refresh it."
         ));
     } else {
         output::emit(&format!("Signed in as {identity}."));
@@ -227,10 +227,10 @@ async fn verify_and_build_session(tokens: CallbackTokens) -> Result<Session> {
         .map_err(|error| Error::operation("verify login", error.to_string()))?;
     if !response.status().is_success() {
         let reason = if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            "Anarlog rejected the callback session".to_string()
+            "BlackMushi rejected the callback session".to_string()
         } else {
             format!(
-                "Anarlog could not verify the callback session (HTTP {})",
+                "BlackMushi could not verify the callback session (HTTP {})",
                 response.status().as_u16()
             )
         };
@@ -461,7 +461,7 @@ mod tests {
     }
 
     #[test]
-    fn nightly_auth_uses_its_own_callback_and_token_store() {
+    fn each_channel_uses_its_own_login_callback_and_token_store() {
         let environment = Environment::for_executable("anarlog-nightly");
         assert_eq!(environment.scheme, "anarlog-nightly");
         assert_eq!(environment.bundle_id, "com.blackmushi.nightly");
@@ -475,10 +475,6 @@ mod tests {
             Environment::for_executable("anarlog").bundle_id,
             "com.blackmushi.stable"
         );
-    }
-
-    #[test]
-    fn builds_headless_browser_login_url() {
         assert_eq!(
             login_url("anarlog").unwrap().as_str(),
             "https://anarlog.so/auth?flow=desktop&scheme=anarlog"

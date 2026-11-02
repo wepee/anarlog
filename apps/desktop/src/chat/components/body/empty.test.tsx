@@ -18,44 +18,43 @@ describe("ChatBodyEmpty", () => {
     cleanup();
   });
 
-  it("renders context suggestions as short list rows without intro copy", () => {
+  it("offers different quick actions for notes, live meetings, and no context", () => {
+    const prompts: string[] = [];
+    for (const props of [
+      { hasContext: true },
+      { hasContext: true, isLiveMeeting: true },
+      { hasContext: false },
+    ]) {
+      const onSendMessage = vi.fn();
+      const view = render(
+        <ChatBodyEmpty {...props} onSendMessage={onSendMessage} />,
+      );
+      fireEvent.click(screen.getAllByRole("button")[0]);
+      const [prompt, parts] = onSendMessage.mock.calls[0];
+      expect(prompt.trim().length).toBeGreaterThan(0);
+      expect(parts).toEqual([{ type: "text", text: prompt }]);
+      prompts.push(prompt);
+      view.unmount();
+    }
+    expect(new Set(prompts).size).toBe(prompts.length);
+  });
+
+  it("offers shorter and longer rewrites only when the note has a summary", () => {
     const onSendMessage = vi.fn();
-
-    render(<ChatBodyEmpty hasContext onSendMessage={onSendMessage} />);
-
-    expect(screen.queryByText("Anarlog AI")).toBeNull();
-    expect(screen.queryByText(/Hi, I'm Anarlog AI/i)).toBeNull();
-
-    const actionItem = screen.getByRole("button", {
-      name: "List action items.",
-    });
-    const followUp = screen.getByRole("button", {
-      name: "Draft follow-up email.",
-    });
-    const decisions = screen.getByRole("button", {
-      name: "Find key decisions.",
-    });
-
-    expect(actionItem.className).toContain("w-full");
-    expect(actionItem.className).toContain("grid");
-    expect(actionItem.className).toContain("grid-cols-[1.5rem_minmax(0,1fr)]");
-    expect(actionItem.className).toContain("gap-x-1.5");
-    expect(actionItem.className).toContain("hover:bg-muted/55");
-    expect(actionItem.className).toContain("text-left");
-    expect(actionItem.firstElementChild?.className).toContain("size-6");
-    expect(followUp.className).toContain("w-full");
-    expect(decisions.className).toContain("w-full");
-
-    fireEvent.click(decisions);
-
-    expect(onSendMessage).toHaveBeenCalledWith(
-      "What were the key decisions that have been made?",
-      [
-        {
-          type: "text",
-          text: "What were the key decisions that have been made?",
-        },
-      ],
+    const view = render(
+      <ChatBodyEmpty hasContext hasSummary onSendMessage={onSendMessage} />,
     );
+    fireEvent.click(screen.getByText("Make the summary shorter."));
+    fireEvent.click(screen.getByText("Make the summary longer."));
+    const [shorter, longer] = onSendMessage.mock.calls.map(
+      ([prompt]) => prompt,
+    );
+    expect(shorter.trim()).not.toBe("");
+    expect(longer.trim()).not.toBe("");
+    expect(shorter).not.toEqual(longer);
+    view.unmount();
+
+    render(<ChatBodyEmpty hasContext onSendMessage={vi.fn()} />);
+    expect(screen.queryByText("Make the summary shorter.")).toBeNull();
   });
 });

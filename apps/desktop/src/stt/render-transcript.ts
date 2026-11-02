@@ -20,6 +20,8 @@ export type RenderedTranscriptSegmentWithWordMetadata = Omit<
 };
 
 export type TranscriptRow = {
+  source?: string;
+  provider?: string;
   started_at?: number | null;
   words?: Array<{
     id?: string | null;
@@ -115,6 +117,9 @@ export function getRenderTranscriptRequestKey(
       writeValue(word.channel);
       writeValue(word.speaker_index);
       writeValue((word as { metadata?: unknown }).metadata);
+      writeValue(
+        syntheticChunkStartMs((word as { metadata?: unknown }).metadata),
+      );
     }
 
     for (const assignment of transcript.assignments) {
@@ -153,7 +158,7 @@ export function buildRenderTranscriptRequestFromRows(
     humans,
     participantHumanIds,
   );
-  return request && speakerContext
+  return request && speakerContext?.intervals.length
     ? { ...request, speaker_context: speakerContext }
     : request;
 }
@@ -272,10 +277,47 @@ function buildRenderTranscriptRequest(
       normalizeSpeakerHint(hint, words, wordIndexById);
     }
 
+    // Older Gemini batch responses put the entire recording on the personal-mic
+    // channel. Repair the render input without changing saved words or labels.
+    const legacyGeminiMix =
+      transcript.source === "batch_transcription" &&
+      transcript.provider === "google_generative_ai" &&
+      words.length > 0 &&
+      words.every((word) => word.channel === 0) &&
+      !(transcript.words ?? []).some((word) => {
+        const metadata = parseHintValue(word.metadata);
+        return (
+          metadata != null &&
+          typeof metadata === "object" &&
+          "source_channel_restored" in metadata &&
+          metadata.source_channel_restored === true
+        );
+      }) &&
+      !(transcript.speaker_hints ?? []).some((hint) => {
+        const value = parseHintValue(hint.value);
+        return (
+          hint.type === "provider_speaker_index" &&
+          value != null &&
+          typeof value === "object" &&
+          (value as { source_channel_restored?: unknown })
+            .source_channel_restored === true
+        );
+      });
+    if (legacyGeminiMix) {
+      for (const word of words) word.channel = 2;
+    }
+
     for (const hint of transcript.speaker_hints ?? []) {
       if (hint.type === "automatic_speaker_assignment") {
         const normalized = normalizeSpeakerHint(hint, words, wordIndexById);
         if (normalized) {
+          if (
+            legacyGeminiMix &&
+            "channel" in normalized.scope &&
+            normalized.scope.channel === "DirectMic"
+          ) {
+            normalized.scope.channel = "MixedCapture";
+          }
           assignments.push(normalized);
         }
       }
@@ -285,6 +327,13 @@ function buildRenderTranscriptRequest(
       if (hint.type === "user_speaker_assignment") {
         const normalized = normalizeSpeakerHint(hint, words, wordIndexById);
         if (normalized) {
+          if (
+            legacyGeminiMix &&
+            "channel" in normalized.scope &&
+            normalized.scope.channel === "DirectMic"
+          ) {
+            normalized.scope.channel = "MixedCapture";
+          }
           assignments.push(normalized);
         }
       }
@@ -469,13 +518,36 @@ function normalizeRenderTranscriptRequest(
     transcripts: request.transcripts.map((transcript) => ({
       ...transcript,
       started_at: normalizeOptionalTranscriptMs(transcript.started_at),
-      words: transcript.words.map((word) => ({
-        ...word,
-        start_ms: normalizeTranscriptMs(word.start_ms),
-        end_ms: normalizeTranscriptMs(word.end_ms),
-      })),
+      words: transcript.words.map((word) => {
+        const chunkStartMs = syntheticChunkStartMs(
+          (word as { metadata?: unknown }).metadata,
+        );
+        return {
+          ...word,
+          start_ms: normalizeTranscriptMs(word.start_ms),
+          end_ms: normalizeTranscriptMs(word.end_ms),
+          ...(chunkStartMs !== undefined
+            ? { synthetic_timing: { chunk_start_ms: chunkStartMs } }
+            : {}),
+        };
+      }),
     })),
   };
+}
+
+function syntheticChunkStartMs(metadata: unknown): number | null | undefined {
+  const timing = normalizeWordMetadata(metadata)?.timing;
+  if (!timing || typeof timing !== "object" || Array.isArray(timing)) {
+    return undefined;
+  }
+  const record = timing as Record<string, unknown>;
+  if (record.source !== "synthetic_text") {
+    return undefined;
+  }
+  const chunkStartMs = record.chunk_start_ms;
+  return typeof chunkStartMs === "number" && Number.isFinite(chunkStartMs)
+    ? chunkStartMs
+    : null;
 }
 
 function collectWordMetadataById(

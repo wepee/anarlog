@@ -10,7 +10,7 @@ Teams give a group shared membership for meeting-note access and reusable resour
 1. Sign in to Anarlog.
 2. Open **Settings → Teams**.
 3. Enter a workspace name and click **Create**. If workspace creation is locked, upgrade to Pro first.
-4. If the workspace needs shared billing and Pro for every member, use **Start Team** to continue to Team checkout.
+4. If the workspace needs shared billing and Pro for every member, use **Start Pro** to continue to Pro checkout.
 
 Use the workspace tabs at the top of Teams settings to switch between workspaces or create another one.
 
@@ -20,7 +20,7 @@ Workspace owners and admins can open **Members** to:
 
 - Invite a teammate by email
 - Resend or cancel a pending invitation
-- Change a member between the Admin and Member roles
+- Change member roles within your own permissions; owners can add other owners
 - Remove a member
 
 ### Accept an invitation
@@ -31,14 +31,16 @@ An invitation notification opens Teams settings. If an invitation is missing, ch
 
 ### Membership billing and ownership
 
-You do not need to purchase seats before inviting someone. Pending invitations do not add a billable member. Team billing adjusts when someone joins or leaves, with prorated changes included in the next scheduled invoice. Annual plans keep their annual billing cycle.
+You do not need to purchase seats before inviting someone. Pending invitations do not add a billable member. Workspace billing adjusts when someone joins or leaves, with prorated changes included in the next scheduled invoice. Annual plans keep their annual billing cycle.
 
 Owners can enable automatic joining for coworkers with a verified work email domain. Personal email domains such as Gmail are excluded, and previously removed members are not automatically readmitted.
 
-Ownership transfers require the recipient to accept the request. Until they accept, the current owner keeps ownership.
+A workspace can have several **Owners** and one **Primary owner**. Only the Primary owner can transfer primary ownership or delete the workspace. Other owners cannot remove or demote the Primary owner.
+
+Primary ownership transfers require the recipient to accept. Until they accept, permissions stay unchanged. After acceptance, the previous Primary owner remains an Owner.
 
 <Warning>
-  Deleting a workspace removes it for everyone in it, and cannot be undone. Only the owner can transfer ownership, so transfer it before leaving if someone else should keep the workspace.
+  Deleting a workspace removes it for everyone in it, and cannot be undone. The Primary owner must transfer primary ownership before leaving if someone else should keep the workspace.
 </Warning>
 
 ## Share a meeting with the workspace
@@ -46,6 +48,12 @@ Ownership transfers require the recipient to accept the request. Until they acce
 Open a meeting's **Share** panel and set **General access** to the workspace. Everyone in that workspace can then open the shared note. The meeting's private memo is not included.
 
 See [Share meetings](/sharing) for invitations, links, comments, and shared audio.
+
+## Send new notes to a workspace from a folder
+
+Open a folder and choose **Everyone in your workspace** under **Default access**. Confirm the choice. New notes in that folder are shared once their summary is ready. Notes already in the folder keep their access. You can still change access on each note; see [Share meetings](/sharing#share-new-notes-from-a-folder).
+
+Choose **Only me** to stop automatically sharing new notes in that folder. Use a meeting's **Share** panel to change access to an existing note.
 
 ## Share a reusable resource
 
@@ -64,8 +72,7 @@ To change access, open **Share** on the original item. You can move it to anothe
 ## Plans
 
 - **Free** keeps notes and local features on your computer.
-- **Pro** adds personal cloud features and lets you share reusable resources with guests.
-- **Team** adds shared workspaces, roles, Pro for every member, and centralized billing.
+- **Pro** adds cloud features, sharing, shared workspaces, roles, Pro for every member, and centralized billing at $14/person/month or $140/person/year.
 - **Enterprise** can add organization controls such as sharing policies, usage visibility, a custom workspace subdomain, SSO, SCIM, retention, and managed capture.
 
-See [Anarlog pricing](https://anarlog.so/pricing) for current prices and plan availability.
+See [BlackMushi pricing](https://anarlog.so/pricing) for current prices and plan availability.

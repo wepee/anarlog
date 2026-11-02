@@ -4,7 +4,7 @@ use super::*;
 use crate::responses::SYNTHETIC_BATCH_WORD_SECONDS;
 
 #[test]
-fn parses_model_ids() {
+fn parses_model_ids_and_repo_aliases() {
     assert_eq!(
         "soniqo-parakeet-streaming".parse::<SoniqoModel>().unwrap(),
         SoniqoModel::ParakeetStreaming
@@ -17,10 +17,7 @@ fn parses_model_ids() {
         "soniqo-qwen3-large".parse::<SoniqoModel>().unwrap(),
         SoniqoModel::Qwen3Large
     );
-}
 
-#[test]
-fn parakeet_batch_repo_matches_30s_coreml_artifact() {
     assert_eq!(
         SoniqoModel::ParakeetBatch.repo(),
         "aufklarer/Parakeet-TDT-v3-CoreML-INT8-30s"
@@ -40,48 +37,17 @@ fn parakeet_batch_repo_matches_30s_coreml_artifact() {
 }
 
 #[test]
-fn all_includes_available_model_variants() {
-    assert_eq!(
-        SoniqoModel::all(),
-        &[
-            SoniqoModel::ParakeetStreaming,
-            SoniqoModel::ParakeetBatch,
-            SoniqoModel::Omnilingual,
-        ]
-    );
-}
-
-#[test]
-fn selectable_includes_advertised_models() {
-    assert_eq!(
-        SoniqoModel::selectable(),
-        &[SoniqoModel::ParakeetStreaming, SoniqoModel::ParakeetBatch]
-    );
-}
-
-#[test]
-fn parakeet_models_support_documented_european_languages() {
+fn language_support_per_model() {
     let english = "en-US".parse().unwrap();
     let french = "fr".parse().unwrap();
+    let korean = "ko".parse().unwrap();
 
     assert!(SoniqoModel::ParakeetStreaming.supports_language(&english));
     assert!(SoniqoModel::ParakeetBatch.supports_language(&english));
     assert!(SoniqoModel::ParakeetStreaming.supports_language(&french));
     assert!(SoniqoModel::ParakeetBatch.supports_language(&french));
-}
-
-#[test]
-fn parakeet_models_reject_unsupported_languages() {
-    let korean = "ko".parse().unwrap();
-
     assert!(!SoniqoModel::ParakeetStreaming.supports_language(&korean));
     assert!(!SoniqoModel::ParakeetBatch.supports_language(&korean));
-}
-
-#[test]
-fn multilingual_models_support_non_english_languages() {
-    let french = "fr".parse().unwrap();
-
     assert!(SoniqoModel::Omnilingual.supports_language(&french));
     assert!(SoniqoModel::Qwen3Small.supports_language(&french));
     assert!(SoniqoModel::Qwen3Large.supports_language(&french));
@@ -94,17 +60,6 @@ fn live_support_is_gated_by_platform() {
         cfg!(all(target_os = "macos", target_arch = "aarch64")),
     );
     assert!(!SoniqoModel::ParakeetBatch.supports_live_on_current_platform());
-}
-
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-#[test]
-fn qwen3_platform_error_mentions_macos_15() {
-    let error = ensure_supported_platform(SoniqoModel::Qwen3Small).unwrap_err();
-
-    assert_eq!(
-        error.to_string(),
-        "Qwen3 ASR 0.6B requires macOS 15 or newer."
-    );
 }
 
 #[test]
@@ -132,6 +87,23 @@ fn batch_response_has_deepgram_shape() {
     assert_eq!(response.metadata["model_info"]["arch"], "soniqo");
     assert_eq!(response.metadata["duration"], 2.0);
     assert_eq!(response.metadata["timing_source"], "synthetic_text");
+
+    let response = batch_response_from_text(
+        SoniqoModel::ParakeetBatch,
+        "eins zwei\n drei\tvier".to_string(),
+        4.0,
+    );
+    let alternative = &response.results.channels[0].alternatives[0];
+
+    assert_eq!(alternative.transcript, "eins zwei drei vier");
+    assert_eq!(
+        alternative
+            .words
+            .iter()
+            .map(|word| word.word.as_str())
+            .collect::<Vec<_>>(),
+        vec!["eins", "zwei", "drei", "vier"]
+    );
 }
 
 #[test]
@@ -211,6 +183,100 @@ fn batch_response_offsets_synthetic_words_by_chunk_start() {
 }
 
 #[test]
+fn multichannel_synthetic_response_preserves_words_and_exposes_chunk_boundaries() {
+    let channel = |text: &str| {
+        FileTranscript::from_chunks(
+            vec![FileTranscriptChunk {
+                text: text.to_string(),
+                start_seconds: 29.5,
+                duration_seconds: 29.5,
+            }],
+            59.0,
+        )
+    };
+    let response = batch_response_from_channels(
+        SoniqoModel::ParakeetBatch,
+        vec![channel("mic first."), channel("remote second.")],
+    );
+
+    assert_eq!(response.metadata["timing_source"], "synthetic_text");
+    assert_eq!(
+        response.metadata["synthetic_chunks"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(response.metadata["synthetic_chunks"][0]["channel"], 0);
+    assert_eq!(
+        response.metadata["synthetic_chunks"][0]["start_seconds"],
+        29.5
+    );
+    assert_eq!(
+        response.metadata["synthetic_chunks"][0]["end_seconds"],
+        59.0
+    );
+    assert_eq!(response.metadata["synthetic_chunks"][1]["channel"], 1);
+    let mic_words = &response.results.channels[0].alternatives[0].words;
+    let remote_words = &response.results.channels[1].alternatives[0].words;
+    assert_eq!(mic_words.len(), 2);
+    assert_eq!(remote_words.len(), 2);
+    assert_eq!(mic_words[0].word, "mic");
+    assert_eq!(mic_words[1].word, "first.");
+    assert_eq!(remote_words[0].word, "remote");
+}
+
+#[test]
+fn mixed_channel_diarization_marks_only_unaligned_channel_synthetic() {
+    let mic = FileTranscript::from_chunks(
+        vec![FileTranscriptChunk {
+            text: "mic words".to_string(),
+            start_seconds: 0.0,
+            duration_seconds: 4.0,
+        }],
+        4.0,
+    );
+    let mut remote = FileTranscript::from_chunks(
+        vec![FileTranscriptChunk {
+            text: "remote words".to_string(),
+            start_seconds: 0.0,
+            duration_seconds: 4.0,
+        }],
+        4.0,
+    );
+    remote.speaker_segments = vec![DiarizationSegment {
+        start_seconds: 0.0,
+        end_seconds: 4.0,
+        speaker_index: 0,
+    }];
+    let response = batch_response_from_channels(SoniqoModel::ParakeetBatch, vec![mic, remote]);
+
+    assert_eq!(
+        response.metadata["timing_sources_by_channel"][0],
+        "synthetic_text"
+    );
+    assert_eq!(
+        response.metadata["timing_sources_by_channel"][1],
+        "provider_segment_interpolated"
+    );
+    assert_eq!(
+        response.metadata["synthetic_chunks"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(response.metadata["synthetic_chunks"][0]["channel"], 0);
+    assert_eq!(response.results.channels[0].alternatives[0].words.len(), 2);
+    assert!(
+        response.results.channels[1].alternatives[0]
+            .words
+            .iter()
+            .all(|word| word.speaker == Some(0))
+    );
+}
+
+#[test]
 fn batch_response_aligns_words_to_diarized_speech() {
     let mut transcript = FileTranscript::from_chunks(
         vec![FileTranscriptChunk {
@@ -244,26 +310,7 @@ fn batch_response_aligns_words_to_diarized_speech() {
     assert!(words[0].start >= 1.0);
     assert!(words[3].start >= 6.0);
     assert_eq!(response.metadata["timing_source"], "diarized_speech");
-}
-
-#[test]
-fn batch_response_normalizes_internal_whitespace() {
-    let response = batch_response_from_text(
-        SoniqoModel::ParakeetBatch,
-        "eins zwei\n drei\tvier".to_string(),
-        4.0,
-    );
-    let alternative = &response.results.channels[0].alternatives[0];
-
-    assert_eq!(alternative.transcript, "eins zwei drei vier");
-    assert_eq!(
-        alternative
-            .words
-            .iter()
-            .map(|word| word.word.as_str())
-            .collect::<Vec<_>>(),
-        vec!["eins", "zwei", "drei", "vier"]
-    );
+    assert!(response.metadata.get("synthetic_chunks").is_none());
 }
 
 #[test]

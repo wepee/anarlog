@@ -19,7 +19,8 @@ export function createCaptureAudioRecovery(options: {
     intervals: RecoveryInterval[],
     signal: AbortSignal,
   ) => Promise<void>;
-  onStatus: (status: "waiting" | "repairing" | "complete") => void;
+  // Chunks from earlier captures are repaired whole into their own transcript.
+  inherited?: (chunk: RecoveryAudioChunk) => boolean;
   now?: () => number;
 }) {
   const now = options.now ?? Date.now;
@@ -37,22 +38,25 @@ export function createCaptureAudioRecovery(options: {
   let retryAt = 0;
   let recoverThrough = 0;
   let revision = 0;
+  let batchFromRetainedAudio = false;
+  let sawConnectionEvent = false;
 
   const elapsed = () => Math.max(0, now() - options.startedAt);
+  const collapseGaps = () => {
+    if (gaps.length > 128)
+      gaps = [{ start: gaps[0]!.start, end: gaps[gaps.length - 1]!.end }];
+  };
   const markGap = () => {
     revision += 1;
     gapStart ??= Math.max(acknowledgedThrough, confirmedThrough - 1_000);
     pending = true;
-    options.onStatus("waiting");
   };
   const closeGap = () => {
     if (gapStart === undefined) return;
     revision += 1;
     gaps.push({ start: gapStart, end: elapsed() });
     gapStart = undefined;
-    // Adjacent incidents share one interval; outage count cannot grow RAM.
-    if (gaps.length > 128)
-      gaps = [{ start: gaps[0]!.start, end: gaps[gaps.length - 1]!.end }];
+    collapseGaps();
   };
 
   const process = async (settle: boolean) => {
@@ -60,8 +64,20 @@ export function createCaptureAudioRecovery(options: {
     pending = gapStart !== undefined || gaps.length > 0;
     for (const chunk of chunks) {
       controller.signal.throwIfAborted();
+      if (options.inherited?.(chunk)) {
+        pending = true;
+        if (!online || now() < retryAt) return false;
+        await options.repair(chunk, [], controller.signal);
+        controller.signal.throwIfAborted();
+        await options.acknowledge(chunk);
+        continue;
+      }
       const range = chunkInterval(chunk, options.startedAt);
       if (!settle && range.end > elapsed() - 10_000) continue;
+      if (batchFromRetainedAudio) {
+        await options.acknowledge(chunk);
+        continue;
+      }
       await options.flush();
       controller.signal.throwIfAborted();
       const repairRevision = revision;
@@ -88,7 +104,6 @@ export function createCaptureAudioRecovery(options: {
       if (intervals.length > 0) {
         pending = true;
         if (!online || now() < retryAt) return false;
-        options.onStatus("repairing");
         await options.repair(chunk, intervals, controller.signal);
         controller.signal.throwIfAborted();
       }
@@ -105,7 +120,6 @@ export function createCaptureAudioRecovery(options: {
     }
     if (settle && chunks.length < 128) gaps = [];
     pending = gapStart !== undefined || gaps.length > 0 || chunks.length >= 128;
-    if (!pending && !failed) options.onStatus("complete");
     return settle && chunks.length >= 128;
   };
 
@@ -116,7 +130,6 @@ export function createCaptureAudioRecovery(options: {
         if (controller.signal.aborted) return false;
         pending = true;
         retryAt = now() + 30_000;
-        options.onStatus("waiting");
         console.warn("[listener] audio recovery deferred", error);
         return false;
       })
@@ -137,19 +150,52 @@ export function createCaptureAudioRecovery(options: {
       confirmedThrough = Math.max(confirmedThrough, endMs);
     },
     interrupted() {
+      sawConnectionEvent = true;
       online = false;
       markGap();
     },
-    batchOnly() {
+    batchOnly(retainAudio: boolean) {
+      sawConnectionEvent = true;
       online = true;
-      markGap();
+      batchFromRetainedAudio = retainAudio;
+      if (!retainAudio) markGap();
     },
     recoverPending() {
       recoverThrough = elapsed();
       pending = true;
       online = true;
     },
+    restore(ledger: {
+      gaps: RecoveryInterval[];
+      openGapStart?: number;
+      awaitingConnection: boolean;
+      storageFailed: boolean;
+      confirmedThrough?: number;
+    }) {
+      revision += 1;
+      confirmedThrough = Math.max(
+        confirmedThrough,
+        ledger.confirmedThrough ?? 0,
+      );
+      failed ||= ledger.storageFailed;
+      gaps.push(...ledger.gaps);
+      collapseGaps();
+      if (ledger.openGapStart !== undefined) {
+        if (gapStart === undefined && !sawConnectionEvent) {
+          gapStart = ledger.openGapStart;
+          online = !ledger.awaitingConnection;
+        } else if (gapStart === undefined) {
+          gaps.push({ start: ledger.openGapStart, end: elapsed() });
+        } else {
+          gapStart = Math.min(gapStart, ledger.openGapStart);
+        }
+        collapseGaps();
+      }
+      pending = true;
+      retryAt = 0;
+    },
     connected() {
+      sawConnectionEvent = true;
       closeGap();
       online = true;
       retryAt = 0;
@@ -162,17 +208,9 @@ export function createCaptureAudioRecovery(options: {
       failed = true;
       markGap();
     },
-    async stop(retainAudio: boolean) {
+    async stop() {
       active = false;
       clearTimeout(timer);
-      if (!retainAudio) {
-        controller.abort();
-        await running;
-        return {
-          incomplete:
-            pending || failed || gapStart !== undefined || gaps.length > 0,
-        };
-      }
       closeGap();
       await running;
       while (await tick(true)) {

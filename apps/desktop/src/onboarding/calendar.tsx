@@ -12,7 +12,7 @@ import {
 } from "~/calendar/components/calendar-selection";
 import { SyncProvider, useSync } from "~/calendar/components/context";
 import { useEnabledCalendars } from "~/calendar/hooks";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { usePermission } from "~/shared/hooks/usePermissions";
 
 function getCalendarSelectionKey(groups: CalendarGroup[]) {

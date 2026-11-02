@@ -96,7 +96,7 @@ vi.mock("@anlg/plugin-transcription", () => ({
   commands: { getCaptureState: mocks.getCaptureState },
 }));
 vi.mock("@anlg/ui/components/ui/toast", () => ({
-  sonnerToast: { error: vi.fn() },
+  toast: { error: vi.fn() },
 }));
 
 import {
@@ -127,8 +127,22 @@ describe("dictation access and lifecycle", () => {
     expect(useDictationStatus.getState().lastTranscript).toBe("");
   });
 
+  it("unregisters dictation while capturing a shortcut and restores it afterwards", async () => {
+    render(<DictationLifecycle />);
+    await waitFor(() => expect(useDictationStatus.getState().ready).toBe(true));
+    act(() => useDictationStatus.setState({ capturingShortcut: true }));
+    await waitFor(() => expect(mocks.configure).toHaveBeenLastCalledWith(null));
+    expect(useDictationStatus.getState().ready).toBe(false);
+    act(() => useDictationStatus.setState({ capturingShortcut: false }));
+    await waitFor(() =>
+      expect(mocks.configure).toHaveBeenLastCalledWith("Control+Alt+Space"),
+    );
+    expect(mocks.startSystemRecording).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    useDictationStatus.setState({ capturingShortcut: false });
     mocks.session = { user: { id: "user-1" } };
     mocks.platform = "macos";
     mocks.connection = null;

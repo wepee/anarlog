@@ -110,15 +110,6 @@ export type CloudsyncNetworkResult = {
   };
 };
 
-export type CloudsyncActivityEntry = {
-  timestamp_ms: number;
-  trigger: "background" | "manual";
-  status: "completed" | "progress" | "failed";
-  sent_bytes: number;
-  received_bytes: number;
-  error: string | null;
-};
-
 export type CloudsyncStatus = {
   cloudsync_enabled: boolean;
   extension_loaded: boolean;
@@ -146,12 +137,17 @@ export type CloudsyncStatus = {
     | null;
   recovery_error?: string | null;
   configuration_error?: string | null;
-  activity_log?: CloudsyncActivityEntry[];
 };
 
 export type QueryEvent<T = Record<string, unknown>> =
   | { event: "result"; data: T[] }
   | { event: "error"; data: string };
+
+export async function cleanupRecordingImports(
+  vaultPath: string,
+): Promise<void> {
+  return invoke("plugin:db|cleanup_recording_imports", { vaultPath });
+}
 
 export async function listMeetings(
   input: ListMeetingsInput,
@@ -414,22 +410,29 @@ export async function subscribe<T = Record<string, unknown>>(
   const channel = new Channel<QueryEvent<T>>();
 
   channel.onmessage = (event) => {
-    if (event.event === "result") {
-      options.onData(event.data);
-      return;
-    }
+    try {
+      if (event.event === "result") {
+        options.onData(event.data);
+        return;
+      }
 
-    options.onError?.(event.data);
+      options.onError?.(event.data);
+    } catch (error) {
+      console.error("[plugin-db] live query callback failed", error);
+    }
   };
 
-  const registration: SubscriptionRegistration = await invoke(
-    "plugin:db|subscribe",
-    {
+  let registration: SubscriptionRegistration;
+  try {
+    registration = await invoke("plugin:db|subscribe", {
       sql,
       params,
       onEvent: channel,
-    },
-  );
+    });
+  } catch (error) {
+    channel.onmessage = () => {};
+    throw error;
+  }
 
   if (registration.analysis.kind === "non_reactive") {
     console.warn(

@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { CalendarDots } from "@anlg/ui/components/icons";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { cn } from "@anlg/utils";
 
 import { useAnchor, useAutoScrollToAnchor } from "./anchor";
@@ -38,7 +39,6 @@ import { useTimelineTables } from "~/calendar/queries";
 import { useDeleteSession } from "~/session/hooks/useDeleteSession";
 import { useConfigValue } from "~/shared/config";
 import { scrollElementByWheel } from "~/shared/dom/scroll-wheel";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { useNativeContextMenu } from "~/shared/hooks/useNativeContextMenu";
 import { DestructiveConfirmationDialog } from "~/shared/ui/destructive-confirmation-dialog";
 import { useSidebarNotes } from "~/sidebar/note-filter";

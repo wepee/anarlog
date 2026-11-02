@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import { CheckCircle, PencilSimple } from "@anlg/ui/components/icons";
 import { DancingSticks } from "@anlg/ui/components/ui/dancing-sticks";
 import { Spinner } from "@anlg/ui/components/ui/spinner";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 import { cn } from "@anlg/utils";
 
 import { IconHeaderView, copyTextToClipboard } from "./header-shared";
@@ -16,7 +16,7 @@ import {
   buildTranscriptExportSegments,
   formatTranscriptExportSegments,
 } from "~/session/components/note-input/transcript/export-data";
-import { useSessionTranscriptRenderData } from "~/session/components/note-input/transcript/render-request-hooks";
+import { getSessionTranscriptRenderRequest } from "~/session/components/note-input/transcript/render-request-hooks";
 import { useHasTranscript } from "~/session/components/shared";
 import { getBaseLanguageDisplayName } from "~/settings/general/language";
 import {
@@ -28,6 +28,7 @@ import {
   useSessionTranscriptLanguage,
   useTranscriptionLanguageChoices,
 } from "~/stt/session-language";
+import { useSessionTranscriptMetadata } from "~/stt/queries";
 import { useStartListeningWithBatchOverride } from "~/stt/useStartListeningWithBatchOverride";
 import {
   isMainWebviewWindow,
@@ -92,7 +93,6 @@ function HeaderViewTranscriptButton({
   pressed?: boolean;
   live?: {
     amplitude: number;
-    degraded: boolean;
     muted: boolean;
   };
 }) {
@@ -125,15 +125,10 @@ function HeaderViewTranscriptButton({
                 ? "w-[98px] min-w-[98px] gap-1.5 px-2 @max-[480px]:w-10 @max-[480px]:min-w-10 @max-[480px]:gap-0"
                 : null,
               isActive
-                ? live.degraded
-                  ? [
-                      "bg-amber-50 text-amber-500 hover:bg-amber-100 hover:text-amber-600",
-                      "dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950 dark:hover:text-amber-200",
-                    ]
-                  : [
-                      "bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600",
-                      "dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950 dark:hover:text-red-200",
-                    ]
+                ? [
+                    "bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600",
+                    "dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950 dark:hover:text-red-200",
+                  ]
                 : null,
             ]
           : null,
@@ -147,12 +142,9 @@ function HeaderViewTranscriptLiveIcon({
 }: {
   live: {
     amplitude: number;
-    degraded: boolean;
     muted: boolean;
   };
 }) {
-  const color = live.degraded ? "#f59e0b" : "#ef4444";
-
   return (
     <span className="relative flex size-4 items-center justify-center">
       {live.muted ? (
@@ -160,7 +152,7 @@ function HeaderViewTranscriptLiveIcon({
       ) : (
         <DancingSticks
           amplitude={live.amplitude}
-          color={color}
+          color="#ef4444"
           height={16}
           width={16}
         />
@@ -170,11 +162,10 @@ function HeaderViewTranscriptLiveIcon({
 }
 
 function useTranscriptLiveViewState(sessionId: string) {
-  const { amplitude, degraded, mode, muted } = useListener((state) => {
+  const { amplitude, mode, muted } = useListener((state) => {
     const mode = state.getSessionMode(sessionId);
     return {
       amplitude: state.live.amplitude,
-      degraded: state.live.degraded,
       mode,
       muted: state.live.muted,
     };
@@ -187,7 +178,6 @@ function useTranscriptLiveViewState(sessionId: string) {
               Math.hypot(amplitude.mic, amplitude.speaker),
               1,
             ),
-            degraded: Boolean(degraded),
             muted,
           }
         : undefined,
@@ -211,7 +201,6 @@ function HeaderViewTranscriptActive({
   sessionId: string;
   live?: {
     amplitude: number;
-    degraded: boolean;
     muted: boolean;
   };
 }) {
@@ -221,8 +210,7 @@ function HeaderViewTranscriptActive({
   const activeLanguage = sessionLanguage || transcriptionLanguages[0] || "";
   const startListening = useStartListeningWithBatchOverride(sessionId);
   const hasTranscript = useHasTranscript(sessionId);
-  const { request: transcriptExportRequest } =
-    useSessionTranscriptRenderData(sessionId);
+  const transcriptMetadata = useSessionTranscriptMetadata(sessionId);
   const {
     audioExists,
     audioExistsResolved,
@@ -240,13 +228,15 @@ function HeaderViewTranscriptActive({
 
     onClick?.();
   }, [canEdit, editMode, onClick, onEditModeChange]);
-  const canCopyTranscript = Boolean(transcriptExportRequest);
+  const canCopyTranscript = transcriptMetadata.some((t) => t.hasWords);
   const handleCopyTranscript = useCallback(async () => {
-    if (!transcriptExportRequest) {
-      return;
-    }
-
     try {
+      const transcriptExportRequest =
+        await getSessionTranscriptRenderRequest(sessionId);
+      if (!transcriptExportRequest) {
+        return;
+      }
+
       const transcriptSegments = await buildTranscriptExportSegments(
         transcriptExportRequest,
       );
@@ -261,9 +251,9 @@ function HeaderViewTranscriptActive({
       });
     } catch (error) {
       console.error("Failed to copy transcript", error);
-      sonnerToast.error("Failed to copy transcript");
+      toast.error("Failed to copy transcript");
     }
-  }, [transcriptExportRequest]);
+  }, [sessionId]);
   const handleDeleteRecording = useCallback(() => {
     void deleteRecording();
   }, [deleteRecording]);

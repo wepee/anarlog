@@ -29,12 +29,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@anlg/ui/components/ui/select";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@anlg/ui/components/ui/tooltip";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { useSquircleRef } from "@anlg/ui/hooks/use-squircle";
 import { chipSquircle } from "@anlg/ui/lib/squircle";
 import { cn } from "@anlg/utils";
@@ -77,8 +78,8 @@ import { getBaseLanguageDisplayName } from "~/settings/general/language";
 import { useAiProvidersState } from "~/settings/providers";
 import { useSetSettingValues } from "~/settings/queries";
 import { useConfigValues } from "~/shared/config";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { SettingsAlertToast } from "~/shared/ui/settings-alert";
+import { usePendingSttSelection } from "~/store/zustand/pending-stt-selection";
 import {
   canAppleSpeechTranscribe,
   isConfiguredSttModel,
@@ -106,6 +107,11 @@ export function SelectProviderAndModel() {
   const { providers: configuredProviders, isReady: providerSettingsReady } =
     useConfiguredMapping();
   const { startDownload } = useSttSettings();
+  const pendingSelection = usePendingSttSelection((state) => state.selection);
+  const { activeDownloads } = useNotifications();
+  const pendingDownload = activeDownloads.find(
+    (download) => download.model === pendingSelection?.model,
+  );
   const health = useConnectionHealth();
   const [pendingProvider, setPendingProvider] = useState<ProviderId | null>(
     null,
@@ -141,24 +147,29 @@ export function SelectProviderAndModel() {
           current_stt_model,
         )
       : null;
-  const effectiveSelection = pendingProvider
-    ? { provider: pendingProvider, model: "" }
-    : (defaultSelection ?? visibleSelection);
+  const effectiveSelection =
+    pendingSelection ??
+    (pendingProvider
+      ? { provider: pendingProvider, model: "" }
+      : (defaultSelection ?? visibleSelection));
   const visibleProvider = effectiveSelection.provider as ProviderId | "";
-  const isConfigured = !!(visibleProvider && effectiveSelection.model);
+  const isConfigured =
+    !pendingSelection && !!(visibleProvider && effectiveSelection.model);
   const hasError = isConfigured && health.status === "error";
   const alertDescription = !providerSettingsReady
     ? undefined
-    : !isConfigured
-      ? t`Choose a transcription model to start listening.`
-      : hasError
-        ? health.message
-        : undefined;
+    : pendingSelection
+      ? undefined
+      : !isConfigured
+        ? t`Choose a transcription model to start listening.`
+        : hasError
+          ? health.message
+          : undefined;
   const selectedModels = visibleProvider
     ? (configuredProviders[visibleProvider]?.models ?? [])
     : [];
   const displayedSttModel =
-    visibleProvider === "custom"
+    visibleProvider === "custom" || visibleProvider === "nvidia"
       ? effectiveSelection.model
       : effectiveSelection.model
         ? getPreferredProviderModel(effectiveSelection.model, selectedModels, {
@@ -188,6 +199,7 @@ export function SelectProviderAndModel() {
   };
 
   const handleProviderChange = (provider: string) => {
+    usePendingSttSelection.setState({ selection: null });
     rememberModel(current_stt_provider, selectedSttModel);
 
     const providerId = provider as ProviderId;
@@ -196,13 +208,20 @@ export function SelectProviderAndModel() {
       getPreferredProviderModel(
         lastSelectedModelsRef.current[provider],
         nextModels,
-        { allowSavedModelWithoutChoices: providerId === "custom" },
+        {
+          allowSavedModelWithoutChoices:
+            providerId === "custom" || providerId === "nvidia",
+        },
       ) ||
       getDefaultSttModel(providerId) ||
       "";
 
     if (!nextModel) {
       setPendingProvider(providerId);
+      setSelection({
+        current_stt_provider: provider,
+        current_stt_model: "",
+      });
       return;
     }
 
@@ -220,6 +239,7 @@ export function SelectProviderAndModel() {
     }
 
     rememberModel(visibleProvider, model);
+    usePendingSttSelection.setState({ selection: null });
     setPendingProvider(null);
     setSelection({
       current_stt_provider: visibleProvider,
@@ -228,7 +248,7 @@ export function SelectProviderAndModel() {
   };
   return (
     <div className="flex flex-col gap-4">
-      {defaultSelection && !pendingProvider ? (
+      {defaultSelection && !pendingProvider && !pendingSelection ? (
         <PersistAiSelection
           key={`stt:${defaultSelection.provider}:${defaultSelection.model}`}
           type="stt"
@@ -242,7 +262,9 @@ export function SelectProviderAndModel() {
         variant={hasError ? "error" : "warning"}
         lifecycle="condition-bound"
       />
-      {!alertDescription && <TranscriptionLanguageWarningToast />}
+      {!alertDescription && !pendingSelection && (
+        <TranscriptionLanguageWarningToast />
+      )}
 
       <h3 className="text-md font-sans font-semibold">
         <Trans>Model being used</Trans>
@@ -257,9 +279,15 @@ export function SelectProviderAndModel() {
               <SelectValue placeholder={t`Select a provider`} />
             </SelectTrigger>
             <SelectContent>
+              {providerOptions.length === 0 && (
+                <div className="text-muted-foreground px-2 py-3 text-center text-sm">
+                  <Trans>No providers found.</Trans>
+                </div>
+              )}
               {providerOptions.map((provider) => {
                 const configured =
                   configuredProviders[provider.id]?.configured ?? false;
+                // [fork] Nothing is gated behind a plan in this build.
                 const locked = false;
                 return (
                   <SelectItem
@@ -299,7 +327,7 @@ export function SelectProviderAndModel() {
           <div className="min-w-0 flex-3">
             <LocalFileModel healthStatus={health.status} />
           </div>
-        ) : visibleProvider === "custom" ? (
+        ) : visibleProvider === "custom" || visibleProvider === "nvidia" ? (
           <div className="min-w-0 flex-3">
             <Input
               value={displayedSttModel || ""}
@@ -320,7 +348,8 @@ export function SelectProviderAndModel() {
                 className={cn([
                   "bg-card rounded-[18px] text-left shadow-none",
                   "[&>span]:!flex [&>span]:w-full [&>span]:min-w-0 [&>span]:items-center [&>span]:justify-start [&>span]:gap-2 [&>span]:overflow-visible [&>span]:[-webkit-line-clamp:unset]",
-                  isConfigured && "[&>svg:last-child]:hidden",
+                  (isConfigured || pendingSelection) &&
+                    "[&>svg:last-child]:hidden",
                 ])}
               >
                 <SelectValue placeholder={t`Select a model`}>
@@ -328,6 +357,16 @@ export function SelectProviderAndModel() {
                     <ModelSelectedValue model={selectedModel} />
                   ) : undefined}
                 </SelectValue>
+                {pendingSelection && (
+                  <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px]">
+                    <CircleNotch className="size-3 animate-spin" />
+                    {pendingDownload && !pendingDownload.isStarting ? (
+                      formatDownloadProgress(pendingDownload.progress)
+                    ) : (
+                      <Trans>Starting</Trans>
+                    )}
+                  </span>
+                )}
                 {isConfigured && <HealthStatusIndicator />}
                 {isConfigured && health.status === "success" && (
                   <Check className="-mr-1 h-4 w-4 shrink-0 text-green-600" />
@@ -351,7 +390,13 @@ export function SelectProviderAndModel() {
                       )}
                       <ModelSelectItem
                         model={model}
-                        onDownload={() => startDownload(model.id as LocalModel)}
+                        onDownload={() => {
+                          setPendingProvider(null);
+                          startDownload(
+                            model.id as LocalModel,
+                            visibleProvider,
+                          );
+                        }}
                       />
                     </span>
                   );
@@ -455,7 +500,7 @@ function TranscriptionLanguageWarningToastLifecycle({
 }) {
   useMountEffect(() => {
     let shouldRememberDismissal = true;
-    sonnerToast.warning(description, {
+    toast.warning(description, {
       id: TRANSCRIPTION_LANGUAGE_WARNING_TOAST_ID,
       duration: Infinity,
       icon: <Warning className="size-4 shrink-0 text-amber-500" />,
@@ -484,7 +529,7 @@ function TranscriptionLanguageWarningToastLifecycle({
 }
 
 function clearTranscriptionLanguageWarningToast() {
-  sonnerToast.dismiss(TRANSCRIPTION_LANGUAGE_WARNING_TOAST_ID);
+  toast.dismiss(TRANSCRIPTION_LANGUAGE_WARNING_TOAST_ID);
 }
 
 function useTranscriptionLanguageWarning() {
@@ -740,7 +785,7 @@ export function useConfiguredMapping(): {
         ];
       }
 
-      if (provider.id === "custom") {
+      if (provider.id === "custom" || provider.id === "nvidia") {
         return [provider.id, { configured: true, models: [] }];
       }
 

@@ -13,7 +13,7 @@ pub const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions"
 
 // App attribution per https://openrouter.ai/docs/app-attribution
 pub const APP_REFERER: &str = "https://anarlog.so";
-pub const APP_TITLE: &str = "Anarlog";
+pub const APP_TITLE: &str = "BlackMushi";
 pub const APP_CATEGORIES: &str = "writing-assistant,personal-agent";
 
 pub struct OpenRouterProvider {
@@ -222,39 +222,22 @@ mod tests {
         assert_eq!(accumulator.output_tokens, 42);
     }
 
-    #[test]
-    fn stream_parsing_handles_whole_payload_in_one_chunk() {
-        let provider = OpenRouterProvider::default();
-        let mut accumulator = StreamAccumulator::new();
-        provider.parse_stream_chunk(STREAM_FIXTURE.as_bytes(), &mut accumulator);
-        provider.finish_stream(&mut accumulator);
-        assert_fixture_result(&accumulator);
-    }
-
     // Feeding one byte at a time exercises every possible chunk boundary,
     // including splits inside multibyte UTF-8 characters and JSON tokens.
     #[test]
     fn stream_parsing_is_invariant_to_chunk_boundaries() {
         let provider = OpenRouterProvider::default();
+        let mut whole_payload = StreamAccumulator::new();
+        provider.parse_stream_chunk(STREAM_FIXTURE.as_bytes(), &mut whole_payload);
+        provider.finish_stream(&mut whole_payload);
+        assert_fixture_result(&whole_payload);
+
         let mut accumulator = StreamAccumulator::new();
         for byte in STREAM_FIXTURE.as_bytes() {
             provider.parse_stream_chunk(std::slice::from_ref(byte), &mut accumulator);
         }
         provider.finish_stream(&mut accumulator);
         assert_fixture_result(&accumulator);
-    }
-
-    #[test]
-    fn stream_parsing_is_invariant_to_every_two_chunk_split() {
-        let provider = OpenRouterProvider::default();
-        let bytes = STREAM_FIXTURE.as_bytes();
-        for split in 0..=bytes.len() {
-            let mut accumulator = StreamAccumulator::new();
-            provider.parse_stream_chunk(&bytes[..split], &mut accumulator);
-            provider.parse_stream_chunk(&bytes[split..], &mut accumulator);
-            provider.finish_stream(&mut accumulator);
-            assert_fixture_result(&accumulator);
-        }
     }
 
     #[test]

@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatEditorHandle, JSONContent } from "@anlg/editor/chat";
 import { EMPTY_DOC } from "@anlg/editor/markdown";
 import { commands as analyticsCommands } from "@anlg/plugin-analytics";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import { DraftCache, type DraftRetentionFailure } from "./draft-cache";
 import { pushSentMessage, sentMessageAt, sentMessageCount } from "./history";
 
 import type { ContextRef } from "~/chat/context/entities";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 
 const draftCache = new DraftCache();
 
@@ -45,7 +45,7 @@ export function useDraftState({
     return () => {
       const failure = draftCache.release(draftKey);
       if (failure) {
-        sonnerToast.error(draftRetentionFailureMessage(failure));
+        toast.error(draftRetentionFailureMessage(failure));
       }
     };
   });
@@ -307,7 +307,7 @@ function draftRetentionFailureMessage(failure: DraftRetentionFailure) {
   return "This unsent chat draft could not be kept because draft storage is full.";
 }
 
-function extractContextRefsFromTiptapJson(
+export function extractContextRefsFromTiptapJson(
   json: JSONContent | undefined,
 ): ContextRef[] {
   const refs: ContextRef[] = [];
@@ -349,6 +349,13 @@ function extractContextRefsFromTiptapJson(
           key: `organization:manual:${mentionId}`,
           source: "manual",
           organizationId: mentionId,
+        };
+      } else if (mentionType === "folder") {
+        ref = {
+          kind: "folder",
+          key: `folder:manual:${mentionId}`,
+          source: "manual",
+          folderId: mentionId,
         };
       }
 

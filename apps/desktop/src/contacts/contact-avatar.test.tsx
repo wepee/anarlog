@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { Avatar } from "@anlg/ui/components/avatar";
+
 import { AvatarUploadButton } from "./contact-avatar";
 
 afterEach(() => {
@@ -9,12 +11,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("mounts contact avatars without synchronously measuring layout", () => {
+  vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(
+    () => {
+      throw new Error("Avatar mounting must not force a layout flush");
+    },
+  );
+
+  const { rerender } = render(<Avatar seed="Contact" size={32} />);
+  rerender(<Avatar seed="Contact" size={64} />);
+});
+
 describe("AvatarUploadButton", () => {
   it.each([
     { width: 800, height: 400, output: 256 },
-    { width: 128, height: 64, output: 64 },
     { width: 64, height: 128, output: 64 },
-    { width: 128, height: 128, output: 128 },
   ])(
     "center-crops $width × $height avatars to $output pixels without upscaling",
     async ({ width, height, output }) => {

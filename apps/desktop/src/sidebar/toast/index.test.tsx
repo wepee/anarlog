@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   openNew: vi.fn(),
   updateSettingsTabState: vi.fn(),
   clearDevtoolsPreview: vi.fn(),
-  setToastActionTarget: vi.fn(),
   message: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
@@ -39,6 +38,7 @@ const mocks = vi.hoisted(() => ({
       model: string;
       displayName: string;
       progress: number;
+      isStarting?: boolean;
     }>,
     localSttStatus: null as null | "loading" | "unreachable",
     isLocalSttModel: false,
@@ -60,7 +60,7 @@ vi.mock("@anlg/ui/components/ui/toast", async (importOriginal) => {
     await importOriginal<typeof import("@anlg/ui/components/ui/toast")>();
   return {
     ...actual,
-    sonnerToast: {
+    toast: {
       message: mocks.message,
       error: mocks.error,
       warning: mocks.warning,
@@ -105,12 +105,6 @@ vi.mock("~/store/zustand/tabs", () => ({
       openNew: mocks.openNew,
       updateSettingsTabState: mocks.updateSettingsTabState,
     }),
-}));
-
-vi.mock("~/store/zustand/toast-action", () => ({
-  useToastAction: (
-    selector: (state: { setTarget: (target: "stt" | null) => void }) => unknown,
-  ) => selector({ setTarget: mocks.setToastActionTarget }),
 }));
 
 vi.mock("~/stt/capabilities", () => ({
@@ -249,6 +243,45 @@ describe("ToastNotifications", () => {
     );
   });
 
+  it("updates the model download toast from starting to download progress", () => {
+    mocks.notifications.hasActiveDownload = true;
+    mocks.notifications.downloadingModel = "Apple Speech";
+    mocks.notifications.activeDownloads = [
+      {
+        model: "apple-speech",
+        displayName: "Apple Speech",
+        progress: 0,
+        isStarting: true,
+      },
+    ];
+    const view = render(<ToastNotifications />);
+    act(() => vi.advanceTimersByTime(500));
+    expect(mocks.loading).toHaveBeenLastCalledWith(
+      "Downloading Apple Speech",
+      expect.objectContaining({
+        id: "downloading-model",
+        description: "Starting",
+        duration: Infinity,
+      }),
+    );
+    mocks.notifications.activeDownloads = [
+      { model: "apple-speech", displayName: "Apple Speech", progress: 42 },
+    ];
+    view.rerender(<ToastNotifications />);
+    expect(mocks.loading).toHaveBeenLastCalledWith(
+      "Downloading Apple Speech",
+      expect.objectContaining({
+        id: "downloading-model",
+        description: "42%",
+        duration: Infinity,
+      }),
+    );
+    mocks.notifications.hasActiveDownload = false;
+    mocks.notifications.activeDownloads = [];
+    view.rerender(<ToastNotifications />);
+    expect(mocks.dismiss).toHaveBeenCalledWith("downloading-model");
+  });
+
   it("offers Restart after the download finishes", () => {
     mocks.update.status = "downloading";
     mocks.update.version = "1.0.34";
@@ -267,7 +300,7 @@ describe("ToastNotifications", () => {
     view.rerender(<ToastNotifications />);
 
     expect(mocks.message).toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is ready to install",
+      "BlackMushi 1.0.34 is ready to install",
       expect.objectContaining({
         id: "desktop-update:1.0.34:ready",
         action: expect.objectContaining({ label: "Restart" }),
@@ -289,7 +322,7 @@ describe("ToastNotifications", () => {
     act(() => vi.advanceTimersByTime(500));
 
     expect(mocks.loading).toHaveBeenCalledWith(
-      "Downloading Anarlog 1.0.34 (10%)",
+      "Downloading BlackMushi 1.0.34 (10%)",
       expect.objectContaining({
         id: "desktop-update:1.0.34:downloading",
         duration: Infinity,
@@ -303,7 +336,7 @@ describe("ToastNotifications", () => {
 
     expect(mocks.dismiss).not.toHaveBeenCalled();
     expect(mocks.loading).toHaveBeenCalledWith(
-      "Downloading Anarlog 1.0.34 (58%)",
+      "Downloading BlackMushi 1.0.34 (58%)",
       expect.objectContaining({
         id: "desktop-update:1.0.34:downloading",
       }),
@@ -333,73 +366,37 @@ describe("ToastNotifications", () => {
     expect(mocks.openNew).not.toHaveBeenCalled();
   });
 
-  it("snoozes dismissed available updates for one day", () => {
-    mocks.update.status = "available";
-    mocks.update.version = "1.0.34";
-
-    const view = render(<ToastNotifications />);
-    act(() => vi.advanceTimersByTime(500));
-
-    const firstOptions = mocks.message.mock.calls[0][1];
-    expect(mocks.message).toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
-      expect.objectContaining({
-        id: "desktop-update:1.0.34:available",
-        closeButton: true,
-      }),
-    );
-
-    act(() => firstOptions.onDismiss());
-    expect(mocks.dismissToast).not.toHaveBeenCalled();
-
-    mocks.message.mockClear();
-    view.rerender(<ToastNotifications />);
-    expect(mocks.message).not.toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
-      expect.anything(),
-    );
-  });
-
-  it("keeps an available update snoozed across relaunches", () => {
-    mocks.update.status = "available";
-    mocks.update.version = "1.0.34";
-
-    const firstLaunch = render(<ToastNotifications />);
-    act(() => vi.advanceTimersByTime(500));
-
-    const firstOptions = mocks.message.mock.calls[0][1];
-    act(() => firstOptions.onDismiss());
-
-    firstLaunch.unmount();
-    mocks.message.mockClear();
-    render(<ToastNotifications />);
-    act(() => vi.advanceTimersByTime(500));
-
-    expect(mocks.message).not.toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
-      expect.anything(),
-    );
-  });
-
-  it("resurfaces an available update after its one-day snooze expires", () => {
+  it("snoozes a dismissed available update for one day across relaunches", () => {
     vi.setSystemTime(new Date("2026-08-09T00:00:00Z"));
     mocks.update.status = "available";
     mocks.update.version = "1.0.34";
+    const wasShown = () =>
+      mocks.message.mock.calls.some(
+        ([, options]) => options.id === "desktop-update:1.0.34:available",
+      );
+    const relaunch = () => {
+      mocks.message.mockClear();
+      const view = render(<ToastNotifications />);
+      act(() => vi.advanceTimersByTime(500));
+      return view;
+    };
 
-    const firstLaunch = render(<ToastNotifications />);
-    act(() => vi.advanceTimersByTime(500));
+    const firstLaunch = relaunch();
+    expect(wasShown()).toBe(true);
     act(() => mocks.message.mock.calls[0][1].onDismiss());
+    expect(mocks.dismissToast).not.toHaveBeenCalled();
+
+    mocks.message.mockClear();
+    firstLaunch.rerender(<ToastNotifications />);
+    expect(wasShown()).toBe(false);
     firstLaunch.unmount();
 
-    vi.setSystemTime(new Date("2026-08-10T00:00:00.001Z"));
-    mocks.message.mockClear();
-    render(<ToastNotifications />);
-    act(() => vi.advanceTimersByTime(500));
+    relaunch().unmount();
+    expect(wasShown()).toBe(false);
 
-    expect(mocks.message).toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
-      expect.objectContaining({ id: "desktop-update:1.0.34:available" }),
-    );
+    vi.setSystemTime(new Date("2026-08-10T00:00:00.001Z"));
+    relaunch();
+    expect(wasShown()).toBe(true);
   });
 
   it("resurfaces a dismissed ready update after relaunch", () => {
@@ -416,7 +413,7 @@ describe("ToastNotifications", () => {
     act(() => vi.advanceTimersByTime(500));
 
     expect(mocks.message).toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is ready to install",
+      "BlackMushi 1.0.34 is ready to install",
       expect.objectContaining({ id: "desktop-update:1.0.34:ready" }),
     );
   });
@@ -452,7 +449,7 @@ describe("ToastNotifications", () => {
     act(() => vi.advanceTimersByTime(500));
 
     expect(mocks.message).toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
+      "BlackMushi 1.0.34 is available",
       expect.objectContaining({ id: "desktop-update:1.0.34:available" }),
     );
 
@@ -467,7 +464,7 @@ describe("ToastNotifications", () => {
     view.rerender(<ToastNotifications />);
 
     expect(mocks.message).toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
+      "BlackMushi 1.0.34 is available",
       expect.objectContaining({ id: "desktop-update:1.0.34:available" }),
     );
   });
@@ -486,7 +483,7 @@ describe("ToastNotifications", () => {
     mocks.live = { status: "active", sessionId: "meeting-1" };
     view.rerender(<ToastNotifications />);
     expect(mocks.message).not.toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
+      "BlackMushi 1.0.34 is available",
       expect.anything(),
     );
 
@@ -494,7 +491,7 @@ describe("ToastNotifications", () => {
     view.rerender(<ToastNotifications />);
 
     expect(mocks.message).not.toHaveBeenCalledWith(
-      "Anarlog 1.0.34 is available",
+      "BlackMushi 1.0.34 is available",
       expect.anything(),
     );
   });

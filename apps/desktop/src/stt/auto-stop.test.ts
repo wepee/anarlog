@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   AUTO_STOP_NETWORK_HOLD_MS,
   AUTO_STOP_RECENT_OFFLINE_MS,
+  getMeetingAppsStillOnCall,
   isRecentNetworkDrop,
   resolveNetworkHoldUntilMs,
   showMeetingEndedPrompt,
@@ -34,49 +35,94 @@ beforeEach(() => {
 });
 
 describe("resolveNetworkHoldUntilMs", () => {
-  test("keeps a future calendar deadline", () => {
+  test.each([
+    {
+      name: "keeps a future calendar deadline",
+      calendarDeadlineMs: 2_000,
+      expected: 2_000,
+    },
+    {
+      name: "falls back to the default hold when no calendar deadline exists",
+      calendarDeadlineMs: null,
+      expected: 1_000 + AUTO_STOP_NETWORK_HOLD_MS,
+    },
+    {
+      name: "falls back to the default hold when the calendar deadline has passed",
+      calendarDeadlineMs: 500,
+      expected: 1_000 + AUTO_STOP_NETWORK_HOLD_MS,
+    },
+  ])("$name", ({ calendarDeadlineMs, expected }) => {
     expect(
-      resolveNetworkHoldUntilMs({
-        calendarDeadlineMs: 2_000,
-        nowMs: 1_000,
-      }),
-    ).toBe(2_000);
+      resolveNetworkHoldUntilMs({ calendarDeadlineMs, nowMs: 1_000 }),
+    ).toBe(expected);
   });
+});
 
-  test("falls back to the default hold when no calendar deadline exists", () => {
-    expect(
-      resolveNetworkHoldUntilMs({
-        calendarDeadlineMs: null,
-        nowMs: 1_000,
-      }),
-    ).toBe(1_000 + AUTO_STOP_NETWORK_HOLD_MS);
-  });
+describe("getMeetingAppsStillOnCall", () => {
+  const teams = { id: "com.microsoft.teams2", name: "Microsoft Teams" };
+  const braveOrigin = { id: "com.brave.Browser.origin", name: "Brave Origin" };
+  const chrome = { id: "com.google.Chrome", name: "Google Chrome" };
+  const recorder = { id: "com.example.recorder", name: "Recorder" };
+  const faceTime = { id: "com.apple.FaceTime", name: "FaceTime" };
 
-  test("falls back to the default hold when the calendar deadline has passed", () => {
+  test.each([
+    {
+      name: "keeps recording when a browser goes quiet during a Teams call",
+      triggerAppIds: [teams.id, braveOrigin.id],
+      quietApps: [braveOrigin],
+      micApps: [teams, recorder],
+      expected: [teams],
+    },
+    {
+      name: "keeps recording when a recorder goes quiet while an untracked meeting app has the call",
+      triggerAppIds: [recorder.id],
+      quietApps: [recorder],
+      micApps: [teams],
+      expected: [teams],
+    },
+    {
+      name: "keeps recording when a FaceTime call ends during a Google Meet call",
+      triggerAppIds: [chrome.id, faceTime.id],
+      quietApps: [faceTime],
+      micApps: [chrome],
+      expected: [chrome],
+    },
+    {
+      name: "stops when the meeting app itself goes quiet, even if an unrelated browser has the mic",
+      triggerAppIds: [teams.id, recorder.id],
+      quietApps: [teams],
+      micApps: [chrome, recorder],
+      expected: [],
+    },
+  ])("$name", ({ triggerAppIds, quietApps, micApps, expected }) => {
     expect(
-      resolveNetworkHoldUntilMs({
-        calendarDeadlineMs: 500,
-        nowMs: 1_000,
-      }),
-    ).toBe(1_000 + AUTO_STOP_NETWORK_HOLD_MS);
+      getMeetingAppsStillOnCall({ triggerAppIds, quietApps, micApps }),
+    ).toEqual(expected);
   });
 });
 
 describe("isRecentNetworkDrop", () => {
-  test("is true inside the recent-reconnect window", () => {
-    expect(
-      isRecentNetworkDrop(1_000, 1_000 + AUTO_STOP_RECENT_OFFLINE_MS),
-    ).toBe(true);
-  });
-
-  test("is false after the recent-reconnect window", () => {
-    expect(
-      isRecentNetworkDrop(1_000, 1_000 + AUTO_STOP_RECENT_OFFLINE_MS + 1),
-    ).toBe(false);
-  });
-
-  test("is false when no reconnect was recorded", () => {
-    expect(isRecentNetworkDrop(null, 1_000)).toBe(false);
+  test.each([
+    {
+      name: "is true inside the recent-reconnect window",
+      reconnectMs: 1_000,
+      nowMs: 1_000 + AUTO_STOP_RECENT_OFFLINE_MS,
+      expected: true,
+    },
+    {
+      name: "is false after the recent-reconnect window",
+      reconnectMs: 1_000,
+      nowMs: 1_000 + AUTO_STOP_RECENT_OFFLINE_MS + 1,
+      expected: false,
+    },
+    {
+      name: "is false when no reconnect was recorded",
+      reconnectMs: null,
+      nowMs: 1_000,
+      expected: false,
+    },
+  ])("$name", ({ reconnectMs, nowMs, expected }) => {
+    expect(isRecentNetworkDrop(reconnectMs, nowMs)).toBe(expected);
   });
 });
 

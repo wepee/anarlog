@@ -19,7 +19,6 @@ use crate::{
 
 const MAX_DEVICE_NAME_BYTES: usize = 128;
 const MAX_ENROLLMENT_CIPHERTEXT_BYTES: usize = 2_048;
-const MAX_SYNC_DEVICES: i64 = 5;
 
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -145,7 +144,7 @@ struct EnrollmentRow {
         (status = 200, description = "Current enrollment request", body = RegisterE2eeDeviceEnrollmentResponse),
         (status = 400, description = "Invalid device enrollment"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro or a free device slot is required"),
+        (status = 403, description = "BlackMushi Pro or a free device slot is required"),
         (status = 409, description = "An existing device must establish encrypted sync first"),
         (status = 502, description = "Enrollment service unavailable")
     )
@@ -181,7 +180,7 @@ pub(super) async fn register_e2ee_device_enrollment(
         (status = 204, description = "Enrollment package sealed"),
         (status = 400, description = "Invalid enrollment package"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 404, description = "Enrollment request unavailable"),
         (status = 409, description = "Enrollment request already sealed"),
         (status = 502, description = "Enrollment service unavailable")
@@ -213,7 +212,7 @@ pub(super) async fn seal_e2ee_device_enrollment(
         (status = 204, description = "Enrollment package consumed"),
         (status = 400, description = "Invalid enrollment acknowledgement"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 404, description = "Enrollment request unavailable"),
         (status = 502, description = "Enrollment service unavailable")
     )
@@ -318,7 +317,7 @@ fn validate_registration_row(
     let expiration = DateTime::parse_from_rfc3339(&expires_at)
         .map_err(|_| SyncError::Upstream)?
         .with_timezone(&Utc);
-    if expiration <= Utc::now() || !(1..=MAX_SYNC_DEVICES).contains(&row.device_count) {
+    if expiration <= Utc::now() || row.device_count < 1 {
         return Err(SyncError::Upstream);
     }
     let status = parse_status(row.enrollment_status.as_deref())?;
@@ -471,9 +470,6 @@ pub(super) async fn list_e2ee_device_enrollments(
 }
 
 fn validate_enrollment_rows(rows: Vec<EnrollmentRow>) -> Result<Vec<E2eeDeviceEnrollmentSummary>> {
-    if rows.len() > MAX_SYNC_DEVICES as usize {
-        return Err(SyncError::Upstream);
-    }
     let now = Utc::now();
     let mut enrollments = Vec::with_capacity(rows.len());
     for row in rows {

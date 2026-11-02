@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 
 import {
@@ -10,13 +10,21 @@ import {
   Copy,
 } from "@anlg/ui/components/icons";
 import { streamdownIcons } from "@anlg/ui/components/streamdown-icons";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { cn } from "@anlg/utils";
 
-import { Disclosure, MessageBubble, MessageContainer } from "./shared";
+import {
+  Disclosure,
+  FlatDisclosureGroup,
+  MessageBubble,
+  MessageContainer,
+  useFlatDisclosure,
+} from "./shared";
+import { MessageTimestamp } from "./timestamp";
 import { Tool } from "./tool";
 import type { Part } from "./types";
 
-import { hasRenderableContent } from "~/chat/components/shared";
+import { hasRenderableContent } from "~/chat/message-content";
 import type { AnlgUIMessage } from "~/chat/types";
 
 function getMessageText(message: AnlgUIMessage): string {
@@ -50,13 +58,13 @@ export function NormalMessage({
   const [copied, setCopied] = useState(false);
   const copiedResetTimeoutRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  useMountEffect(() => {
     return () => {
       if (copiedResetTimeoutRef.current !== null) {
         window.clearTimeout(copiedResetTimeoutRef.current);
       }
     };
-  }, []);
+  });
 
   const handleCopy = useCallback(async () => {
     const text = getMessageText(message);
@@ -83,8 +91,8 @@ export function NormalMessage({
     <MessageContainer align={isUser ? "end" : "start"}>
       <div
         className={cn([
-          "flex min-w-0 flex-col",
-          isUser ? "max-w-[85%] items-end" : "group w-full",
+          "group/message flex min-w-0 flex-col",
+          isUser ? "max-w-[85%] items-end" : "w-full",
         ])}
       >
         <MessageBubble variant={isUser ? "user" : "assistant"}>
@@ -99,35 +107,40 @@ export function NormalMessage({
               }
               title={t`Activity`}
             >
-              {activityParts.map((part, i) => (
-                <Part key={i} part={part as Part} />
-              ))}
+              <FlatDisclosureGroup>
+                {activityParts.map((part, i) => (
+                  <Part key={i} part={part as Part} />
+                ))}
+              </FlatDisclosureGroup>
             </Disclosure>
           )}
           {visibleParts.map((part, i) => (
             <Part key={i} part={part as Part} />
           ))}
         </MessageBubble>
-        {!isUser && (
-          <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              onClick={handleCopy}
-              className={`p-1 transition-colors ${copied ? "text-green-500" : "text-muted-foreground hover:text-foreground"}`}
-              aria-label={t`Copy message`}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-            </button>
-            {handleReload && (
+        <div className="mt-1 flex min-h-6 items-center gap-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
+          {!isUser && (
+            <>
               <button
-                onClick={handleReload}
-                className="text-muted-foreground hover:text-foreground p-1 transition-colors"
-                aria-label={t`Regenerate message`}
+                onClick={handleCopy}
+                className={`p-1 transition-colors ${copied ? "text-green-500" : "text-muted-foreground hover:text-foreground"}`}
+                aria-label={t`Copy message`}
               >
-                <ArrowCounterClockwise size={14} />
+                {copied ? <Check size={14} /> : <Copy size={14} />}
               </button>
-            )}
-          </div>
-        )}
+              {handleReload && (
+                <button
+                  onClick={handleReload}
+                  className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                  aria-label={t`Regenerate message`}
+                >
+                  <ArrowCounterClockwise size={14} />
+                </button>
+              )}
+            </>
+          )}
+          <MessageTimestamp createdAt={message.metadata?.createdAt} />
+        </div>
       </div>
     </MessageContainer>
   );
@@ -161,6 +174,7 @@ function Part({ part }: { part: Part }) {
 }
 
 function Reasoning({ part }: { part: Extract<Part, { type: "reasoning" }> }) {
+  const flat = useFlatDisclosure();
   const raw = part.text.trim();
 
   if (!raw) {
@@ -177,6 +191,21 @@ function Reasoning({ part }: { part: Extract<Part, { type: "reasoning" }> }) {
 
   if (!title) {
     return null;
+  }
+
+  if (flat) {
+    return (
+      <div className="my-1.5 flex items-start gap-2 first:mt-0 last:mb-0">
+        {streaming ? (
+          <CircleNotch className="mt-0.5 h-3 w-3 shrink-0 animate-spin" />
+        ) : (
+          <Brain className="text-muted-foreground mt-0.5 h-3 w-3 shrink-0" />
+        )}
+        <div className="text-muted-foreground min-w-0 flex-1 text-xs whitespace-pre-wrap">
+          {part.text}
+        </div>
+      </div>
+    );
   }
 
   return (

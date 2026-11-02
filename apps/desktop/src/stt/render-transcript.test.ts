@@ -138,6 +138,93 @@ function createRequest(
 }
 
 describe("buildRenderTranscriptRequestFromRows", () => {
+  it("recovers saved Gemini batch speaker turns without reassigning live microphone audio", () => {
+    const row: TranscriptRow = {
+      source: "batch_transcription",
+      provider: "google_generative_ai",
+      words: [
+        { id: "first", text: "Hello.", start_ms: 0, end_ms: 100, channel: 0 },
+        { id: "second", text: "Hi.", start_ms: 200, end_ms: 300, channel: 0 },
+      ],
+      speaker_hints: [
+        {
+          word_id: "first",
+          type: "provider_speaker_index",
+          value: JSON.stringify({ channel: 0, speaker_index: 0 }),
+        },
+        {
+          word_id: "second",
+          type: "provider_speaker_index",
+          value: JSON.stringify({ channel: 0, speaker_index: 1 }),
+        },
+        {
+          word_id: "second",
+          type: "user_speaker_assignment",
+          value: JSON.stringify({
+            scope: "speaker",
+            channel: 0,
+            speaker_index: 1,
+            human_id: "guest",
+          }),
+        },
+      ],
+    };
+    const input = buildRenderTranscriptRequestFromRows([row])!.transcripts[0]!;
+    expect(
+      input.words.map(({ channel, speaker_index }) => [channel, speaker_index]),
+    ).toEqual([
+      [2, 0],
+      [2, 1],
+    ]);
+    expect(input.assignments).toEqual([
+      {
+        human_id: "guest",
+        scope: {
+          kind: "channel_speaker",
+          channel: "MixedCapture",
+          speaker_index: 1,
+        },
+      },
+    ]);
+    expect(row.words!.map((word) => word.channel)).toEqual([0, 0]);
+    const restoredWithoutHints = {
+      ...row,
+      words: row.words!.map((word) => ({
+        ...word,
+        metadata: JSON.stringify({
+          timing: { source: "provider_word" },
+          source_channel_restored: true,
+        }),
+      })),
+      speaker_hints: [],
+    };
+    expect(
+      buildRenderTranscriptRequestFromRows([
+        restoredWithoutHints,
+      ])!.transcripts[0]!.words.map((word) => word.channel),
+    ).toEqual([0, 0]);
+    const restored = {
+      ...row,
+      speaker_hints: row.speaker_hints!.map((hint) => ({
+        ...hint,
+        value: JSON.stringify({
+          ...JSON.parse(hint.value as string),
+          source_channel_restored: true,
+        }),
+      })),
+    };
+    expect(
+      buildRenderTranscriptRequestFromRows([
+        restored,
+      ])!.transcripts[0]!.words.map((word) => word.channel),
+    ).toEqual([0, 0]);
+    expect(
+      buildRenderTranscriptRequestFromRows([
+        { ...row, source: "live_capture" },
+      ])!.transcripts[0]!.words.map((word) => word.channel),
+    ).toEqual([0, 0]);
+  });
+
   beforeEach(() => {
     renderTranscriptSegmentsCommand.mockReset();
   });
@@ -165,10 +252,22 @@ describe("buildRenderTranscriptRequestFromRows", () => {
     expect(request?.self_human_id).toBe("self");
   });
 
-  it("passes through all mapped participant ids for Rust-side resolution", () => {
-    const request = createRequest(["early"], ["self", "remote", "third"]);
+  it("does not enable context mode before recording evidence exists", () => {
+    const request = buildRenderTranscriptRequestFromRows(
+      [transcripts.early] as unknown as TranscriptRow[],
+      {
+        selfHumanId: "self",
+        humans: [
+          { human_id: "self", name: "Me" },
+          { human_id: "remote", name: "Marco" },
+        ],
+      },
+      ["remote"],
+      { intervals: [] },
+    );
 
-    expect(request?.participant_human_ids).toEqual(["self", "remote", "third"]);
+    expect(request?.speaker_context).toBeUndefined();
+    expect(request?.participant_human_ids).toEqual(["remote"]);
   });
 
   it("applies provider speaker hints before user assignments regardless of storage order", () => {
@@ -487,6 +586,64 @@ describe("buildRenderTranscriptRequestFromRows", () => {
       },
     });
   });
+
+  it("forwards synthetic timing to the renderer without splitting input rows", async () => {
+    renderTranscriptSegmentsCommand.mockResolvedValue({
+      status: "ok",
+      data: [],
+    });
+
+    const word = (
+      id: string,
+      start_ms: number,
+      channel: number,
+      chunk_start_ms?: number,
+    ) => ({
+      id,
+      text: ` ${id}`,
+      start_ms,
+      end_ms: start_ms + 400,
+      channel,
+      metadata: {
+        timing: { source: "synthetic_text", chunk_start_ms },
+      },
+    });
+
+    const request = buildRenderTranscriptRequestFromRows([
+      {
+        started_at: 1_000,
+        words: [
+          word("mic-1", 0, 0, 0),
+          word("remote-1", 0, 1, 0),
+          word("mic-legacy", 400, 0),
+          {
+            id: "timed-remote",
+            text: " timed-remote",
+            start_ms: 500,
+            end_ms: 900,
+            channel: 1,
+            metadata: { timing: { source: "provider_word" } },
+          },
+        ],
+        speaker_hints: [],
+      },
+    ])!;
+
+    expect(request.transcripts).toHaveLength(1);
+    await renderTranscriptSegments(request);
+
+    const sent = renderTranscriptSegmentsCommand.mock.calls[0]?.[0];
+    expect(
+      sent.transcripts[0]?.words.map(
+        (word: { synthetic_timing?: unknown }) => word.synthetic_timing,
+      ),
+    ).toEqual([
+      { chunk_start_ms: 0 },
+      { chunk_start_ms: 0 },
+      { chunk_start_ms: null },
+      undefined,
+    ]);
+  });
 });
 
 describe("getRenderTranscriptRequestKey", () => {
@@ -496,50 +653,92 @@ describe("getRenderTranscriptRequestKey", () => {
     expect(getRenderTranscriptRequestKey(request)).toMatch(/^\d+:\d+:\d+:/);
   });
 
-  it("changes when rendered transcript inputs change", () => {
-    const request = createRequest();
-    const changedRequest = {
-      ...request!,
-      transcripts: request!.transcripts.map((transcript, index) =>
-        index === 0
-          ? {
-              ...transcript,
-              words: transcript.words.map((word, wordIndex) =>
-                wordIndex === 0 ? { ...word, text: " changed" } : word,
-              ),
-            }
-          : transcript,
-      ),
-    };
+  it("changes when only synthetic timing differs", () => {
+    const request = buildRenderTranscriptRequestFromRows([
+      {
+        started_at: 0,
+        words: [
+          {
+            id: "synthetic-word",
+            text: " hello",
+            start_ms: 0,
+            end_ms: 400,
+            channel: 0,
+            metadata: {
+              timing: { source: "synthetic_text", chunk_start_ms: 0 },
+            },
+          },
+        ],
+        speaker_hints: [],
+      },
+    ])!;
 
-    expect(getRenderTranscriptRequestKey(changedRequest)).not.toBe(
-      getRenderTranscriptRequestKey(request),
-    );
+    const rekey = (
+      chunkStartMs: number | undefined,
+      source = "synthetic_text",
+    ) =>
+      getRenderTranscriptRequestKey({
+        ...request,
+        transcripts: request.transcripts.map((transcript) => ({
+          ...transcript,
+          words: transcript.words.map((word) => ({
+            ...word,
+            metadata: {
+              timing: { source, chunk_start_ms: chunkStartMs },
+            },
+          })),
+        })),
+      });
+
+    const base = getRenderTranscriptRequestKey(request);
+    expect(rekey(0)).toBe(base);
+    expect(rekey(30_000)).not.toBe(base);
+    expect(rekey(undefined, "provider_word")).not.toBe(base);
   });
 
-  it("changes when speaker assignments change", () => {
+  it.each([
+    {
+      name: "rendered transcript inputs change",
+      change: (request: NonNullable<ReturnType<typeof createRequest>>) => ({
+        ...request,
+        transcripts: request.transcripts.map((transcript, index) =>
+          index === 0
+            ? {
+                ...transcript,
+                words: transcript.words.map((word, wordIndex) =>
+                  wordIndex === 0 ? { ...word, text: " changed" } : word,
+                ),
+              }
+            : transcript,
+        ),
+      }),
+    },
+    {
+      name: "speaker assignments change",
+      change: (request: NonNullable<ReturnType<typeof createRequest>>) => ({
+        ...request,
+        transcripts: request.transcripts.map((transcript, index) =>
+          index === 0
+            ? {
+                ...transcript,
+                assignments: [
+                  {
+                    human_id: "third",
+                    scope: {
+                      kind: "channel",
+                      channel: "RemoteParty",
+                    },
+                  } as const,
+                ],
+              }
+            : transcript,
+        ),
+      }),
+    },
+  ])("changes when $name", ({ change }) => {
     const request = createRequest();
-    const changedRequest = {
-      ...request!,
-      transcripts: request!.transcripts.map((transcript, index) =>
-        index === 0
-          ? {
-              ...transcript,
-              assignments: [
-                {
-                  human_id: "third",
-                  scope: {
-                    kind: "channel",
-                    channel: "RemoteParty",
-                  },
-                } as const,
-              ],
-            }
-          : transcript,
-      ),
-    };
 
-    expect(getRenderTranscriptRequestKey(changedRequest)).not.toBe(
+    expect(getRenderTranscriptRequestKey(change(request!))).not.toBe(
       getRenderTranscriptRequestKey(request),
     );
   });

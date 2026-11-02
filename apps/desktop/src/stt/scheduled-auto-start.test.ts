@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   getScheduledAutoStartAction,
   hasPendingAutoStart,
+  isPreviousCallOnMic,
   SCHEDULED_AUTO_START_GRACE_MS,
   type ScheduledMeetingRow,
   ScheduledMeetingAutoStart,
@@ -21,10 +22,18 @@ const mocks = vi.hoisted(() => ({
   getOrCreateSessionForEventId: vi.fn(),
   openNew: vi.fn(),
   openUrl: vi.fn(),
+  executeMeeting: vi.fn(),
   subscribeMeetings: vi.fn(),
   subscribeListener: vi.fn(),
   subscribeTabs: vi.fn(),
+  listMicUsingApplications: vi.fn(),
+  listenDetectEvent: vi.fn(),
   tabs: [] as Tab[],
+}));
+
+vi.mock("@anlg/plugin-detect", () => ({
+  commands: { listMicUsingApplications: mocks.listMicUsingApplications },
+  events: { detectEvent: { listen: mocks.listenDetectEvent } },
 }));
 
 vi.mock("@anlg/plugin-windows", () => ({
@@ -32,7 +41,10 @@ vi.mock("@anlg/plugin-windows", () => ({
 }));
 
 vi.mock("~/db", () => ({
-  liveQueryClient: { subscribe: mocks.subscribeMeetings },
+  liveQueryClient: {
+    execute: mocks.executeMeeting,
+    subscribe: mocks.subscribeMeetings,
+  },
 }));
 
 vi.mock("~/shared/config", () => ({
@@ -73,6 +85,32 @@ vi.mock("~/store/zustand/tabs", () => ({
 
 const NOW = new Date("2026-05-15T12:00:00.000Z").getTime();
 
+function attendance(
+  selfStatus:
+    | "organizer"
+    | "accepted"
+    | "tentative"
+    | "pending"
+    | "declined"
+    | "unknown" = "accepted",
+  overrides: Record<string, unknown> = {},
+) {
+  return JSON.stringify({
+    version: 1,
+    self_status: selfStatus,
+    roster_status: "complete",
+    others: {
+      accepted: 1,
+      tentative: 0,
+      pending: 0,
+      declined: 0,
+      unknown: 0,
+    },
+    observed_at: new Date(NOW).toISOString(),
+    ...overrides,
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -86,11 +124,26 @@ function meeting(
   return {
     id,
     started_at: new Date(NOW + offsetMs).toISOString(),
+    ended_at: new Date(NOW + offsetMs + 30 * 60_000).toISOString(),
     meeting_link: `https://zoom.us/j/${id}`,
     tracking_id_event: `tracking-${id}`,
     recurrence_series_id: "",
+    attendance_json: attendance(),
     ...overrides,
   };
+}
+
+function currentMeeting(
+  id: string,
+  overrides: Partial<ScheduledMeetingRow> = {},
+): ScheduledMeetingRow {
+  return meeting(id, 0, {
+    started_at: new Date().toISOString(),
+    attendance_json: attendance("accepted", {
+      observed_at: new Date().toISOString(),
+    }),
+    ...overrides,
+  });
 }
 
 function select(rows: ScheduledMeetingRow[], firedEventIds: string[] = []) {
@@ -102,65 +155,98 @@ function select(rows: ScheduledMeetingRow[], firedEventIds: string[] = []) {
 }
 
 describe("selectDueMeetings", () => {
-  test("selects a meeting whose start time has just arrived", () => {
-    expect(select([meeting("a", 0)])).toEqual(["a"]);
+  test.each([
+    {
+      name: "selects a meeting whose start time has just arrived",
+      rows: [meeting("a", 0)],
+      fired: [],
+      expected: ["a"],
+    },
+    {
+      name: "ignores meetings that have not started yet",
+      rows: [meeting("a", 30_000)],
+      fired: [],
+      expected: [],
+    },
+    {
+      name: "selects a meeting that started within the grace window",
+      rows: [meeting("a", -SCHEDULED_AUTO_START_GRACE_MS + 1)],
+      fired: [],
+      expected: ["a"],
+    },
+    {
+      name: "ignores meetings that started before the grace window",
+      rows: [meeting("a", -SCHEDULED_AUTO_START_GRACE_MS - 1)],
+      fired: [],
+      expected: [],
+    },
+    {
+      name: "ignores meetings that already fired",
+      rows: [meeting("a", 0)],
+      fired: ["a"],
+      expected: [],
+    },
+    {
+      name: "orders overlapping meetings by most recent start",
+      rows: [
+        meeting("earlier", -4 * 60_000),
+        meeting("latest", -30_000),
+        meeting("middle", -2 * 60_000),
+      ],
+      fired: [],
+      expected: ["latest", "middle", "earlier"],
+    },
+    {
+      name: "still returns an overlapping meeting when the newest already fired",
+      rows: [meeting("earlier", -60_000), meeting("latest", -30_000)],
+      fired: ["latest"],
+      expected: ["earlier"],
+    },
+    {
+      name: "skips rows with an unparseable start time",
+      rows: [
+        meeting("broken", 0, { started_at: "not-a-date" }),
+        meeting("good", -60_000),
+      ],
+      fired: [],
+      expected: ["good"],
+    },
+    {
+      name: "treats timezone-naive Graph timestamps as UTC",
+      rows: [
+        meeting("naive", 0, { started_at: "2026-05-15T12:00:00.0000000" }),
+      ],
+      fired: [],
+      expected: ["naive"],
+    },
+    {
+      name: "returns nothing when no meeting is due",
+      rows: [],
+      fired: [],
+      expected: [],
+    },
+  ])("$name", ({ rows, fired, expected }) => {
+    expect(select(rows, fired)).toEqual(expected);
   });
 
-  test("ignores meetings that have not started yet", () => {
-    expect(select([meeting("a", 30_000)])).toEqual([]);
-  });
+  test.each(["tentative", "pending", "declined", "unknown"] as const)(
+    "does not select a meeting when self attendance is %s",
+    (selfStatus) => {
+      expect(
+        select([meeting("a", 0, { attendance_json: attendance(selfStatus) })]),
+      ).toEqual([]);
+    },
+  );
 
-  test("selects a meeting that started within the grace window", () => {
-    expect(select([meeting("a", -SCHEDULED_AUTO_START_GRACE_MS + 1)])).toEqual([
-      "a",
-    ]);
-  });
-
-  test("ignores meetings that started before the grace window", () => {
-    expect(select([meeting("a", -SCHEDULED_AUTO_START_GRACE_MS - 1)])).toEqual(
-      [],
-    );
-  });
-
-  test("ignores meetings that already fired", () => {
-    expect(select([meeting("a", 0)], ["a"])).toEqual([]);
-  });
-
-  test("orders overlapping meetings by most recent start", () => {
-    const rows = [
-      meeting("earlier", -4 * 60_000),
-      meeting("latest", -30_000),
-      meeting("middle", -2 * 60_000),
-    ];
-
-    expect(select(rows)).toEqual(["latest", "middle", "earlier"]);
-  });
-
-  test("still returns an overlapping meeting when the newest already fired", () => {
-    const rows = [meeting("earlier", -60_000), meeting("latest", -30_000)];
-
-    expect(select(rows, ["latest"])).toEqual(["earlier"]);
-  });
-
-  test("skips rows with an unparseable start time", () => {
-    const rows = [
-      meeting("broken", 0, { started_at: "not-a-date" }),
-      meeting("good", -60_000),
-    ];
-
-    expect(select(rows)).toEqual(["good"]);
-  });
-
-  test("treats timezone-naive Graph timestamps as UTC", () => {
+  test("does not let a newer ineligible meeting hide an older eligible one", () => {
     expect(
       select([
-        meeting("naive", 0, { started_at: "2026-05-15T12:00:00.0000000" }),
+        meeting("older", -60_000),
+        meeting("newer", 0, {
+          attendance_json: attendance("pending"),
+        }),
       ]),
-    ).toEqual(["naive"]);
-  });
-
-  test("returns nothing when no meeting is due", () => {
-    expect(select([])).toEqual([]);
+    ).toEqual(["older"]);
   });
 });
 
@@ -208,11 +294,20 @@ describe("startScheduledMeeting", () => {
     mocks.getOrCreateSessionForEventId
       .mockReset()
       .mockResolvedValue("session-a");
+    mocks.executeMeeting
+      .mockReset()
+      .mockImplementation(async (_sql, params: string[]) => [
+        currentMeeting(params[0] ?? "a"),
+      ]);
     mocks.openNew.mockReset();
     mocks.openUrl.mockReset().mockResolvedValue({ status: "ok", data: null });
     mocks.subscribeMeetings.mockReset().mockResolvedValue(async () => {});
     mocks.subscribeListener.mockReset().mockReturnValue(() => {});
     mocks.subscribeTabs.mockReset().mockReturnValue(() => {});
+    mocks.listMicUsingApplications
+      .mockReset()
+      .mockResolvedValue({ status: "ok", data: [] });
+    mocks.listenDetectEvent.mockReset().mockResolvedValue(() => {});
     mocks.tabs = [];
   });
 
@@ -225,7 +320,7 @@ describe("startScheduledMeeting", () => {
     expect(mocks.openNew).toHaveBeenCalledWith({
       type: "sessions",
       id: "session-a",
-      state: { view: null, autoStart: true },
+      state: { view: null, autoStart: true, scheduledAutoStart: true },
     });
   });
 
@@ -236,6 +331,84 @@ describe("startScheduledMeeting", () => {
 
     expect(mocks.openUrl).not.toHaveBeenCalled();
     expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+
+  test("does nothing when the defensive read sees a decline", async () => {
+    mocks.executeMeeting.mockResolvedValue([
+      currentMeeting("a", {
+        attendance_json: attendance("declined", {
+          observed_at: new Date().toISOString(),
+        }),
+      }),
+    ]);
+
+    await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
+      "ineligible",
+    );
+
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+    expect(mocks.openNew).not.toHaveBeenCalled();
+  });
+
+  test("re-checks attendance after session creation before automatic actions", async () => {
+    mocks.executeMeeting
+      .mockResolvedValueOnce([currentMeeting("a")])
+      .mockResolvedValueOnce([
+        currentMeeting("a", {
+          attendance_json: attendance("declined", {
+            observed_at: new Date().toISOString(),
+          }),
+        }),
+      ]);
+
+    await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
+      "ineligible",
+    );
+
+    expect(mocks.getOrCreateSessionForEventId).toHaveBeenCalledWith("a");
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+    expect(mocks.openNew).not.toHaveBeenCalled();
+  });
+
+  test("does nothing when the meeting is rescheduled before starting", async () => {
+    mocks.executeMeeting.mockResolvedValue([
+      currentMeeting("a", {
+        started_at: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    ]);
+
+    await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
+      "ineligible",
+    );
+
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+    expect(mocks.openNew).not.toHaveBeenCalled();
+  });
+
+  test("does nothing when the event disappeared before starting", async () => {
+    mocks.executeMeeting.mockResolvedValue([]);
+
+    await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
+      "ineligible",
+    );
+
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+    expect(mocks.openNew).not.toHaveBeenCalled();
+  });
+
+  test("uses the latest meeting link from the defensive read", async () => {
+    mocks.executeMeeting.mockResolvedValue([
+      currentMeeting("a", { meeting_link: "https://meet.example/latest" }),
+    ]);
+
+    await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
+      "started",
+    );
+
+    expect(mocks.openUrl).toHaveBeenCalledWith(
+      "https://meet.example/latest",
+      null,
+    );
   });
 
   test("does not open the link while the session cannot start yet", async () => {
@@ -254,6 +427,28 @@ describe("startScheduledMeeting", () => {
       ignoredIds: new Set(["tracking-a"]),
       ignoredSeriesIds: new Set<string>(),
     });
+
+    await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
+      "ignored",
+    );
+
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+    expect(mocks.openNew).not.toHaveBeenCalled();
+  });
+
+  test("re-checks ignored identities before automatic actions", async () => {
+    mocks.getIgnoredEventSets
+      .mockResolvedValueOnce({
+        ignoredIds: new Set<string>(),
+        ignoredSeriesIds: new Set<string>(),
+      })
+      .mockResolvedValueOnce({
+        ignoredIds: new Set(["tracking-latest"]),
+        ignoredSeriesIds: new Set<string>(),
+      });
+    mocks.executeMeeting.mockResolvedValue([
+      currentMeeting("a", { tracking_id_event: "tracking-latest" }),
+    ]);
 
     await expect(startScheduledMeeting(meeting("a", 0), true)).resolves.toBe(
       "ignored",
@@ -331,18 +526,286 @@ describe("startScheduledMeeting", () => {
     expect(mocks.openUrl).not.toHaveBeenCalled();
     expect(mocks.openNew).not.toHaveBeenCalled();
   });
+
+  test("waits for an earlier call that is still on the mic, then starts when it ends", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW - 15 * 60_000);
+    const teams = { id: "com.microsoft.teams2", name: "Microsoft Teams" };
+    mocks.listMicUsingApplications.mockResolvedValue({
+      status: "ok",
+      data: [teams],
+    });
+    render(createElement(ScheduledMeetingAutoStart));
+    mocks.subscribeMeetings.mock.calls[0][2].onData([
+      meeting("earlier", -30 * 60_000),
+      meeting("next", 0),
+    ]);
+
+    await vi.advanceTimersByTimeAsync(15 * 60_000);
+    expect(mocks.getOrCreateSessionForEventId).not.toHaveBeenCalled();
+
+    mocks.listMicUsingApplications.mockResolvedValue({
+      status: "ok",
+      data: [],
+    });
+    mocks.listenDetectEvent.mock.calls[0][0]({
+      payload: { type: "micStopped", apps: [teams] },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.getOrCreateSessionForEventId).toHaveBeenCalledWith("next");
+    expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+
+  test("waits for a call that ran past its meeting long before the next one", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW - 50 * 60_000);
+    const teams = { id: "com.microsoft.teams2", name: "Microsoft Teams" };
+    mocks.listMicUsingApplications.mockResolvedValue({
+      status: "ok",
+      data: [teams],
+    });
+    render(createElement(ScheduledMeetingAutoStart));
+    mocks.subscribeMeetings.mock.calls[0][2].onData([
+      meeting("earlier", -60 * 60_000),
+      meeting("next", 0),
+    ]);
+
+    await vi.advanceTimersByTimeAsync(50 * 60_000);
+
+    expect(mocks.getOrCreateSessionForEventId).not.toHaveBeenCalled();
+  });
+
+  test("starts when a due unanswered meeting becomes accepted", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    render(createElement(ScheduledMeetingAutoStart));
+    const onData = mocks.subscribeMeetings.mock.calls[0][2].onData;
+
+    onData([meeting("a", 0, { attendance_json: attendance("pending") })]);
+    expect(mocks.getOrCreateSessionForEventId).not.toHaveBeenCalled();
+
+    onData([meeting("a", 0)]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.getOrCreateSessionForEventId).toHaveBeenCalledWith("a");
+    expect(mocks.openUrl).toHaveBeenCalledWith("https://zoom.us/j/a", null);
+    expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+
+  test("tries an older overlapping meeting when the newest becomes ineligible", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    mocks.executeMeeting.mockImplementation(async (_sql, params: string[]) => [
+      params[0] === "newer"
+        ? currentMeeting("newer", {
+            attendance_json: attendance("declined", {
+              observed_at: new Date().toISOString(),
+            }),
+          })
+        : currentMeeting("older"),
+    ]);
+    render(createElement(ScheduledMeetingAutoStart));
+
+    mocks.subscribeMeetings.mock.calls[0][2].onData([
+      meeting("older", -60_000),
+      meeting("newer", 0),
+    ]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(mocks.getOrCreateSessionForEventId).toHaveBeenCalledWith("older");
+    expect(mocks.openUrl).toHaveBeenCalledWith("https://zoom.us/j/older", null);
+    expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+
+  test("retries an event when calendar data changes during an ineligible read", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    let resolveStaleRead: (rows: ScheduledMeetingRow[]) => void = () => {};
+    mocks.executeMeeting
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveStaleRead = resolve;
+        }),
+      )
+      .mockImplementation(async (_sql, params: string[]) => [
+        currentMeeting(params[0] ?? "a"),
+      ]);
+    render(createElement(ScheduledMeetingAutoStart));
+    const onData = mocks.subscribeMeetings.mock.calls[0][2].onData;
+
+    onData([meeting("a", 0)]);
+    onData([meeting("a", 0, { meeting_link: "https://meet.example/fresh" })]);
+    resolveStaleRead([
+      currentMeeting("a", {
+        attendance_json: attendance("declined", {
+          observed_at: new Date().toISOString(),
+        }),
+      }),
+    ]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(mocks.openUrl).toHaveBeenCalledWith("https://zoom.us/j/a", null);
+    expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not let unrelated calendar updates starve an older meeting", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    let resolveNewestRead: (rows: ScheduledMeetingRow[]) => void = () => {};
+    mocks.executeMeeting
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveNewestRead = resolve;
+        }),
+      )
+      .mockImplementation(async (_sql, params: string[]) => [
+        currentMeeting(params[0] ?? "older"),
+      ]);
+    render(createElement(ScheduledMeetingAutoStart));
+    const onData = mocks.subscribeMeetings.mock.calls[0][2].onData;
+    const newest = meeting("newer", 0);
+
+    onData([meeting("older", -60_000), newest]);
+    onData([
+      meeting("older", -60_000, {
+        meeting_link: "https://meet.example/older-updated",
+      }),
+      newest,
+    ]);
+    resolveNewestRead([
+      currentMeeting("newer", {
+        attendance_json: attendance("declined", {
+          observed_at: new Date().toISOString(),
+        }),
+      }),
+    ]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(mocks.getOrCreateSessionForEventId).toHaveBeenCalledWith("older");
+    expect(mocks.openUrl).toHaveBeenCalledWith("https://zoom.us/j/older", null);
+    expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+
+  test("retries a due meeting that disappears and returns during its read", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    let resolveMissingRead: (rows: ScheduledMeetingRow[]) => void = () => {};
+    mocks.executeMeeting
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveMissingRead = resolve;
+        }),
+      )
+      .mockImplementation(async (_sql, params: string[]) => [
+        currentMeeting(params[0] ?? "newer"),
+      ]);
+    render(createElement(ScheduledMeetingAutoStart));
+    const onData = mocks.subscribeMeetings.mock.calls[0][2].onData;
+    const newer = meeting("newer", 0);
+    const older = meeting("older", -60_000);
+
+    onData([older, newer]);
+    onData([older]);
+    onData([older, newer]);
+    resolveMissingRead([]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(mocks.getOrCreateSessionForEventId).toHaveBeenLastCalledWith(
+      "newer",
+    );
+    expect(mocks.openUrl).toHaveBeenCalledWith("https://zoom.us/j/newer", null);
+    expect(mocks.openNew).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isPreviousCallOnMic", () => {
+  test.each([
+    {
+      name: "sees a call that took the mic during the earlier meeting",
+      heldSinceMs: NOW - 20 * 60_000,
+      earlierEndMs: NOW,
+      expected: true,
+    },
+    {
+      name: "sees a call that joined the earlier meeting a few minutes early",
+      heldSinceMs: NOW - 32 * 60_000,
+      earlierEndMs: NOW,
+      expected: true,
+    },
+    {
+      name: "starts an early join that took the mic in free time",
+      heldSinceMs: NOW - 12 * 60_000,
+      earlierEndMs: NOW - 15 * 60_000,
+      expected: false,
+    },
+    {
+      name: "starts a join from just before the meeting",
+      heldSinceMs: NOW - 2 * 60_000,
+      earlierEndMs: NOW,
+      expected: false,
+    },
+    {
+      name: "starts an early join made before a meeting that began just ahead of it",
+      heldSinceMs: NOW - 10 * 60_000,
+      earlierStartMs: NOW - 5 * 60_000,
+      earlierEndMs: NOW + 25 * 60_000,
+      expected: false,
+    },
+    {
+      name: "sees an early join to a recorded meeting that began just ahead of it",
+      heldSinceMs: NOW - 11 * 60_000,
+      earlierStartMs: NOW - 8 * 60_000,
+      earlierEndMs: NOW + 22 * 60_000,
+      lastRecordingEndedMs: NOW - 3 * 60_000,
+      expected: true,
+    },
+    {
+      name: "starts an early join when the meeting just ahead of it was not recorded",
+      heldSinceMs: NOW - 11 * 60_000,
+      earlierStartMs: NOW - 8 * 60_000,
+      earlierEndMs: NOW + 22 * 60_000,
+      lastRecordingEndedMs: NOW - 30 * 60_000,
+      expected: false,
+    },
+  ])(
+    "$name",
+    ({
+      heldSinceMs,
+      earlierStartMs = NOW - 30 * 60_000,
+      earlierEndMs,
+      lastRecordingEndedMs,
+      expected,
+    }: {
+      heldSinceMs: number;
+      earlierStartMs?: number;
+      earlierEndMs: number;
+      lastRecordingEndedMs?: number;
+      expected: boolean;
+    }) => {
+      const next = meeting("next", 0);
+      const earlier = meeting("earlier", earlierStartMs - NOW, {
+        ended_at: new Date(earlierEndMs).toISOString(),
+      });
+
+      expect(
+        isPreviousCallOnMic({
+          holds: new Map([["com.microsoft.teams2", heldSinceMs]]),
+          meeting: next,
+          rows: [earlier, next],
+          lastRecordingEndedMs,
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe("getScheduledAutoStartAction", () => {
-  test("starts when no live session is active", () => {
-    expect(getScheduledAutoStartAction("inactive")).toBe("start");
-  });
-
-  test("retries while a live session is finalizing", () => {
-    expect(getScheduledAutoStartAction("finalizing")).toBe("retry");
-  });
-
-  test("skips when a live session is active", () => {
-    expect(getScheduledAutoStartAction("active")).toBe("skip");
+  test.each([
+    { status: "inactive" as const, expected: "start" },
+    { status: "finalizing" as const, expected: "retry" },
+    { status: "active" as const, expected: "skip" },
+  ])("returns $expected for a $status live session", ({ status, expected }) => {
+    expect(getScheduledAutoStartAction(status)).toBe(expected);
   });
 });

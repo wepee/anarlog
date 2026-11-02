@@ -53,17 +53,113 @@ notificationEvent: "plugin:notification:notification-event"
 
 /** user-defined types **/
 
-export type Duration = { secs: number; nanos: number }
-export type EventDetails = { what: string; timezone: string | null; location: string | null }
-export type Notification = { key: string | null; title: string; message: string; timeout: Duration | null; source: NotificationSource | null; start_time: number | null; participants: Participant[] | null; event_details: EventDetails | null; action_label: string | null; action_variant: NotificationActionVariant | null; options: string[] | null; footer: NotificationFooter | null; icon: NotificationIcon | null }
-export type NotificationActionVariant = "default" | "destructive"
-export type NotificationEvent = { type: "notification_confirm"; key: string; source: NotificationSource | null } | { type: "notification_accept"; key: string; source: NotificationSource | null } | { type: "notification_dismiss"; key: string; source: NotificationSource | null } | { type: "notification_timeout"; key: string; source: NotificationSource | null } | { type: "notification_option_selected"; key: string; source: NotificationSource | null; selected_index: number } | { type: "notification_footer_action"; key: string; source: NotificationSource | null }
-export type NotificationFooter = { text: string; actionLabel: string; icon: NotificationIcon | null }
-export type NotificationIcon = { type: "hidden" } | { type: "bundle_id"; bundle_id: string } | { type: "system_symbol"; name: string } | { type: "path"; path: string } | { type: "overlay"; base: NotificationIconAsset; badge: NotificationIconAsset }
-export type NotificationIconAsset = { type: "app_icon" } | { type: "calendar" } | { type: "system_symbol"; name: string } | { type: "bundle_id"; bundle_id: string } | { type: "path"; path: string }
-export type NotificationSource = { type: "calendar_event"; event_id: string } | { type: "session"; session_id: string } | { type: "mic_detected"; app_names: string[]; app_ids?: string[]; event_ids?: string[] }
-export type Participant = { name: string | null; email: string; status: ParticipantStatus }
-export type ParticipantStatus = "Accepted" | "Maybe" | "Declined"
+export type Duration = { secs: number; nanos: number };
+export type EventDetails = {
+  what: string;
+  timezone: string | null;
+  location: string | null;
+};
+export type Notification = {
+  key: string | null;
+  title: string;
+  message: string;
+  timeout: Duration | null;
+  source: NotificationSource | null;
+  start_time: number | null;
+  participants: Participant[] | null;
+  event_details: EventDetails | null;
+  action_label: string | null;
+  action_variant: NotificationActionVariant | null;
+  action: NotificationAction | null;
+  action_menu: NotificationActionMenu | null;
+  options: string[] | null;
+  footer: NotificationFooter | null;
+  icon: NotificationIcon | null;
+};
+/**
+ * An explicit calendar reminder action. These are intentionally semantic so the
+ * app can decide whether foregrounding its window is appropriate.
+ */
+export type NotificationAction = "join_and_record" | "open_meeting";
+export type NotificationActionMenu = {
+  label: string;
+  action: NotificationAction;
+};
+export type NotificationActionVariant = "default" | "destructive";
+export type NotificationEvent =
+  | {
+      type: "notification_confirm";
+      key: string;
+      source: NotificationSource | null;
+    }
+  | {
+      type: "notification_accept";
+      key: string;
+      source: NotificationSource | null;
+    }
+  | {
+      type: "notification_action";
+      key: string;
+      source: NotificationSource | null;
+      action: NotificationAction;
+    }
+  | {
+      type: "notification_dismiss";
+      key: string;
+      source: NotificationSource | null;
+    }
+  | {
+      type: "notification_timeout";
+      key: string;
+      source: NotificationSource | null;
+    }
+  | {
+      type: "notification_option_selected";
+      key: string;
+      source: NotificationSource | null;
+      selected_index: number;
+    }
+  | {
+      type: "notification_footer_action";
+      key: string;
+      source: NotificationSource | null;
+    };
+export type NotificationFooter = {
+  text: string;
+  actionLabel: string;
+  icon: NotificationIcon | null;
+};
+export type NotificationIcon =
+  | { type: "hidden" }
+  | { type: "bundle_id"; bundle_id: string }
+  | { type: "system_symbol"; name: string }
+  | { type: "path"; path: string }
+  | {
+      type: "overlay";
+      base: NotificationIconAsset;
+      badge: NotificationIconAsset;
+    };
+export type NotificationIconAsset =
+  | { type: "app_icon" }
+  | { type: "calendar" }
+  | { type: "system_symbol"; name: string }
+  | { type: "bundle_id"; bundle_id: string }
+  | { type: "path"; path: string };
+export type NotificationSource =
+  | { type: "calendar_event"; event_id: string }
+  | { type: "session"; session_id: string }
+  | {
+      type: "mic_detected";
+      app_names: string[];
+      app_ids?: string[];
+      event_ids?: string[];
+    };
+export type Participant = {
+  name: string | null;
+  email: string;
+  status: ParticipantStatus;
+};
+export type ParticipantStatus = "Accepted" | "Maybe" | "Declined";
 
 /** tauri-specta globals **/
 

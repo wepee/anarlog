@@ -30,6 +30,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@anlg/ui/components/ui/tooltip";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { useSquircleRef } from "@anlg/ui/hooks/use-squircle";
 import { cn } from "@anlg/utils";
 
@@ -43,7 +44,6 @@ import {
   useWeekStartsOn,
 } from "~/calendar/hooks";
 import type { CalendarSyncRange } from "~/services/calendar";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 
 const WEEKDAY_HEADERS_SUN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_HEADERS_MON = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -399,13 +399,13 @@ function CalendarSyncHeaderControls() {
   const [showManualRefreshFeedback, setShowManualRefreshFeedback] =
     useState(false);
 
-  useEffect(() => {
+  useMountEffect(() => {
     return () => {
       if (refreshFeedbackTimeoutRef.current) {
         clearTimeout(refreshFeedbackTimeoutRef.current);
       }
     };
-  }, []);
+  });
 
   const handleRefresh = useCallback(() => {
     if (refreshFeedbackTimeoutRef.current) {

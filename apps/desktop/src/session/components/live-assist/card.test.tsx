@@ -25,7 +25,7 @@ vi.mock("~/session/queries", () => ({
 }));
 
 vi.mock("@anlg/ui/components/ui/toast", () => ({
-  sonnerToast: { error: hoisted.toastError },
+  toast: { error: hoisted.toastError },
 }));
 
 import { LiveAssistCard } from "./card";

@@ -1,4 +1,9 @@
 export const SETTING_DEFINITIONS = {
+  intelligence_disabled: {
+    type: "boolean",
+    path: ["ai", "intelligence_disabled"],
+    default: false as boolean,
+  },
   dictation_live_preview: {
     type: "boolean",
     path: ["dictation", "live_preview"],
@@ -24,6 +29,26 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "export_directory"],
     default: "" as string,
   },
+  export_format: {
+    type: "string",
+    path: ["general", "export_format"],
+    default: "pdf" as string,
+  },
+  export_include_memo: {
+    type: "boolean",
+    path: ["general", "export_include_memo"],
+    default: false as boolean,
+  },
+  export_include_summary: {
+    type: "boolean",
+    path: ["general", "export_include_summary"],
+    default: true as boolean,
+  },
+  export_include_transcript: {
+    type: "boolean",
+    path: ["general", "export_include_transcript"],
+    default: false as boolean,
+  },
   autostart: {
     type: "boolean",
     path: ["general", "autostart"],
@@ -38,6 +63,12 @@ export const SETTING_DEFINITIONS = {
     type: "boolean",
     path: ["general", "auto_stop_meetings"],
     default: true as boolean,
+  },
+  primary_recording_device: {
+    type: "string",
+    path: ["general", "primary_recording_device"],
+    synced: true,
+    default: "" as string,
   },
   auto_start_scheduled_meetings: {
     type: "boolean",
@@ -164,11 +195,6 @@ export const SETTING_DEFINITIONS = {
     path: ["notification", "detect"],
     default: true as boolean,
   },
-  notification_transcription_complete: {
-    type: "boolean",
-    path: ["notification", "transcription_complete"],
-    default: true as boolean,
-  },
   notification_summary_complete: {
     type: "boolean",
     path: ["notification", "summary_complete"],
@@ -245,6 +271,11 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "live_assist_enabled"],
     default: false as boolean,
   },
+  capture_shared_screens: {
+    type: "boolean",
+    path: ["general", "capture_shared_screens"],
+    default: false as boolean,
+  },
   cloud_sync_enabled: {
     type: "boolean",
     path: ["general", "cloud_sync_enabled"],
@@ -259,6 +290,11 @@ export const SETTING_DEFINITIONS = {
     type: "string",
     path: ["language", "spoken_languages"],
     default: "[]" as string,
+  },
+  summary_use_main_language: {
+    type: "boolean",
+    path: ["language", "summary_use_main_language"],
+    default: false as boolean,
   },
   personalization_dictionary_terms: {
     type: "string",
@@ -279,11 +315,6 @@ export const SETTING_DEFINITIONS = {
     type: "string",
     path: ["ai", "auto_summary_prompt"],
     default: "" as string,
-  },
-  summary_length: {
-    type: "string",
-    path: ["ai", "summary_length"],
-    default: "detailed" as string,
   },
   ignored_platforms: {
     type: "string",

@@ -202,6 +202,10 @@ interface NativeModuleInterface {
   ubrn_uniffi_mobile_bridge_fn_init_callback_vtable_transcriptioneventlistener(
     vtable: UniffiVTableCallbackInterfaceMobileBridgeTranscriptionEventListener,
   ): void;
+  ubrn_uniffi_mobile_bridge_fn_func_render_stored_transcript(
+    requestJson: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus,
+  ): Uint8Array;
   ubrn_uniffi_mobile_bridge_fn_func_start_provider_live_transcription(
     requestJson: Uint8Array,
     listener: bigint,
@@ -357,6 +361,14 @@ interface NativeModuleInterface {
     uniffiSelf: bigint,
     requestJson: Uint8Array,
   ): bigint;
+  ubrn_uniffi_mobile_bridge_fn_method_mobiledbbridge_seal_e2ee_device_enrollment(
+    uniffiSelf: bigint,
+    accountUserId: Uint8Array,
+    requestId: Uint8Array,
+    recoveryKeyCode: Uint8Array,
+    recipientPublicKey: Uint8Array,
+    uniffi_out_err: UniffiRustCallStatus,
+  ): Uint8Array;
   ubrn_uniffi_mobile_bridge_fn_method_mobiledbbridge_start_cloudsync(
     uniffiSelf: bigint,
     uniffi_out_err: UniffiRustCallStatus,
@@ -409,6 +421,7 @@ interface NativeModuleInterface {
     uniffi_out_err: UniffiRustCallStatus,
   ): void;
   ubrn_ffi_mobile_bridge_uniffi_contract_version(): number;
+  ubrn_uniffi_mobile_bridge_checksum_func_render_stored_transcript(): number;
   ubrn_uniffi_mobile_bridge_checksum_func_start_provider_live_transcription(): number;
   ubrn_uniffi_mobile_bridge_checksum_func_transcribe_provider_audio(): number;
   ubrn_uniffi_mobile_bridge_checksum_constructor_mobiledbbridge_open(): number;
@@ -438,6 +451,7 @@ interface NativeModuleInterface {
   ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_prepare_attachment_upload(): number;
   ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_read_attachment_upload_range(): number;
   ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_restore_attachment(): number;
+  ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_seal_e2ee_device_enrollment(): number;
   ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_start_cloudsync(): number;
   ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_stop_cloudsync(): number;
   ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_subscribe(): number;

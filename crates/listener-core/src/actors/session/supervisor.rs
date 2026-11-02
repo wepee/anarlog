@@ -26,6 +26,7 @@ const LISTENER_RETRY_DELAYS: [Duration; 5] = [
     Duration::from_secs(30),
 ];
 const MAX_LISTENER_RETRY_AFTER: Duration = Duration::from_secs(30);
+const RECORDER_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 pub struct SessionState {
     ctx: SessionContext,
@@ -36,6 +37,7 @@ pub struct SessionState {
     recorder_restarts: anlg_supervisor::RestartTracker,
     mode: SessionModeState,
     listener_retry_attempt: usize,
+    listener_mic_isolated: bool,
     shutting_down: bool,
 }
 
@@ -45,6 +47,8 @@ pub enum SessionMsg {
     Shutdown,
     RetryListener,
     RetryRecorder,
+    SourceHealthy,
+    SourceRoutingChanged,
     UpdateCredentials(String),
     UpdateConfig(SessionConfigUpdate),
 }
@@ -72,7 +76,7 @@ impl Actor for SessionActor {
                 Ok(cell) => Some(cell),
                 Err(error) => {
                     emit_storage_error(&ctx, &error.to_string());
-                    myself.send_after(Duration::from_secs(30), || SessionMsg::RetryRecorder);
+                    myself.send_after(RECORDER_RETRY_DELAY, || SessionMsg::RetryRecorder);
                     None
                 }
             };
@@ -94,6 +98,7 @@ impl Actor for SessionActor {
                 recorder_restarts: anlg_supervisor::RestartTracker::new(),
                 mode,
                 listener_retry_attempt: 0,
+                listener_mic_isolated: false,
                 shutting_down: false,
             })
         }
@@ -116,8 +121,9 @@ impl Actor for SessionActor {
             }
 
             match children::spawn_listener(myself.get_cell(), &state.ctx, None).await {
-                Ok(listener_cell) => {
+                Ok((listener_cell, mic_isolated)) => {
                     state.listener_cell = Some(listener_cell);
+                    state.listener_mic_isolated = mic_isolated;
                     state.mode.on_listener_attached();
                     children::attach_listener_to_source(state).await;
                 }
@@ -142,6 +148,10 @@ impl Actor for SessionActor {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
+            SessionMsg::SourceHealthy => state.source_restarts.reset(),
+            SessionMsg::SourceRoutingChanged => {
+                refresh_listener_on_isolation_change(&myself, state).await;
+            }
             SessionMsg::Shutdown => {
                 state.shutting_down = true;
                 children::shutdown_children(state, "session_stop").await;
@@ -162,7 +172,7 @@ impl Actor for SessionActor {
                         .recorder_restarts
                         .maybe_reset(&children::RECORDER_RESTART_BUDGET);
                     if !children::try_restart_recorder(myself.get_cell(), state).await {
-                        myself.send_after(Duration::from_secs(30), || SessionMsg::RetryRecorder);
+                        myself.send_after(RECORDER_RETRY_DELAY, || SessionMsg::RetryRecorder);
                     }
                 }
             }
@@ -184,9 +194,6 @@ impl Actor for SessionActor {
     ) -> Result<(), ActorProcessingErr> {
         let span = session_span(&state.ctx.params.session_id);
         async {
-            state
-                .source_restarts
-                .maybe_reset(&children::SOURCE_RESTART_BUDGET);
             state
                 .recorder_restarts
                 .maybe_reset(&children::RECORDER_RESTART_BUDGET);
@@ -224,6 +231,8 @@ impl Actor for SessionActor {
                             {
                                 tracing::error!("source_restart_limit_exceeded_meltdown");
                                 meltdown(myself, state).await;
+                            } else {
+                                refresh_listener_on_isolation_change(&myself, state).await;
                             }
                         }
                         Some(ChildKind::Recorder) => {
@@ -234,8 +243,7 @@ impl Actor for SessionActor {
                                 &state.ctx,
                                 reason.as_deref().unwrap_or("Audio saving stopped"),
                             );
-                            myself
-                                .send_after(Duration::from_secs(30), || SessionMsg::RetryRecorder);
+                            myself.send_after(RECORDER_RETRY_DELAY, || SessionMsg::RetryRecorder);
                         }
                         None => {
                             tracing::warn!("unknown_child_terminated");
@@ -263,6 +271,8 @@ impl Actor for SessionActor {
                             if !children::try_restart_source(myself.get_cell(), state, true).await {
                                 tracing::error!("source_restart_limit_exceeded_meltdown");
                                 meltdown(myself, state).await;
+                            } else {
+                                refresh_listener_on_isolation_change(&myself, state).await;
                             }
                         }
                         Some(ChildKind::Recorder) => {
@@ -270,8 +280,7 @@ impl Actor for SessionActor {
                             state.recorder_cell = None;
                             children::sync_source_recorder(state).await;
                             emit_storage_error(&state.ctx, &error.to_string());
-                            myself
-                                .send_after(Duration::from_secs(30), || SessionMsg::RetryRecorder);
+                            myself.send_after(RECORDER_RETRY_DELAY, || SessionMsg::RetryRecorder);
                         }
                         None => {
                             tracing::warn!("unknown_child_failed");
@@ -297,7 +306,7 @@ impl Actor for SessionActor {
                 &state.ctx.params.session_id,
             );
             if let Err(error) = tokio::task::spawn_blocking(move || {
-                crate::actors::recorder::delete_capture_audio(&dir)
+                crate::actors::recorder::delete_transcribed_capture_audio(&dir).map(|_| ())
             })
             .await?
             {
@@ -396,8 +405,9 @@ async fn refresh_listener(myself: ActorRef<SessionMsg>, state: &mut SessionState
         (state.ctx.started_at_instant.elapsed().as_secs_f64() - replay_duration_secs).max(0.0);
 
     match children::spawn_listener(myself.get_cell(), &state.ctx, Some(replay_offset_secs)).await {
-        Ok(listener_cell) => {
+        Ok((listener_cell, mic_isolated)) => {
             state.listener_cell = Some(listener_cell);
+            state.listener_mic_isolated = mic_isolated;
             state.mode.on_listener_attached();
             children::attach_listener_to_source(state).await;
         }
@@ -407,6 +417,23 @@ async fn refresh_listener(myself: ActorRef<SessionMsg>, state: &mut SessionState
             let degraded = classify_listener_spawn_failure(state, &error);
             handle_listener_failure(&myself, state, degraded, retry_after).await;
         }
+    }
+}
+
+// A source restart can change audio routing (headphones unplugging, a mic swap),
+// which can flip the mic-isolation verdict the listener's provider session was
+// opened with. That session cannot be renegotiated, so refresh the listener.
+async fn refresh_listener_on_isolation_change(
+    myself: &ActorRef<SessionMsg>,
+    state: &mut SessionState,
+) {
+    if state.listener_cell.is_none() {
+        return;
+    }
+
+    let mic_isolated = children::source_mic_isolated(&state.ctx).await;
+    if mic_isolated != state.listener_mic_isolated {
+        refresh_listener(myself.clone(), state).await;
     }
 }
 
@@ -536,12 +563,13 @@ async fn retry_listener(myself: ActorRef<SessionMsg>, state: &mut SessionState) 
         (state.ctx.started_at_instant.elapsed().as_secs_f64() - replay_duration_secs).max(0.0);
 
     match children::spawn_listener(myself.get_cell(), &state.ctx, Some(replay_offset_secs)).await {
-        Ok(listener_cell) => {
+        Ok((listener_cell, mic_isolated)) => {
             tracing::info!(
                 attempts = state.listener_retry_attempt,
                 "listener_reconnected"
             );
             state.listener_cell = Some(listener_cell);
+            state.listener_mic_isolated = mic_isolated;
             state.listener_retry_attempt = 0;
             state.mode.on_listener_attached();
             children::attach_listener_to_source(state).await;
@@ -782,6 +810,7 @@ mod tests {
             app_dir: std::env::temp_dir(),
             started_at_instant: Instant::now(),
             started_at_system: SystemTime::now(),
+            live_transcript: Default::default(),
         }
     }
 
@@ -795,6 +824,7 @@ mod tests {
             recorder_restarts: RestartTracker::new(),
             mode: SessionModeState::new(TranscriptionMode::Live, TranscriptionMode::Live),
             listener_retry_attempt: 0,
+            listener_mic_isolated: false,
             shutting_down: false,
         }
     }
@@ -817,7 +847,7 @@ mod tests {
     }
 
     #[test]
-    fn config_update_does_not_refresh_for_speaker_assignments() {
+    fn config_update_keeps_stream_for_participant_and_speaker_changes() {
         let mut ctx = test_ctx();
         ctx.params.participant_human_ids = vec!["self".to_string(), "remote-a".to_string()];
         ctx.params.self_human_id = Some("self".to_string());
@@ -830,11 +860,30 @@ mod tests {
                 speaker_index: 0,
             },
         }];
+        assert!(
+            !update_requires_listener_refresh(&state.ctx.params, &update),
+            "speaker assignments"
+        );
 
-        assert!(!update_requires_listener_refresh(
-            &state.ctx.params,
-            &update
-        ));
+        let mut ctx = test_ctx();
+        ctx.params.participant_human_ids = vec!["self".to_string()];
+        ctx.params.self_human_id = Some("self".to_string());
+        let state = test_state(ctx);
+        let update = test_update(vec![], vec!["self", "remote-a", "remote-b"], Some("self"));
+        assert!(
+            !update_requires_listener_refresh(&state.ctx.params, &update),
+            "calendar attendance"
+        );
+
+        let mut ctx = test_ctx();
+        ctx.params.participant_human_ids = vec!["self".to_string(), "remote-a".to_string()];
+        ctx.params.self_human_id = Some("self".to_string());
+        let state = test_state(ctx);
+        let update = test_update(vec![], vec!["self", "remote-b"], Some("self"));
+        assert!(
+            !update_requires_listener_refresh(&state.ctx.params, &update),
+            "same speaker count"
+        );
     }
 
     #[test]
@@ -855,68 +904,44 @@ mod tests {
     }
 
     #[test]
-    fn config_update_keeps_stream_when_calendar_attendance_changes() {
-        let mut ctx = test_ctx();
-        ctx.params.participant_human_ids = vec!["self".to_string()];
-        ctx.params.self_human_id = Some("self".to_string());
-        let state = test_state(ctx);
-        let update = test_update(vec![], vec!["self", "remote-a", "remote-b"], Some("self"));
+    fn only_local_soniqo_live_listener_failure_stops_session() {
+        for (base_url, model, expected_stop, label) in [
+            (
+                anlg_transcribe_soniqo::LOCAL_BASE_URL,
+                "soniqo-parakeet-streaming",
+                true,
+                "local soniqo live",
+            ),
+            (
+                "https://api.soniox.com",
+                "stt-v4",
+                false,
+                "direct soniox preserves recording",
+            ),
+            (
+                "https://api.anarlog.so/stt?provider=soniox",
+                "cloud",
+                false,
+                "anarlog proxy soniox enters batch fallback",
+            ),
+            (
+                "http://localhost:1234",
+                "test-model",
+                false,
+                "non-soniqo enters batch fallback",
+            ),
+        ] {
+            let mut ctx = test_ctx();
+            ctx.params.base_url = base_url.to_string();
+            ctx.params.model = model.to_string();
+            let state = test_state(ctx);
 
-        assert!(!update_requires_listener_refresh(
-            &state.ctx.params,
-            &update
-        ));
-    }
-
-    #[test]
-    fn config_update_does_not_refresh_for_same_speaker_count() {
-        let mut ctx = test_ctx();
-        ctx.params.participant_human_ids = vec!["self".to_string(), "remote-a".to_string()];
-        ctx.params.self_human_id = Some("self".to_string());
-        let state = test_state(ctx);
-        let update = test_update(vec![], vec!["self", "remote-b"], Some("self"));
-
-        assert!(!update_requires_listener_refresh(
-            &state.ctx.params,
-            &update
-        ));
-    }
-
-    #[test]
-    fn local_soniqo_live_listener_failure_stops_session() {
-        let mut ctx = test_ctx();
-        ctx.params.base_url = anlg_transcribe_soniqo::LOCAL_BASE_URL.to_string();
-        ctx.params.model = "soniqo-parakeet-streaming".to_string();
-        let state = test_state(ctx);
-
-        assert!(should_stop_on_listener_failure(&state));
-    }
-
-    #[test]
-    fn direct_soniox_listener_failure_preserves_recording() {
-        let mut ctx = test_ctx();
-        ctx.params.base_url = "https://api.soniox.com".to_string();
-        ctx.params.model = "stt-v4".to_string();
-        let state = test_state(ctx);
-
-        assert!(!should_stop_on_listener_failure(&state));
-    }
-
-    #[test]
-    fn anarlog_proxy_soniox_listener_failure_enters_batch_fallback() {
-        let mut ctx = test_ctx();
-        ctx.params.base_url = "https://api.anarlog.so/stt?provider=soniox".to_string();
-        ctx.params.model = "cloud".to_string();
-        let state = test_state(ctx);
-
-        assert!(!should_stop_on_listener_failure(&state));
-    }
-
-    #[test]
-    fn non_soniqo_listener_failure_enters_batch_fallback() {
-        let state = test_state(test_ctx());
-
-        assert!(!should_stop_on_listener_failure(&state));
+            assert_eq!(
+                should_stop_on_listener_failure(&state),
+                expected_stop,
+                "case: {label}"
+            );
+        }
     }
 
     #[test]
@@ -941,16 +966,12 @@ mod tests {
     }
 
     #[test]
-    fn authentication_failures_do_not_retry() {
+    fn permanent_listener_failures_do_not_retry() {
         assert!(!should_retry_listener_failure(
             &DegradedError::AuthenticationFailed {
                 provider: "test".to_string(),
             }
         ));
-    }
-
-    #[test]
-    fn provider_configuration_failures_do_not_retry() {
         let degraded = DegradedError::ProviderConfiguration {
             provider: "test".to_string(),
             message: "invalid endpoint".to_string(),
@@ -1164,6 +1185,7 @@ mod tests {
             recorder_restarts: RestartTracker::new(),
             mode: SessionModeState::new(TranscriptionMode::Live, TranscriptionMode::Live),
             listener_retry_attempt: 0,
+            listener_mic_isolated: false,
             shutting_down: false,
         };
 

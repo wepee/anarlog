@@ -69,16 +69,16 @@ It is built for people who want AI meeting notes without handing their conversat
 
 anarlog keeps audio transcription separate from the language model used for summaries and chat. You can change either one without changing the other.
 
-| Stage                                       | App setting       | Anarlog Cloud                                                                                                                                            | Local or bring your own                                                                   |
+| Stage                                       | App setting       | BlackMushi Cloud                                                                                                                                            | Local or bring your own                                                                   |
 | ------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Audio → transcript                          | **Transcription** | Managed **Pro (Cloud)** chooses by language and live or batch mode. Current primary paths include Deepgram Nova, Soniox 5, and AssemblyAI Universal 3.5. | Soniqo or Apple Speech when available, or your selected transcription provider and model  |
+| Audio → transcript                          | **Transcription** | Managed **Pro (Cloud)** prefers Soniox 5 for live and batch transcription, with eligible fallbacks based on language and mode. | Soniqo or Apple Speech when available, or your selected transcription provider and model  |
 | Transcript + memo → summary, title, or chat | **Intelligence**  | Managed **Auto** (also shown as Pro (Cloud)) currently uses the latest Claude Sonnet alias through OpenRouter.                                           | Your selected API, subscription, OpenAI-compatible server, or eligible Apple Intelligence |
 
 The active provider and model are always visible under **Settings → Transcription** and **Settings → Intelligence**. Read [Models and providers](https://docs.anarlog.so/models-and-providers) for the current routes, local model list, and privacy boundaries.
 
 ## Get started
 
-1. [Download Anarlog](https://anarlog.so/download) for macOS, Windows, or Linux.
+1. [Download BlackMushi](https://anarlog.so/download) for macOS, Windows, or Linux.
 2. Open it and join a meeting. anarlog records on your device and transcribes with the model you selected.
 3. Generate a note, edit it like a document, and export Markdown when you need it.
 4. Optional: connect an LLM provider or a local model in settings for summaries and chat.
@@ -93,7 +93,7 @@ Product docs live at [docs.anarlog.so](https://docs.anarlog.so). To build the de
 | `apps/web`         | anarlog.so website, account portal, and shared-note pages; not the desktop notepad         |
 | `apps/api`         | Optional hosted services for AI, sync, sharing, and integrations                           |
 | `apps/cli`         | Local CLI and MCP server                                                                   |
-| `apps/mobile`      | Mobile client source; no mobile app is currently distributed                               |
+| `apps/mobile`      | iOS and Android client, available as a beta through TestFlight and Google Play             |
 | `apps/stripe`      | Billing integration                                                                        |
 | `apps/watch/apple` | watchOS companion source built with the mobile app                                         |
 | `plugins/*`        | Tauri capabilities such as local STT, database access, calendar, export, and notifications |
@@ -107,7 +107,7 @@ Product docs live at [docs.anarlog.so](https://docs.anarlog.so). To build the de
 
 The local-first desktop app and website start without secrets. Hosted AI, CloudSync, authentication, billing, and connected integrations need their optional local services and configuration.
 
-You need Node.js 22 or later, pnpm 11.1.1, Rust 1.94.0, and the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/). On Debian or Ubuntu, the repository can install the required toolchains and system packages:
+You need Node.js 22 or later, pnpm 11.1.1, Rust 1.94.0, [process-compose](https://f1bonacc1.github.io/process-compose/installation/) 1.122.0 or later (`brew install process-compose` on macOS), and the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/). Apple Silicon Macs also need Xcode with its Metal Toolchain component to compile the MLX shader library (Xcode 26 and later: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -downloadComponent MetalToolchain`); the Command Line Tools alone are not enough. On Debian or Ubuntu, the repository can install the required toolchains and system packages:
 
 ```bash
 bash scripts/setup-linux.sh
@@ -117,12 +117,14 @@ Install the workspace and start the app you want to work on:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm exec turbo dev:desktop
+pnpm dev:desktop
 # or
-pnpm exec turbo dev:web
+pnpm dev:web
 ```
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for validation commands, code ownership, and the contribution workflow. Ask [DeepWiki](https://deepwiki.com/fastrepl/anarlog) for a code-indexed explanation of a subsystem.
+Process Compose builds shared UI first, manages the app processes, and saves logs under `.process-compose/`. Use `pnpm dev` for the combined desktop, web, API, and local Supabase stack after configuring the optional backend.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for backend setup, process controls, validation commands, code ownership, and the contribution workflow. Ask [DeepWiki](https://deepwiki.com/fastrepl/anarlog) for a code-indexed explanation of a subsystem.
 
 ## Name history
 

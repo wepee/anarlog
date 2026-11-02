@@ -13,7 +13,7 @@ const hoisted = vi.hoisted(() => ({
 vi.mock("~/shared/chat-cta", () => ({
   ChatCTA: () => (
     <button type="button" onClick={() => hoisted.sendEvent({ type: "OPEN" })}>
-      Ask Anarlog anything
+      Ask BlackMushi anything
     </button>
   ),
 }));
@@ -51,7 +51,7 @@ describe("FloatingActionButton", () => {
     renderFloatingActionButton();
 
     expect(
-      screen.getByRole("button", { name: "Ask Anarlog anything" }),
+      screen.getByRole("button", { name: "Ask BlackMushi anything" }),
     ).not.toBeNull();
   });
 
@@ -69,7 +69,7 @@ describe("FloatingActionButton", () => {
       const view = renderFloatingActionButton(props);
 
       expect(
-        screen.getByRole("button", { name: "Ask Anarlog anything" }),
+        screen.getByRole("button", { name: "Ask BlackMushi anything" }),
       ).not.toBeNull();
       expect(
         screen.queryByRole("button", { name: "Start listening" }),
@@ -92,18 +92,13 @@ describe("FloatingActionButton", () => {
     expect(stack?.className).toContain("flex-col-reverse");
     expect(stack?.className).toContain("bottom-3");
     expect(slot?.className).toContain("mb-2");
-    expect(slot?.className).toContain("translate-y-8");
-    expect(slot?.className).toContain("peer-hover/session-fab:translate-y-0");
-    expect(slot?.className).toContain(
-      "peer-focus-within/session-fab:translate-y-0",
-    );
   });
 
   it("opens chat from the FAB", () => {
     renderFloatingActionButton();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Ask Anarlog anything" }),
+      screen.getByRole("button", { name: "Ask BlackMushi anything" }),
     );
 
     expect(hoisted.sendEvent).toHaveBeenCalledWith({ type: "OPEN" });

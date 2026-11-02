@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import { commands as analyticsCommands } from "@anlg/plugin-analytics";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 
 import { useAITaskTask } from "~/ai/hooks";
 import { useLanguageModel } from "~/ai/hooks";
@@ -10,6 +10,7 @@ import {
   requestMainAITaskCancel,
   requestMainEnhance,
 } from "~/ai/task-window-sync";
+import { getEnhancerService } from "~/services/enhancer";
 import { getEligibility } from "~/services/enhancer/eligibility";
 import { loadSessionContentSnapshot } from "~/session/content-queries";
 import { useEnhancedNote } from "~/session/queries";
@@ -27,8 +28,8 @@ export function useEnhancedNoteActions({
     ? createTaskId(enhancedNoteId, "enhance")
     : null;
 
-  const noteTemplateId =
-    useEnhancedNote(enhancedNoteId ?? "")?.templateId || undefined;
+  const note = useEnhancedNote(enhancedNoteId ?? "");
+  const noteTemplateId = note?.templateId || undefined;
 
   const enhanceTask = useAITaskTask(taskId, "enhance");
 
@@ -39,7 +40,7 @@ export function useEnhancedNoteActions({
       }
 
       if (!model) {
-        sonnerToast.error(
+        toast.error(
           "Set up Intelligence in Settings before regenerating this summary.",
         );
         return;
@@ -52,7 +53,7 @@ export function useEnhancedNoteActions({
           !eligibility.eligible &&
           eligibility.code === "transcript_too_short"
         ) {
-          sonnerToast.warning("Summary wasn't generated", {
+          toast.warning("Summary wasn't generated", {
             id: `auto-summary-too-short-${sessionId}`,
             description: eligibility.reason,
           });
@@ -63,7 +64,7 @@ export function useEnhancedNoteActions({
       if (!isMainAITaskHostWindow()) {
         void requestMainEnhance(sessionId, {
           templateId: templateId ?? noteTemplateId,
-          targetNoteId: enhancedNoteId,
+          targetNoteId: note ? enhancedNoteId : undefined,
         });
         return;
       }
@@ -72,6 +73,13 @@ export function useEnhancedNoteActions({
         event: "note_enhanced",
         is_auto: false,
       });
+
+      if (!note) {
+        await getEnhancerService()?.enhance(sessionId, {
+          templateId: templateId ?? noteTemplateId,
+        });
+        return;
+      }
 
       await enhanceTask.start({
         model,
@@ -82,7 +90,7 @@ export function useEnhancedNoteActions({
         },
       });
     },
-    [enhancedNoteId, model, enhanceTask.start, sessionId, noteTemplateId],
+    [enhancedNoteId, model, enhanceTask.start, sessionId, noteTemplateId, note],
   );
 
   const onCancel = useCallback(() => {

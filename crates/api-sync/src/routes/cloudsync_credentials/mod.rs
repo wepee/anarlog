@@ -17,6 +17,7 @@ use crate::{
 mod enrollment;
 mod grants;
 mod identity;
+mod meeting_presence;
 mod projection;
 mod token;
 mod transport;
@@ -37,6 +38,10 @@ use identity::{
     SyncDeviceRow, claim_personal_e2ee_key, claim_sync_device, fetch_sync_device_limit,
     is_valid_e2ee_key_id, list_sync_devices, publish_e2ee_member_identity, remove_sync_device,
     rename_sync_device,
+};
+use meeting_presence::{
+    __path_heartbeat_meeting_device, MeetingDevice, MeetingDeviceHeartbeatRequest,
+    MeetingDeviceIntent, MeetingDevicesResponse, heartbeat_meeting_device,
 };
 pub use projection::CloudsyncWorkspace;
 pub(super) use projection::encode_workspace_token_attributes;
@@ -129,6 +134,7 @@ pub struct E2eeIdentity {
         register_e2ee_device_enrollment,
         seal_e2ee_device_enrollment,
         consume_e2ee_device_enrollment,
+        heartbeat_meeting_device,
         get_workspace_e2ee_key_recipients,
         set_workspace_e2ee_key
     ),
@@ -150,6 +156,10 @@ pub struct E2eeIdentity {
         RegisterE2eeDeviceEnrollmentRequest,
         RegisterE2eeDeviceEnrollmentResponse,
         ConsumeE2eeDeviceEnrollmentRequest,
+        MeetingDeviceHeartbeatRequest,
+        MeetingDeviceIntent,
+        MeetingDevice,
+        MeetingDevicesResponse,
         LegacyCloudsyncCredentials,
         ReplicaCredentials
     ))
@@ -196,6 +206,10 @@ pub(super) fn device_router() -> Router<ReplicaState> {
         .route(
             "/e2ee/device-enrollments/{request_id}/consume",
             post(consume_e2ee_device_enrollment),
+        )
+        .route(
+            "/meetings/{meeting_key}/devices",
+            post(heartbeat_meeting_device),
         )
 }
 
@@ -269,7 +283,7 @@ async fn set_workspace_e2ee_key(
         (status = 200, description = "Encrypted replica credentials", body = ReplicaCredentials),
         (status = 400, description = "Invalid E2EE key identity"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 409, description = "Account already uses a different recovery key"),
         (status = 502, description = "Replica credential service unavailable")
     )
@@ -349,7 +363,7 @@ pub struct RenameSyncDeviceRequest {
     responses(
         (status = 200, description = "Approved and pending sync devices", body = SyncDevicesResponse),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 502, description = "Device service unavailable")
     )
 )]
@@ -382,7 +396,7 @@ async fn get_devices(
         (status = 204, description = "Device renamed"),
         (status = 400, description = "Invalid device fingerprint or name"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 502, description = "Device service unavailable")
     )
 )]
@@ -408,7 +422,7 @@ async fn patch_device(
         (status = 204, description = "Device removed"),
         (status = 400, description = "Invalid device fingerprint"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 502, description = "Device service unavailable")
     )
 )]
@@ -433,7 +447,7 @@ async fn delete_device(
         (status = 200, description = "E2EE recovery-key identity claimed", body = E2eeIdentity),
         (status = 400, description = "Invalid E2EE key identity"),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 409, description = "Account already uses a different recovery key"),
         (status = 502, description = "E2EE identity service unavailable")
     )
@@ -466,7 +480,7 @@ async fn claim_e2ee_identity(
     responses(
         (status = 200, description = "Short-lived CloudSync credentials", body = CloudsyncCredentialResponse),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Anarlog Pro subscription required"),
+        (status = 403, description = "BlackMushi Pro subscription required"),
         (status = 426, description = "Desktop upgrade required"),
         (status = 502, description = "Credential issuer unavailable")
     )

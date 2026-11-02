@@ -26,7 +26,7 @@ pub(super) const PENDING_E2EE_WITNESS_UPLOADS_SQL: &str = "
   WHERE pending.workspace_id = ?
     AND local.record_id = pending.record_id
     AND local.workspace_id = pending.workspace_id
-  ORDER BY pending.record_id
+  ORDER BY pending.priority, pending.record_id
   LIMIT ?";
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -183,6 +183,8 @@ async fn pending_e2ee_witness_uploads_inner(
         selected_ids.push(record_id);
         selected_bytes = selected_bytes.saturating_add(upload_bytes);
     }
+    let mut lookup_ids = selected_ids.clone();
+    lookup_ids.sort_unstable();
 
     let mut query = QueryBuilder::<Sqlite>::new(
         "SELECT record_id, workspace_id, table_name, row_id, field_name, revision,
@@ -194,7 +196,7 @@ async fn pending_e2ee_witness_uploads_inner(
     query.push(" AND record_id IN (");
     {
         let mut separated = query.separated(", ");
-        for record_id in &selected_ids {
+        for record_id in &lookup_ids {
             separated.push_bind(record_id);
         }
     }
@@ -204,14 +206,23 @@ async fn pending_e2ee_witness_uploads_inner(
         transaction.rollback().await?;
         return Err(error);
     }
-    if states.len() != selected_ids.len()
+    if states.len() != lookup_ids.len()
         || !states
             .iter()
             .map(|state| state.record_id.as_str())
-            .eq(selected_ids.iter().map(String::as_str))
+            .eq(lookup_ids.iter().map(String::as_str))
     {
         return Err(E2eeReplicaError::InvalidRow);
     }
+    let mut states_by_id = states
+        .into_iter()
+        .map(|state| (state.record_id.clone(), state))
+        .collect::<HashMap<_, _>>();
+    let states = selected_ids
+        .iter()
+        .map(|record_id| states_by_id.remove(record_id))
+        .collect::<Option<Vec<_>>>()
+        .ok_or(E2eeReplicaError::InvalidRow)?;
     if let Err(error) = check_e2ee_cancellation(is_cancelled) {
         transaction.rollback().await?;
         return Err(error);
@@ -673,6 +684,8 @@ async fn load_bounded_e2ee_witness_repairs(
                        WHERE local.record_id = replica.id
                          AND local.workspace_id = replica.workspace_id
                          AND local.payload_hash = replica_hash.payload_hash
+                         AND NOT EXISTS (SELECT 1 FROM e2ee_cloud_authority AS authority
+                           WHERE authority.workspace_id = witness.workspace_id AND witness.sequence > authority.after_sequence)
                          AND (
                            local.revision > witness.revision
                            OR (
@@ -1003,7 +1016,16 @@ async fn upsert_witness_record(
            payload_hash = excluded.payload_hash,
            sequence = MAX(e2ee_witness_records.sequence, excluded.sequence),
            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         WHERE excluded.revision > e2ee_witness_records.revision
+         WHERE (
+           EXISTS (SELECT 1 FROM e2ee_cloud_authority AS authority
+             WHERE authority.workspace_id = excluded.workspace_id
+               AND excluded.sequence > authority.after_sequence)
+           AND excluded.sequence > e2ee_witness_records.sequence
+         ) OR (
+           NOT EXISTS (SELECT 1 FROM e2ee_cloud_authority AS authority
+             WHERE authority.workspace_id = excluded.workspace_id
+               AND MAX(excluded.sequence, e2ee_witness_records.sequence) > authority.after_sequence)
+           AND (excluded.revision > e2ee_witness_records.revision
             OR (
               excluded.revision = e2ee_witness_records.revision
               AND excluded.writer_id > e2ee_witness_records.writer_id
@@ -1018,7 +1040,7 @@ async fn upsert_witness_record(
               AND excluded.writer_id = e2ee_witness_records.writer_id
               AND excluded.payload_hash = e2ee_witness_records.payload_hash
               AND excluded.sequence > e2ee_witness_records.sequence
-            )",
+            )))",
     )
     .bind(&record.workspace_id)
     .bind(&record.record_id)
@@ -1028,6 +1050,13 @@ async fn upsert_witness_record(
     .bind(record.sequence)
     .execute(&mut **transaction)
     .await?;
+    if record.sequence > 0 {
+        // A feed event is also proof of acceptance. This covers restoring a
+        // backup taken after encryption but before the upload ID was frozen.
+        sqlx::query("DELETE FROM e2ee_cloud_outbox WHERE workspace_id = ? AND record_id = ? AND payload_hash = ?")
+            .bind(&record.workspace_id).bind(&record.record_id).bind(&record.payload_hash)
+            .execute(&mut **transaction).await?;
+    }
     reconcile_e2ee_witness_pending(transaction, &record.record_id).await?;
     prune_ciphertext_archive(transaction, &record.workspace_id, &record.record_id).await?;
     Ok(())

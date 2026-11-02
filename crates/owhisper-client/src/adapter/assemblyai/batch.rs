@@ -12,7 +12,10 @@ use serde::{Deserialize, Serialize};
 use super::AssemblyAIAdapter;
 use super::language::BATCH_LANGUAGES;
 use crate::adapter::http::ensure_success;
-use crate::adapter::{BatchFuture, BatchSttAdapter, ClientWithMiddleware, append_path_if_missing};
+use crate::adapter::{
+    BatchFuture, BatchSttAdapter, ClientWithMiddleware, MIXED_CAPTURE_CHANNEL,
+    append_path_if_missing,
+};
 use crate::error::Error;
 use crate::polling::{PollingConfig, PollingResult, poll_until};
 
@@ -348,10 +351,20 @@ impl AssemblyAIAdapter {
         let mut next_speaker_id = 0;
 
         let channels = if num_channels <= 1 {
-            let words: Vec<BatchWord> = all_words
+            let mut words: Vec<BatchWord> = all_words
                 .into_iter()
                 .map(|word| Self::convert_word(word, &mut speaker_ids, &mut next_speaker_id))
                 .collect();
+            // Channel 0 (DirectMic) renders as exactly one speaker, the local
+            // user. Keep solo recordings there, but move a mixed single-track
+            // upload with several voices to the mixed-capture channel so their
+            // speaker labels survive. Unlabeled words move too, like the Mistral
+            // adapter, so they render as unknown speech instead of the user.
+            if speaker_ids.len() > 1 {
+                for word in &mut words {
+                    word.channel = MIXED_CAPTURE_CHANNEL;
+                }
+            }
             let transcript = response.text.unwrap_or_default();
             vec![BatchChannel {
                 alternatives: vec![BatchAlternatives {
@@ -408,111 +421,145 @@ impl AssemblyAIAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http_client::create_client;
 
     #[test]
-    fn batch_defaults_expand_to_current_model_stack() {
-        assert_eq!(
-            AssemblyAIAdapter::resolve_batch_speech_models(&ListenParams::default()),
-            vec!["universal-3-5-pro".to_string(), "universal-2".to_string()]
-        );
-    }
+    fn batch_speech_models_resolve_to_current_stack() {
+        let cases: [(Option<&str>, Vec<&str>); 6] = [
+            (None, vec!["universal-3-5-pro", "universal-2"]),
+            (Some("u3-rt-pro"), vec!["universal-3-5-pro", "universal-2"]),
+            (
+                Some("universal-3-pro"),
+                vec!["universal-3-5-pro", "universal-2"],
+            ),
+            (
+                Some("universal-3-5-pro"),
+                vec!["universal-3-5-pro", "universal-2"],
+            ),
+            (
+                Some("universal-3-5-pro-realtime"),
+                vec!["universal-3-5-pro", "universal-2"],
+            ),
+            (Some("universal-2"), vec!["universal-2"]),
+        ];
 
-    #[test]
-    fn batch_retired_u3_models_expand_to_current_model_stack() {
-        for model in ["u3-rt-pro", "universal-3-pro"] {
+        for (model, expected) in cases {
             let params = ListenParams {
-                model: Some(model.to_string()),
+                model: model.map(str::to_string),
                 ..Default::default()
             };
 
             assert_eq!(
                 AssemblyAIAdapter::resolve_batch_speech_models(&params),
-                vec!["universal-3-5-pro".to_string(), "universal-2".to_string()]
+                expected.into_iter().map(str::to_string).collect::<Vec<_>>(),
+                "model: {model:?}"
             );
         }
     }
 
     #[test]
-    fn batch_explicit_u35_models_expand_to_current_model_stack() {
-        for model in ["universal-3-5-pro", "universal-3-5-pro-realtime"] {
-            let params = ListenParams {
-                model: Some(model.to_string()),
+    fn assemblyai_speaker_range_prefers_fields_then_custom_query() {
+        for params in [
+            ListenParams {
+                min_speakers: Some(2),
+                max_speakers: Some(4),
                 ..Default::default()
-            };
-
+            },
+            ListenParams {
+                custom_query: Some(std::collections::HashMap::from([
+                    ("pyannote_min_speakers".to_string(), "2".to_string()),
+                    ("pyannote_max_speakers".to_string(), "4".to_string()),
+                ])),
+                ..Default::default()
+            },
+        ] {
             assert_eq!(
-                AssemblyAIAdapter::resolve_batch_speech_models(&params),
-                vec!["universal-3-5-pro".to_string(), "universal-2".to_string()]
+                AssemblyAIAdapter::assemblyai_speaker_range_option(
+                    &params,
+                    params.min_speakers,
+                    "pyannote_min_speakers",
+                ),
+                Some(2)
+            );
+            assert_eq!(
+                AssemblyAIAdapter::assemblyai_speaker_range_option(
+                    &params,
+                    params.max_speakers,
+                    "pyannote_max_speakers",
+                ),
+                Some(4)
             );
         }
     }
 
     #[test]
-    fn batch_explicit_universal_2_is_preserved() {
-        let params = ListenParams {
-            model: Some("universal-2".to_string()),
-            ..Default::default()
+    fn mono_diarized_words_use_mixed_capture_channel() {
+        let word = |text: &str, speaker: Option<&str>| AssemblyAIBatchWord {
+            text: text.to_string(),
+            start: 0,
+            end: 500,
+            confidence: 0.9,
+            speaker: speaker.map(str::to_string),
+            channel: None,
+        };
+        let response = TranscriptResponse {
+            id: "id".to_string(),
+            status: "completed".to_string(),
+            text: Some("hello there general".to_string()),
+            words: Some(vec![
+                word("hello", Some("A")),
+                word("there", Some("B")),
+                word("general", None),
+            ]),
+            utterances: None,
+            confidence: Some(0.9),
+            audio_duration: Some(1),
+            audio_channels: Some(1),
+            error: None,
         };
 
-        assert_eq!(
-            AssemblyAIAdapter::resolve_batch_speech_models(&params),
-            vec!["universal-2".to_string()]
-        );
+        let result = AssemblyAIAdapter::convert_to_batch_response(response);
+
+        let words = &result.results.channels[0].alternatives[0].words;
+        assert_eq!(words[0].speaker, Some(0));
+        assert_eq!(words[1].speaker, Some(1));
+        // Must land on the mixed-capture channel, not channel 0 (DirectMic) —
+        // the render pipeline treats DirectMic as always exactly one speaker
+        // and collapses every diarized label back into one there.
+        assert_eq!(words[0].channel, MIXED_CAPTURE_CHANNEL);
+        assert_eq!(words[1].channel, MIXED_CAPTURE_CHANNEL);
+        // Unlabeled speech in a mixed recording must not render as the local user.
+        assert_eq!(words[2].channel, MIXED_CAPTURE_CHANNEL);
+        assert_eq!(words[2].speaker, None);
     }
 
     #[test]
-    fn assemblyai_prefers_listen_params_speaker_range_fields() {
-        let params = ListenParams {
-            min_speakers: Some(2),
-            max_speakers: Some(4),
-            ..Default::default()
+    fn mono_single_speaker_words_stay_on_direct_mic() {
+        let word = |text: &str| AssemblyAIBatchWord {
+            text: text.to_string(),
+            start: 0,
+            end: 500,
+            confidence: 0.9,
+            speaker: Some("A".to_string()),
+            channel: None,
+        };
+        let response = TranscriptResponse {
+            id: "id".to_string(),
+            status: "completed".to_string(),
+            text: Some("just me talking".to_string()),
+            words: Some(vec![word("just"), word("me"), word("talking")]),
+            utterances: None,
+            confidence: Some(0.9),
+            audio_duration: Some(1),
+            audio_channels: Some(1),
+            error: None,
         };
 
-        assert_eq!(
-            AssemblyAIAdapter::assemblyai_speaker_range_option(
-                &params,
-                params.min_speakers,
-                "pyannote_min_speakers",
-            ),
-            Some(2)
-        );
-        assert_eq!(
-            AssemblyAIAdapter::assemblyai_speaker_range_option(
-                &params,
-                params.max_speakers,
-                "pyannote_max_speakers",
-            ),
-            Some(4)
-        );
-    }
+        let result = AssemblyAIAdapter::convert_to_batch_response(response);
 
-    #[test]
-    fn assemblyai_falls_back_to_legacy_custom_query_speaker_range_keys() {
-        let params = ListenParams {
-            custom_query: Some(std::collections::HashMap::from([
-                ("pyannote_min_speakers".to_string(), "2".to_string()),
-                ("pyannote_max_speakers".to_string(), "4".to_string()),
-            ])),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            AssemblyAIAdapter::assemblyai_speaker_range_option(
-                &params,
-                params.min_speakers,
-                "pyannote_min_speakers",
-            ),
-            Some(2)
-        );
-        assert_eq!(
-            AssemblyAIAdapter::assemblyai_speaker_range_option(
-                &params,
-                params.max_speakers,
-                "pyannote_max_speakers",
-            ),
-            Some(4)
-        );
+        // A solo recording keeps DirectMic so it still renders as the local user.
+        let words = &result.results.channels[0].alternatives[0].words;
+        assert!(words.iter().all(|word| word.channel == 0));
+        assert!(words.iter().all(|word| word.speaker == Some(0)));
     }
 
     #[test]
@@ -578,30 +625,5 @@ mod tests {
             result.results.channels[1].alternatives[0].words[0].speaker,
             Some(2)
         );
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_assemblyai_batch_transcription() {
-        let api_key = std::env::var("ASSEMBLYAI_API_KEY").expect("ASSEMBLYAI_API_KEY not set");
-        let client = create_client();
-        let adapter = AssemblyAIAdapter::default();
-        let params = ListenParams::default();
-
-        let audio_path = std::path::PathBuf::from(anlg_data::english_1::AUDIO_PATH);
-
-        let result = adapter
-            .transcribe_file(&client, "", &api_key, &params, &audio_path)
-            .await
-            .expect("transcription failed");
-
-        assert!(!result.results.channels.is_empty());
-        assert!(!result.results.channels[0].alternatives.is_empty());
-        assert!(
-            !result.results.channels[0].alternatives[0]
-                .transcript
-                .is_empty()
-        );
-        assert!(!result.results.channels[0].alternatives[0].words.is_empty());
     }
 }

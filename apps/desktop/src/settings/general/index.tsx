@@ -19,7 +19,6 @@ import { NotificationSettingsView } from "./notification";
 import { Permissions } from "./permissions";
 import { SpokenLanguagesView } from "./spoken-languages";
 import { StorageSettingsView } from "./storage";
-import { SummaryLengthSelector } from "./summary-length";
 import { TimezoneSelector } from "./timezone";
 import { WeekStartSelector } from "./week-start";
 
@@ -29,6 +28,7 @@ import {
   useSetSettingValues,
   useStoredSettingValuesQuery,
 } from "~/settings/queries";
+import { SettingSwitchRow } from "~/settings/setting-row";
 import { isAppStoreBuild } from "~/shared/app-store";
 import { resolveConfigValue, resolveConfigValues } from "~/shared/config";
 
@@ -46,8 +46,10 @@ const SETTINGS_FORM_KEYS = [
   "consent_auto_send_chat",
   "capture_meeting_chat",
   "live_assist_enabled",
+  "capture_shared_screens",
   "ai_language",
   "spoken_languages",
+  "summary_use_main_language",
   "current_stt_provider",
 ] as const;
 
@@ -73,7 +75,9 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
       consent_auto_send_chat: settingsValue.consent_auto_send_chat,
       capture_meeting_chat: settingsValue.capture_meeting_chat,
       live_assist_enabled: settingsValue.live_assist_enabled,
+      capture_shared_screens: settingsValue.capture_shared_screens,
       ai_language: settingsValue.ai_language,
+      summary_use_main_language: settingsValue.summary_use_main_language,
       spoken_languages: getAdditionalSpokenLanguages(
         settingsValue.ai_language,
         settingsValue.spoken_languages,
@@ -116,7 +120,9 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         consent_auto_send_chat: normalizedValue.consent_auto_send_chat,
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         live_assist_enabled: normalizedValue.live_assist_enabled,
+        capture_shared_screens: normalizedValue.capture_shared_screens,
         ai_language: normalizedValue.ai_language,
+        summary_use_main_language: normalizedValue.summary_use_main_language,
         spoken_languages: JSON.stringify(normalizedValue.spoken_languages),
       });
 
@@ -138,6 +144,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         consent_auto_send_chat: normalizedValue.consent_auto_send_chat,
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         live_assist_enabled: normalizedValue.live_assist_enabled,
+        capture_shared_screens: normalizedValue.capture_shared_screens,
       });
     },
   });
@@ -253,43 +260,62 @@ function SettingsSectionContent({
               <Trans>Language &amp; Region</Trans>
             </h2>
             <div className="flex flex-col gap-6">
-              <form.Field name="ai_language">
-                {(field) => (
-                  <MainLanguageView
-                    value={field.state.value}
-                    onChange={(val) => {
-                      field.handleChange(val);
-                      form.setFieldValue(
-                        "spoken_languages",
-                        getAdditionalSpokenLanguages(
-                          val,
-                          form.state.values.spoken_languages,
-                        ),
-                      );
-                    }}
-                    supportedLanguages={CORE_TRANSCRIPTION_LANGUAGE_CODES}
-                  />
-                )}
-              </form.Field>
+              <div className="flex flex-col gap-4">
+                <form.Field name="ai_language">
+                  {(field) => (
+                    <MainLanguageView
+                      value={field.state.value}
+                      onChange={(val) => {
+                        field.handleChange(val);
+                        form.setFieldValue(
+                          "spoken_languages",
+                          getAdditionalSpokenLanguages(
+                            val,
+                            form.state.values.spoken_languages,
+                          ),
+                        );
+                      }}
+                      supportedLanguages={CORE_TRANSCRIPTION_LANGUAGE_CODES}
+                    />
+                  )}
+                </form.Field>
+                <div className="border-muted ml-3 flex flex-col gap-4 border-l-2 pt-2 pl-4">
+                  <form.Field name="summary_use_main_language">
+                    {(field) => (
+                      <SettingSwitchRow
+                        title={<Trans>Use main language for summaries</Trans>}
+                        description={
+                          <Trans>
+                            When off, summaries follow the detected meeting
+                            language.
+                          </Trans>
+                        }
+                        checked={field.state.value}
+                        onChange={field.handleChange}
+                      />
+                    )}
+                  </form.Field>
+                  <form.Field name="spoken_languages">
+                    {(field) => (
+                      <SpokenLanguagesView
+                        mainLanguage={form.state.values.ai_language}
+                        value={field.state.value}
+                        onChange={(val) =>
+                          field.handleChange(
+                            getAdditionalSpokenLanguages(
+                              form.state.values.ai_language,
+                              val,
+                            ),
+                          )
+                        }
+                        supportedLanguages={CORE_TRANSCRIPTION_LANGUAGE_CODES}
+                      />
+                    )}
+                  </form.Field>
+                </div>
+              </div>
               <TimezoneSelector />
               <WeekStartSelector />
-              <form.Field name="spoken_languages">
-                {(field) => (
-                  <SpokenLanguagesView
-                    mainLanguage={form.state.values.ai_language}
-                    value={field.state.value}
-                    onChange={(val) =>
-                      field.handleChange(
-                        getAdditionalSpokenLanguages(
-                          form.state.values.ai_language,
-                          val,
-                        ),
-                      )
-                    }
-                    supportedLanguages={CORE_TRANSCRIPTION_LANGUAGE_CODES}
-                  />
-                )}
-              </form.Field>
             </div>
           </div>
 
@@ -342,16 +368,14 @@ function SettingsSectionContent({
                   onChange: (value) =>
                     submitFieldValue("live_assist_enabled", value),
                 }}
+                captureSharedScreens={{
+                  value: values.capture_shared_screens,
+                  onChange: (value) =>
+                    submitFieldValue("capture_shared_screens", value),
+                }}
               />
             )}
           </form.Subscribe>
-
-          <div>
-            <h2 className="mb-4 font-sans text-lg font-semibold">
-              <Trans>Summaries</Trans>
-            </h2>
-            <SummaryLengthSelector />
-          </div>
 
           <div>
             <h2 className="mb-4 font-sans text-lg font-semibold">

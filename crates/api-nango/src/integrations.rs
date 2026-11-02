@@ -27,6 +27,7 @@ pub const MICROSOFT_TEAMS_OAUTH_SCOPES: &str =
 pub fn oauth_scopes_override(integration_id: &str) -> Option<&'static str> {
     match integration_id {
         GoogleCalendar::ID => Some(GOOGLE_CALENDAR_OAUTH_SCOPES),
+        GoogleDrive::ID => Some("https://www.googleapis.com/auth/drive.file"),
         Outlook::ID => Some(OUTLOOK_OAUTH_SCOPES),
         Zoom::ID => Some(ZOOM_OAUTH_SCOPES),
         Fathom::ID => Some(FATHOM_OAUTH_SCOPES),
@@ -134,6 +135,36 @@ pub struct MicrosoftTeams;
 
 impl NangoIntegrationId for MicrosoftTeams {
     const ID: &'static str = "microsoft-teams";
+}
+
+pub struct HubSpot;
+
+impl NangoIntegrationId for HubSpot {
+    const ID: &'static str = "hubspot";
+}
+
+pub struct Attio;
+
+impl NangoIntegrationId for Attio {
+    const ID: &'static str = "attio";
+}
+
+pub struct Salesforce;
+
+impl NangoIntegrationId for Salesforce {
+    const ID: &'static str = "salesforce";
+}
+
+pub struct Pipedrive;
+
+impl NangoIntegrationId for Pipedrive {
+    const ID: &'static str = "pipedrive";
+}
+
+pub struct Close;
+
+impl NangoIntegrationId for Close {
+    const ID: &'static str = "close";
 }
 
 #[cfg(test)]

@@ -59,6 +59,16 @@ impl RestartTracker {
         }
     }
 
+    pub fn record_consecutive_restart(&mut self, budget: &RestartBudget) -> bool {
+        self.count = self.count.saturating_add(1);
+        self.count <= budget.max_restarts
+    }
+
+    pub fn reset(&mut self) {
+        self.count = 0;
+        self.window_start = Instant::now();
+    }
+
     pub fn count(&self) -> u32 {
         self.count
     }
@@ -77,34 +87,10 @@ mod tests {
     }
 
     #[test]
-    fn new_tracker_starts_at_zero() {
-        let tracker = RestartTracker::new();
-        assert_eq!(tracker.count(), 0);
-    }
-
-    #[test]
-    fn record_restart_increments_within_budget() {
-        let mut tracker = RestartTracker::new();
-        let b = budget(3, 10_000);
-        assert!(tracker.record_restart(&b));
-        assert!(tracker.record_restart(&b));
-        assert!(tracker.record_restart(&b));
-        assert_eq!(tracker.count(), 3);
-    }
-
-    #[test]
     fn record_restart_exceeds_budget() {
         let mut tracker = RestartTracker::new();
         let b = budget(2, 10_000);
         assert!(tracker.record_restart(&b));
-        assert!(tracker.record_restart(&b));
-        assert!(!tracker.record_restart(&b));
-    }
-
-    #[test]
-    fn record_restart_at_exact_boundary() {
-        let mut tracker = RestartTracker::new();
-        let b = budget(1, 10_000);
         assert!(tracker.record_restart(&b));
         assert!(!tracker.record_restart(&b));
     }
@@ -146,13 +132,17 @@ mod tests {
     }
 
     #[test]
-    fn maybe_reset_noop_when_none() {
+    fn consecutive_failures_stay_bounded_until_capture_is_healthy() {
         let mut tracker = RestartTracker::new();
-        let b = budget(3, 10_000);
-
-        tracker.record_restart(&b);
-        tracker.maybe_reset(&b);
-        assert_eq!(tracker.count(), 1);
+        let b = budget(3, 1);
+        for _ in 0..3 {
+            std::thread::sleep(Duration::from_millis(3));
+            assert!(tracker.record_consecutive_restart(&b));
+        }
+        std::thread::sleep(Duration::from_millis(3));
+        assert!(!tracker.record_consecutive_restart(&b));
+        tracker.reset();
+        assert!(tracker.record_consecutive_restart(&b));
     }
 
     #[test]

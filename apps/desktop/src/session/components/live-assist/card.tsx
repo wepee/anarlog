@@ -12,7 +12,7 @@ import {
   WarningCircle,
   X,
 } from "@anlg/ui/components/icons";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 import { cn, formatDistanceToNow } from "@anlg/utils";
 
 import { getStoredNoteMarkdown } from "~/session/components/note-input/header-shared";
@@ -81,7 +81,7 @@ export function LiveAssistCard({
       .then(() => removeCard(sessionId, card.id))
       .catch((error: unknown) => {
         console.error("Failed to insert Live Assist suggestion", error);
-        sonnerToast.error(t`Could not insert into notes. Try again.`);
+        toast.error(t`Could not insert into notes. Try again.`);
       });
   };
 

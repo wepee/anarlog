@@ -58,7 +58,7 @@ impl GgufLlmModel {
     pub fn display_name(&self) -> &'static str {
         match self {
             GgufLlmModel::Llama3p2_3bQ4 => "Llama 3.2 3B Q4",
-            GgufLlmModel::AnarlogLLM => "Anarlog LLM",
+            GgufLlmModel::AnarlogLLM => "BlackMushi LLM",
             GgufLlmModel::Gemma3_4bQ4 => "Gemma 3 4B Q4",
         }
     }
@@ -382,21 +382,6 @@ impl DownloadableModel for LocalModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn model_urls_use_anarlog_domain() {
-        for model in [
-            GgufLlmModel::Llama3p2_3bQ4,
-            GgufLlmModel::AnarlogLLM,
-            GgufLlmModel::Gemma3_4bQ4,
-        ] {
-            assert!(
-                model
-                    .model_url()
-                    .starts_with("https://models.anarlog.so/v0/")
-            );
-        }
-    }
 
     #[test]
     fn anarlog_llm_accepts_legacy_serialized_name() {

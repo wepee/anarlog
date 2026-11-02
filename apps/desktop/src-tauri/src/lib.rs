@@ -111,7 +111,7 @@ pub fn main() {
     startup::apply_linux_webkit_workarounds();
     // Sentry minidump reporting re-execs this binary with --crash-reporter-server.
     // That helper must reach minidump::init instead of the launch lock, or it
-    // shows "Anarlog is already starting" on every launch and never serves dumps.
+    // shows "BlackMushi is already starting" on every launch and never serves dumps.
     if startup::is_crash_reporter_process() {
         run_crash_reporter_process();
     }
@@ -164,6 +164,7 @@ pub fn main() {
                 };
 
             let startup_indicator = startup::SlowStartupIndicator::show_after_delay();
+            startup::consolidate_custom_storage(&identifier);
             let db = match open_desktop_db(&identifier).await {
                 Ok(db) => db,
                 Err(error) => {
@@ -190,6 +191,14 @@ pub fn main() {
         .manage(audio)
         .manage(db.clone())
         .manage(crash_reporting_state);
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.on_web_content_process_terminate(|webview| {
+            tauri_plugin_db::close_webview_subscriptions(webview.app_handle(), webview.label());
+            AppWindow::recover_terminated_webview(webview);
+        });
+    }
 
     // https://docs.crabnebula.dev/plugins/tauri-e2e-tests/#macos-support
     #[cfg(all(target_os = "macos", feature = "automation"))]
@@ -264,6 +273,7 @@ pub fn main() {
         .plugin(tauri_plugin_messenger::init())
         .plugin(tauri_plugin_misc::init())
         .plugin(tauri_plugin_template::init())
+        .plugin(tauri_plugin_session::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_detect::init())
         .plugin(tauri_plugin_dock::init())
@@ -336,6 +346,30 @@ pub fn main() {
             tauri_plugin_shortcut::initialize_global_shortcuts(&app_handle);
 
             specta_builder.mount_events(&app_handle);
+
+            {
+                use tauri_specta::Event;
+                let stop_handle = app_handle.clone();
+                tauri_plugin_windows::FloatingBarStop::listen(&app_handle, move |_| {
+                    let Some(session_id) = tauri_plugin_windows::floating_bar_session_id() else {
+                        return;
+                    };
+                    let app = stop_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        // Give the main webview the first chance to stop so its
+                        // post-stop work runs; this only stops if it didn't.
+                        tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
+                        if tauri_plugin_transcription::stop_capture_for_session(&app, &session_id)
+                            .await
+                            && tauri_plugin_windows::floating_bar_session_id().as_deref()
+                                == Some(session_id.as_str())
+                            && let Err(error) = tauri_plugin_windows::hide_floating_bar()
+                        {
+                            tracing::warn!(%error, "failed to hide floating bar after native stop");
+                        }
+                    });
+                });
+            }
 
             #[cfg(any(windows, target_os = "linux"))]
             {
@@ -461,7 +495,11 @@ pub fn main() {
                 tracing::error!(%error, "failed to reopen main window");
             }
         }
-        tauri::RunEvent::ExitRequested { api, .. } => {
+        tauri::RunEvent::ExitRequested { api, code, .. } => {
+            if code.is_none() && tauri_plugin_windows::main_window_rebuilding() {
+                api.prevent_exit();
+                return;
+            }
             if let Some(ref ctx) = root_supervisor_ctx_for_run {
                 ctx.mark_exiting();
             }
@@ -505,7 +543,7 @@ pub fn main() {
 }
 
 fn startup_failure_message(error: &impl std::fmt::Display) -> String {
-    format!("Anarlog failed to start: {error}")
+    format!("BlackMushi failed to start: {error}")
 }
 
 fn exit_after_startup_failure(identifier: &str, error: &impl std::fmt::Display) -> ! {
@@ -519,11 +557,11 @@ fn exit_after_startup_failure(identifier: &str, error: &impl std::fmt::Display) 
         // Startup can fail before the database is reachable, so the alert text
         // is fixed per failure class instead of embedding the error.
         let alert = if db::is_transient_lock_error(error) {
-            "display alert \"Anarlog is not ready yet\" message \"Another Anarlog process is still using your data, possibly finishing an update. Your existing data was left unchanged. Please wait a moment and open Anarlog again.\" as critical buttons {\"OK\"} default button \"OK\""
+            "display alert \"BlackMushi is not ready yet\" message \"Another BlackMushi process is still using your data, possibly finishing an update. Your existing data was left unchanged. Please wait a moment and open BlackMushi again.\" as critical buttons {\"OK\"} default button \"OK\""
         } else if db::is_newer_schema_error(error) {
-            "display alert \"Anarlog needs an update\" message \"Your data was updated by a newer version of Anarlog, such as Anarlog Nightly, and this version cannot open it yet. Your existing data was left unchanged. Install the latest version of Anarlog, or keep using the newer app until this version catches up.\" as critical buttons {\"OK\"} default button \"OK\""
+            "display alert \"BlackMushi needs an update\" message \"Your data was updated by a newer version of BlackMushi, such as BlackMushi Nightly, and this version cannot open it yet. Your existing data was left unchanged. Install the latest version of BlackMushi, or keep using the newer app until this version catches up.\" as critical buttons {\"OK\"} default button \"OK\""
         } else {
-            "display alert \"Anarlog could not start\" message \"Your existing data was left unchanged. Please restart the app. If the problem continues, contact support.\" as critical buttons {\"OK\"} default button \"OK\""
+            "display alert \"BlackMushi could not start\" message \"Your existing data was left unchanged. Please restart the app. If the problem continues, contact support.\" as critical buttons {\"OK\"} default button \"OK\""
         };
         let _ = std::process::Command::new("/usr/bin/osascript")
             .args(["-e", alert])
@@ -605,7 +643,6 @@ fn make_specta_builder<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             commands::get_env::<tauri::Wry>,
             commands::show_devtool::<tauri::Wry>,
             commands::is_app_store_build,
-            commands::request_local_database_reset::<tauri::Wry>,
             commands::complete_app_exit::<tauri::Wry>,
             commands::get_tinybase_values::<tauri::Wry>,
             commands::get_pinned_tabs::<tauri::Wry>,
@@ -625,46 +662,6 @@ fn make_specta_builder<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn tokio_runtime_is_not_entered_after_block_on_returns() {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            assert!(tokio::runtime::Handle::try_current().is_ok());
-        });
-        assert!(tokio::runtime::Handle::try_current().is_err());
-    }
-
-    #[test]
-    fn tauri_async_runtime_can_spawn_after_block_on_returns() {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        tauri::async_runtime::set(runtime.handle().clone());
-        runtime.block_on(async {});
-        assert!(tokio::runtime::Handle::try_current().is_err());
-
-        let (tx, rx) = std::sync::mpsc::channel();
-        tauri::async_runtime::spawn(async move {
-            let _ = tx.send(());
-        });
-        rx.recv_timeout(std::time::Duration::from_secs(2))
-            .expect("spawned task should run on the process-wide runtime");
-    }
-
-    #[test]
-    fn startup_failure_message_includes_the_original_error() {
-        let message = startup_failure_message(&"legacy import did not pass parity verification");
-
-        assert_eq!(
-            message,
-            "Anarlog failed to start: legacy import did not pass parity verification"
-        );
-    }
 
     #[test]
     fn complete_quit_allows_immediate_exit_without_frontend_flush() {

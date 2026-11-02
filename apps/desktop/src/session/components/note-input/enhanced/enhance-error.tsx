@@ -1,4 +1,4 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { useMutation } from "@tanstack/react-query";
 
 import { ArrowsClockwise, WarningCircle } from "@anlg/ui/components/icons";
@@ -7,6 +7,7 @@ import { Button } from "@anlg/ui/components/ui/button";
 import { useAITask } from "~/ai/contexts";
 import { useLanguageModel } from "~/ai/hooks";
 import { useEnhancedNote } from "~/session/queries";
+import { getAIErrorSource } from "~/store/zustand/ai-task/shared/error-source";
 import { createTaskId } from "~/store/zustand/ai-task/task-configs";
 
 export function EnhanceError({
@@ -56,7 +57,7 @@ export function EnhanceError({
         <p className="text-muted-foreground text-sm leading-relaxed">
           {isUnauthenticated ? (
             <Trans>
-              Anarlog could not generate this summary because you were not
+              BlackMushi could not generate this summary because you were not
               signed in. Sign in, then try again.
             </Trans>
           ) : (
@@ -65,6 +66,7 @@ export function EnhanceError({
             )
           )}
         </p>
+        {!isUnauthenticated && <ErrorSourceNote error={error} />}
       </div>
       {isUnauthenticated ? (
         <Button
@@ -95,4 +97,34 @@ export function EnhanceError({
       )}
     </div>
   );
+}
+
+function ErrorSourceNote({ error }: { error: Error | undefined }) {
+  const { t } = useLingui();
+  const source = getAIErrorSource(error);
+  if (!source) {
+    return null;
+  }
+
+  let label: string;
+  switch (source.kind) {
+    case "provider": {
+      const provider = source.provider;
+      label = provider
+        ? t`Source: ${provider} (AI model provider)`
+        : t`Source: AI model provider`;
+      break;
+    }
+    case "openrouter":
+      label = t`Source: OpenRouter (AI routing service)`;
+      break;
+    case "upstream":
+      label = t`Source: OpenRouter or the AI model provider`;
+      break;
+    case "anarlog":
+      label = t`Source: BlackMushi`;
+      break;
+  }
+
+  return <p className="text-muted-foreground text-xs">{label}</p>;
 }

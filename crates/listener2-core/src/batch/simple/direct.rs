@@ -7,7 +7,8 @@ use owhisper_client::{
     CohereAdapter, DeepgramAdapter, ElevenLabsAdapter, FireworksAdapter, GladiaAdapter,
     GoogleCloudAdapter, GoogleGenerativeAiAdapter, GroqAdapter, MetaAdapter, MistralAdapter,
     OpenAIAdapter, OpenRouterAdapter, PyannoteAdapter, RevAiAdapter, SiliconFlowAdapter,
-    SmallestAIAdapter, SonioxAdapter, SpeechmaticsAdapter, TogetherAdapter, XaiAdapter, ZaiAdapter,
+    SmallestAIAdapter, SonioxAdapter, SpeechmaticsAdapter, TogetherAdapter, WisprFlowAdapter,
+    XaiAdapter, ZaiAdapter,
 };
 use owhisper_interface::batch::{Alternatives, Channel, Response, Results};
 use tracing::Instrument;
@@ -86,6 +87,7 @@ pub(in crate::batch) async fn run_direct_batch_for_adapter_kind(
         AssemblyAI => AssemblyAIAdapter,
         Fireworks => FireworksAdapter,
         OpenAI => OpenAIAdapter,
+        AmazonBedrock => owhisper_client::AmazonBedrockAdapter,
         OpenRouter => OpenRouterAdapter,
         SiliconFlow => SiliconFlowAdapter,
         Zai => ZaiAdapter,
@@ -107,7 +109,8 @@ pub(in crate::batch) async fn run_direct_batch_for_adapter_kind(
         Together => TogetherAdapter,
         Xai => XaiAdapter,
         SmallestAI => SmallestAIAdapter,
-    }, unsupported: [DashScope, Nari])
+        WisprFlow => WisprFlowAdapter,
+    }, unsupported: [DashScope, Nari, Inworld, Gradium, Modulate, Alebex, Nvidia])
 }
 
 async fn run_anarlog_batch(
@@ -158,7 +161,7 @@ pub(super) async fn prepare_anarlog_batch_upload(
             );
             crate::BatchFailure::DirectRequestFailed {
                 provider: AdapterKind::Anarlog.to_string(),
-                message: "Anarlog couldn't prepare this large recording for transcription."
+                message: "BlackMushi couldn't prepare this large recording for transcription."
                     .to_string(),
             }
         })?;
@@ -174,7 +177,7 @@ pub(super) async fn prepare_anarlog_batch_upload(
             );
             crate::BatchFailure::DirectRequestFailed {
                 provider: AdapterKind::Anarlog.to_string(),
-                message: "Anarlog couldn't prepare this large recording for transcription."
+                message: "BlackMushi couldn't prepare this large recording for transcription."
                     .to_string(),
             }
         })?
@@ -185,7 +188,7 @@ pub(super) async fn prepare_anarlog_batch_upload(
             );
             crate::BatchFailure::DirectRequestFailed {
                 provider: AdapterKind::Anarlog.to_string(),
-                message: "Anarlog couldn't prepare this large recording for transcription."
+                message: "BlackMushi couldn't prepare this large recording for transcription."
                     .to_string(),
             }
         })?;

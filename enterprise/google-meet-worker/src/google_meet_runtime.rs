@@ -394,10 +394,6 @@ mod tests {
     #[error("unused sink failed")]
     struct UnusedSinkError;
 
-    struct RetryingFinishSink {
-        attempts: usize,
-    }
-
     struct DurationRecordingSink {
         fail_attempts: usize,
         attempts: usize,
@@ -424,7 +420,7 @@ mod tests {
             if self.attempts <= self.fail_attempts {
                 return Err(UnusedSinkError);
             }
-            Ok(Vec::new())
+            Ok(vec![transcript_output()])
         }
     }
 
@@ -444,29 +440,6 @@ mod tests {
             _capture_duration: Duration,
         ) -> Result<Vec<AudioFrameSinkOutput>, Self::Error> {
             Ok(Vec::new())
-        }
-    }
-
-    #[async_trait]
-    impl AudioFrameSink for RetryingFinishSink {
-        type Error = UnusedSinkError;
-
-        async fn write_frame(
-            &mut self,
-            _frame: crate::AudioFrame,
-        ) -> Result<Vec<AudioFrameSinkOutput>, Self::Error> {
-            Ok(Vec::new())
-        }
-
-        async fn finish(
-            &mut self,
-            _capture_duration: Duration,
-        ) -> Result<Vec<AudioFrameSinkOutput>, Self::Error> {
-            self.attempts += 1;
-            if self.attempts == 1 {
-                return Err(UnusedSinkError);
-            }
-            Ok(vec![transcript_output()])
         }
     }
 
@@ -511,7 +484,7 @@ mod tests {
             Err(GoogleMeetRuntimeConfigError::InvalidBotName)
         ));
 
-        let mut invalid_x11 = config("Anarlog Notes");
+        let mut invalid_x11 = config("BlackMushi Notes");
         invalid_x11.x11.display.clear();
         assert!(matches!(
             GoogleMeetRuntime::new(invalid_x11, UnusedSink),
@@ -520,7 +493,7 @@ mod tests {
             ))
         ));
 
-        let mut invalid_monitor = config("Anarlog Notes");
+        let mut invalid_monitor = config("BlackMushi Notes");
         invalid_monitor.runtime_poll_interval = Duration::ZERO;
         assert!(matches!(
             GoogleMeetRuntime::new(invalid_monitor, UnusedSink),
@@ -532,7 +505,7 @@ mod tests {
 
     #[test]
     fn rejects_other_platforms_before_launching_the_browser() {
-        let runtime = GoogleMeetRuntime::new(config("Anarlog Notetaker"), UnusedSink).unwrap();
+        let runtime = GoogleMeetRuntime::new(config("BlackMushi Notetaker"), UnusedSink).unwrap();
         let checkpoint = WorkerCheckpoint {
             job_id: "job-1".into(),
             bot_id: "bot-1".into(),
@@ -590,31 +563,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retries_sink_finalization_during_cleanup_after_a_transient_failure() {
-        let mut runtime =
-            GoogleMeetRuntime::new(config("Anarlog Notes"), RetryingFinishSink { attempts: 0 })
-                .unwrap();
-        let frozen = Duration::from_secs(42);
-        runtime.media = MediaState::Finalizing {
-            capture_duration: frozen,
-        };
-
-        let first = runtime.finalize_media().await;
-        assert!(first.sink_error.is_some());
-        assert!(matches!(
-            runtime.media,
-            MediaState::Finalizing { capture_duration } if capture_duration == frozen
-        ));
-
-        let second = runtime.finalize_media().await;
-        assert!(second.sink_error.is_none());
-        assert_eq!(second.payloads, vec![transcript_output()]);
-        assert!(matches!(runtime.media, MediaState::Finalized));
-    }
-
-    #[tokio::test]
     async fn finalize_is_a_no_op_before_capture_and_after_completion() {
-        let mut runtime = GoogleMeetRuntime::new(config("Anarlog Notes"), UnusedSink).unwrap();
+        let mut runtime = GoogleMeetRuntime::new(config("BlackMushi Notes"), UnusedSink).unwrap();
 
         let idle = runtime.finalize_media().await;
         assert!(idle.payloads.is_empty());
@@ -631,7 +581,7 @@ mod tests {
     #[tokio::test]
     async fn repeated_finalize_retries_reuse_the_frozen_duration() {
         let mut runtime = GoogleMeetRuntime::new(
-            config("Anarlog Notes"),
+            config("BlackMushi Notes"),
             DurationRecordingSink {
                 fail_attempts: 2,
                 attempts: 0,
@@ -644,9 +594,16 @@ mod tests {
             capture_duration: frozen,
         };
 
-        assert!(runtime.finalize_media().await.sink_error.is_some());
-        assert!(runtime.finalize_media().await.sink_error.is_some());
-        assert!(runtime.finalize_media().await.sink_error.is_none());
+        for _ in 0..2 {
+            assert!(runtime.finalize_media().await.sink_error.is_some());
+            assert!(matches!(
+                runtime.media,
+                MediaState::Finalizing { capture_duration } if capture_duration == frozen
+            ));
+        }
+        let finalized = runtime.finalize_media().await;
+        assert!(finalized.sink_error.is_none());
+        assert_eq!(finalized.payloads, vec![transcript_output()]);
         assert!(matches!(runtime.media, MediaState::Finalized));
         assert_eq!(runtime.audio_sink.durations, vec![frozen, frozen, frozen]);
     }

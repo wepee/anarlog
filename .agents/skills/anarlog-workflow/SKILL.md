@@ -1,15 +1,19 @@
 ---
 name: anarlog-workflow
-description: Execute Anarlog work immediately while preserving useful decisions and non-obvious lessons in Linear. Use for Anarlog repository or Anarlog desktop, web, mobile, and API work, including related worktrees and ANLG issues. Explicit brainstorming stays discussion-first. Do not use for unrelated repositories or meeting-data queries.
+description: Execute BlackMushi work immediately while preserving useful decisions and non-obvious lessons in Linear. Use for BlackMushi repository or BlackMushi desktop, web, mobile, and API work, including related worktrees and ANLG issues. Explicit brainstorming stays discussion-first. Do not use for unrelated repositories or meeting-data queries.
 ---
 
-# Anarlog workflow
+# BlackMushi workflow
 
-Apply to Anarlog repository or Anarlog desktop, web, mobile, and API work. Apply the same workflow in other checkouts and worktrees.
+Apply to BlackMushi repository or BlackMushi desktop, web, mobile, and API work. Apply the same workflow in other checkouts and worktrees.
 
 Use Linear for work tracking and facts worth remembering. Keep implementation and verification details in commits, PRs, and CI.
 
-- Team: **Anarlog** (`ANLG`).
+Write everything you log or edit in English, even when the conversation is in another language: Linear issues, comments, and documents; Slack updates; commits, PRs, and review replies; code comments and docs. Only replies to the user in the conversation follow the user's language, and localized product content such as translation catalogs keeps its target language.
+
+Do not read, create, edit, or comment in Notion for BlackMushi work. BlackMushi does not use Notion; keep its decisions and durable context in Linear.
+
+- Team: **BlackMushi** (`ANLG`).
 - Workspace: [fastrepl-inc](https://linear.app/fastrepl-inc).
 - [Agent lessons](https://linear.app/fastrepl-inc/document/agent-lessons-45018045d01e).
 
@@ -36,7 +40,7 @@ Before writing a comment or document, ask: will this help someone make a future 
 
 - Ticket-specific findings or decisions: a concise comment on the existing issue.
 - Lessons reusable across tickets: the team's **Agent lessons** document (create it if missing). Check for an existing entry and update it rather than repeating it. Use a date, short title, lesson, and future action; newest first.
-- Durable specs, research conclusions, and product context: the relevant team or project document, only when there is substantive context to preserve.
+- Durable specs, research conclusions, and product context: the relevant Linear team or project document, only when there is substantive context to preserve.
 - Use one appropriate home for each fact. Do not duplicate it across an issue comment and a lessons document, or post a separate announcement that it was documented.
 
 ## Keep Slack updates selective

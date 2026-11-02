@@ -1,9 +1,15 @@
 import { useMemo } from "react";
 
+import { commands as calendarCommands } from "@anlg/plugin-calendar";
 import { eventParticipantSchema, type EventParticipant } from "@anlg/store";
 
-import { executeTransaction, liveQueryClient, useLiveQuery } from "~/db";
+import {
+  SESSION_EVENT_MATCH,
+  SESSION_EVENT_ORDER,
+} from "~/calendar/session-event-match";
+import { liveQueryClient, useLiveQuery } from "~/db";
 import { enqueueDatabaseWrite } from "~/db/write-queue";
+import { getSessionEvent } from "~/session/utils";
 import { parseSessionTagNames } from "~/sidebar/item-fields";
 import type {
   TimelineEventRow,
@@ -40,10 +46,14 @@ type CalendarSqlRow = {
 };
 
 type SessionCalendarEventSqlRow = {
+  tracking_id: string;
+  calendar_id: string;
   title: string;
   started_at: string;
   ended_at: string;
   is_all_day: boolean | number;
+  has_recurrence_rules: boolean | number;
+  recurrence_series_id: string;
   location: string;
   meeting_link: string;
   description: string;
@@ -51,6 +61,7 @@ type SessionCalendarEventSqlRow = {
 };
 
 type CalendarEventStartSqlRow = { started_at: string };
+type CalendarEventMeetingLinkSqlRow = { meeting_link: string };
 
 type CalendarEventSearchSqlRow = {
   id: string;
@@ -97,9 +108,10 @@ export type NearbyCalendarEvent = {
 
 export type SessionCalendarEvent = Omit<
   SessionCalendarEventSqlRow,
-  "is_all_day" | "participants_json"
+  "is_all_day" | "has_recurrence_rules" | "participants_json"
 > & {
   is_all_day: boolean;
+  has_recurrence_rules: boolean;
   participants: EventParticipant[];
 };
 
@@ -109,6 +121,7 @@ export type CalendarRow = Omit<CalendarSqlRow, "enabled"> & {
 
 const EMPTY_EVENTS: Record<string, TimelineEventRow> = {};
 const EMPTY_SESSIONS: Record<string, TimelineSessionRow> = {};
+
 const EMPTY_CALENDARS: CalendarRow[] = [];
 const EMPTY_EVENT_PARTICIPANTS: EventParticipant[] = [];
 
@@ -141,10 +154,22 @@ export function useTimelineEventsTable(): TimelineEventsTable {
         event.location,
         event.meeting_link,
         event.description,
-        calendar.color AS calendar_color
+        calendar.color AS calendar_color,
+        CASE
+          WHEN json_valid(event.attendance_json)
+            THEN json_extract(event.attendance_json, '$.self_status')
+        END AS self_status,
+        session.folder_path AS session_folder
       FROM events AS event
       LEFT JOIN calendars AS calendar
         ON calendar.id = event.calendar_id AND calendar.deleted_at IS NULL
+      LEFT JOIN (
+        SELECT event_id, MAX(folder_path) AS folder_path
+        FROM sessions
+        WHERE deleted_at IS NULL AND event_id <> ''
+        GROUP BY event_id
+      ) AS session
+        ON session.event_id = event.id
       WHERE event.deleted_at IS NULL
       ORDER BY event.started_at, event.id
     `,
@@ -155,6 +180,7 @@ export function useTimelineEventsTable(): TimelineEventsTable {
 }
 
 export function useTimelineSessionsTable(): TimelineSessionsTable {
+  const timelineEventsTable = useTimelineEventsTable();
   const { data: timelineSessionsTable = EMPTY_SESSIONS } = useLiveQuery<
     TimelineSessionSqlRow,
     Record<string, TimelineSessionRow>
@@ -164,6 +190,7 @@ export function useTimelineSessionsTable(): TimelineSessionsTable {
         id,
         title,
         created_at,
+        event_id,
         event_json,
         folder_path AS folder_id,
         locked,
@@ -186,7 +213,7 @@ export function useTimelineSessionsTable(): TimelineSessionsTable {
 
   // Sessions with a pending deletion are hidden optimistically, before the
   // soft-delete write commits and the live query re-emits.
-  return useMemo(() => {
+  const sessions = useMemo(() => {
     const pendingIds = Object.keys(pendingDeletions).filter(
       (sessionId) => sessionId in timelineSessionsTable,
     );
@@ -198,6 +225,53 @@ export function useTimelineSessionsTable(): TimelineSessionsTable {
     }
     return filtered;
   }, [timelineSessionsTable, pendingDeletions]);
+
+  return useMemo(() => {
+    if (!sessions || !timelineEventsTable) return sessions;
+    const tracked = new Map<string, { id: string; event: TimelineEventRow }>();
+    for (const [id, event] of Object.entries(timelineEventsTable)) {
+      if (!event.tracking_id_event) continue;
+      const key = JSON.stringify([
+        event.calendar_id ?? "",
+        event.tracking_id_event,
+      ]);
+      const previous = tracked.get(key);
+      const start = event.started_at ?? "";
+      const previousStart = previous?.event.started_at ?? "";
+      if (
+        !previous ||
+        start < previousStart ||
+        (start === previousStart && id < previous.id)
+      ) {
+        tracked.set(key, { id, event });
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(sessions).map(([id, session]) => {
+        const saved = getSessionEvent(session);
+        const live =
+          timelineEventsTable[session.event_id ?? ""] ??
+          tracked.get(
+            JSON.stringify([saved?.calendar_id ?? "", saved?.tracking_id]),
+          )?.event;
+        return [
+          id,
+          live
+            ? {
+                ...session,
+                event_json: JSON.stringify({
+                  ...saved,
+                  tracking_id: live.tracking_id_event,
+                  calendar_id: live.calendar_id,
+                  started_at: live.started_at,
+                  ended_at: live.ended_at,
+                }),
+              }
+            : session,
+        ];
+      }),
+    );
+  }, [sessions, timelineEventsTable]);
 }
 
 export function useEnabledCalendarRows(): CalendarRow[] {
@@ -258,25 +332,13 @@ export function setCalendarEnabled(
   enabled: boolean,
 ): Promise<void> {
   return enqueueDatabaseWrite(`calendar-selection:${calendarId}`, async () => {
-    const now = new Date().toISOString();
-    await executeTransaction([
-      {
-        sql: `
-          UPDATE calendars
-          SET enabled = ?, updated_at = ?
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [Number(enabled), now, calendarId],
-      },
-      {
-        sql: `
-          UPDATE events
-          SET deleted_at = ?, updated_at = ?
-          WHERE calendar_id = ? AND deleted_at IS NULL AND ? = 0
-        `,
-        params: [now, now, calendarId, Number(enabled)],
-      },
-    ]);
+    const result = await calendarCommands.setCalendarEnabled({
+      calendar_id: calendarId,
+      enabled,
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
+    }
   });
 }
 
@@ -293,6 +355,21 @@ export async function getCalendarEventStartedAt(
     [eventId],
   );
   return rows[0]?.started_at || null;
+}
+
+export async function getCalendarEventMeetingLink(
+  eventId: string,
+): Promise<string | null> {
+  const rows = await liveQueryClient.execute<CalendarEventMeetingLinkSqlRow>(
+    `
+      SELECT meeting_link
+      FROM events
+      WHERE id = ? AND deleted_at IS NULL
+      LIMIT 1
+    `,
+    [eventId],
+  );
+  return rows[0]?.meeting_link.trim() || null;
 }
 
 export async function searchCalendarEvents(
@@ -433,34 +510,23 @@ export function useSessionCalendarEvent(
   >({
     sql: `
       SELECT
+        event.tracking_id_event AS tracking_id,
+        event.calendar_id,
         event.title,
         event.started_at,
         event.ended_at,
         event.is_all_day,
+        event.has_recurrence_rules,
+        event.recurrence_series_id,
         event.location,
         event.meeting_link,
         event.description,
         event.participants_json
       FROM sessions AS session
       JOIN events AS event
-        ON event.deleted_at IS NULL
-        AND (
-          event.id = session.event_id
-          OR (
-            event.tracking_id_event = CASE
-              WHEN json_valid(session.event_json)
-              THEN json_extract(session.event_json, '$.tracking_id')
-              ELSE ''
-            END
-            AND event.calendar_id = CASE
-              WHEN json_valid(session.event_json)
-              THEN json_extract(session.event_json, '$.calendar_id')
-              ELSE ''
-            END
-          )
-        )
+        ON ${SESSION_EVENT_MATCH}
       WHERE session.id = ? AND session.deleted_at IS NULL
-      ORDER BY event.started_at, event.id
+      ORDER BY ${SESSION_EVENT_ORDER}
       LIMIT 1
     `,
     params: [sessionId],
@@ -469,10 +535,14 @@ export function useSessionCalendarEvent(
       const row = rows[0];
       return row
         ? {
+            tracking_id: row.tracking_id,
+            calendar_id: row.calendar_id,
             title: row.title,
             started_at: row.started_at,
             ended_at: row.ended_at,
             is_all_day: Boolean(row.is_all_day),
+            has_recurrence_rules: Boolean(row.has_recurrence_rules),
+            recurrence_series_id: row.recurrence_series_id,
             location: row.location,
             meeting_link: row.meeting_link,
             description: row.description,

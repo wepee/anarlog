@@ -1,34 +1,72 @@
 #![forbid(unsafe_code)]
 
+mod attachment_ops;
 mod calendar_ops;
+mod calendar_sync_ops;
 mod calendar_types;
+mod capture_lifecycle_ops;
 mod cloudsync;
+mod contact_ops;
 mod e2ee;
 mod event_ops;
 mod event_types;
+mod folder_catalog_ops;
 mod legacy_import;
+mod managed_settings;
+mod pilot_usage_ops;
+mod session_audio_ops;
+mod session_content_ops;
 mod session_deletion;
+mod session_hold;
+mod session_lifecycle_ops;
+mod session_move_ops;
 mod session_ops;
+mod session_participant_ops;
+mod session_purge;
+mod session_review_ops;
+mod session_transcript_ops;
 mod session_types;
+mod summary_ops;
 mod template_ops;
 mod template_types;
+mod transcript_batch_ops;
+mod transcript_live_ops;
 mod voiceprint_ops;
 mod voiceprint_types;
 mod webhook_ops;
 mod webhook_types;
 
+pub use attachment_ops::*;
 pub use calendar_ops::*;
+pub use calendar_sync_ops::*;
 pub use calendar_types::*;
+pub use capture_lifecycle_ops::*;
 pub use cloudsync::*;
+pub use contact_ops::*;
 pub use e2ee::*;
 pub use event_ops::*;
 pub use event_types::*;
+pub use folder_catalog_ops::*;
 pub use legacy_import::*;
+pub use managed_settings::*;
+pub use pilot_usage_ops::*;
+pub use session_audio_ops::*;
+pub use session_content_ops::*;
+pub use session_hold::*;
+pub use session_lifecycle_ops::*;
+pub use session_move_ops::*;
 pub use session_ops::*;
+pub use session_participant_ops::*;
+pub use session_purge::*;
+pub use session_review_ops::*;
+pub use session_transcript_ops::*;
 pub use session_types::*;
 use sha2::{Digest, Sha384};
+pub use summary_ops::*;
 pub use template_ops::*;
 pub use template_types::*;
+pub use transcript_batch_ops::*;
+pub use transcript_live_ops::*;
 pub use voiceprint_ops::*;
 pub use voiceprint_types::*;
 pub use webhook_ops::*;
@@ -40,7 +78,7 @@ pub use webhook_types::*;
 // builds read or write. If a migration cannot be downgrade-safe, put a
 // "-- breaking" line in the leading comment block of its .sql file; older
 // builds will then refuse to open the database with an explicit
-// "update Anarlog" dialog instead of misbehaving on it.
+// "update BlackMushi" dialog instead of misbehaving on it.
 pub const APP_MIGRATION_STEPS: &[anlg_db_migrate::MigrationStep] = &[
     anlg_db_migrate::MigrationStep {
         id: "20260413020000_templates",
@@ -539,6 +577,43 @@ pub const APP_MIGRATION_STEPS: &[anlg_db_migrate::MigrationStep] = &[
         scope: anlg_db_migrate::MigrationScope::Plain,
         sql: include_str!("../migrations/20260916060000_local_library_write_times.sql"),
     },
+    anlg_db_migrate::MigrationStep {
+        id: "20260928030000_e2ee_witness_pending_priority",
+        scope: anlg_db_migrate::MigrationScope::Plain,
+        sql: include_str!("../migrations/20260928030000_e2ee_witness_pending_priority.sql"),
+    },
+    anlg_db_migrate::MigrationStep {
+        id: "20260930120000_event_attendance",
+        scope: anlg_db_migrate::MigrationScope::Plain,
+        sql: include_str!("../migrations/20260930120000_event_attendance.sql"),
+    },
+    anlg_db_migrate::MigrationStep {
+        id: "20261002090000_session_share_activation_sync",
+        scope: anlg_db_migrate::MigrationScope::CloudsyncAlter {
+            table_name: "sessions",
+        },
+        sql: include_str!("../migrations/20261002090000_session_share_activation_sync.sql"),
+    },
+    anlg_db_migrate::MigrationStep {
+        id: "20261005090000_e2ee_cloud_authority",
+        scope: anlg_db_migrate::MigrationScope::Plain,
+        sql: include_str!("../migrations/20261005090000_e2ee_cloud_authority.sql"),
+    },
+    anlg_db_migrate::MigrationStep {
+        id: "20261011120000_managed_app_settings",
+        scope: anlg_db_migrate::MigrationScope::Plain,
+        sql: include_str!("../migrations/20261011120000_managed_app_settings.sql"),
+    },
+    anlg_db_migrate::MigrationStep {
+        id: "20261011120100_local_meeting_purges",
+        scope: anlg_db_migrate::MigrationScope::Plain,
+        sql: include_str!("../migrations/20261011120100_local_meeting_purges.sql"),
+    },
+    anlg_db_migrate::MigrationStep {
+        id: "20261013090000_recording_import_jobs",
+        scope: anlg_db_migrate::MigrationScope::Plain,
+        sql: include_str!("../migrations/20261013090000_recording_import_jobs.sql"),
+    },
 ];
 
 pub fn schema() -> anlg_db_migrate::DbSchema {
@@ -636,6 +711,7 @@ pub async fn prepare_schema_with_progress(
     requeue_parked_e2ee_records(db.pool()).await?;
     backfill_session_share_activation(db.pool()).await?;
     ensure_cloudsync_workspace_binding(db.pool()).await?;
+    apply_managed_settings(db.pool()).await?;
     Ok(())
 }
 
@@ -768,6 +844,27 @@ async fn backfill_session_share_activation(pool: &sqlx::SqlitePool) -> Result<()
              FROM shared_session_cache
              WHERE manage_access = 1
                AND access_version > 1",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "UPDATE sessions SET share_activation_json = (
+          SELECT json_group_object(activation.viewer_user_id,
+            json_object('share_id', activation.share_id, 'activated_at', activation.activated_at))
+          FROM session_share_activation AS activation
+          JOIN shared_session_cache AS cache
+            ON cache.viewer_user_id = activation.viewer_user_id
+            AND cache.share_id = activation.share_id
+            AND cache.session_id = activation.session_id AND cache.manage_access = 1
+          WHERE activation.session_id = sessions.id
+        ) WHERE deleted_at IS NULL AND share_activation_json = '{}' AND EXISTS (
+          SELECT 1 FROM session_share_activation AS activation
+          JOIN shared_session_cache AS cache
+            ON cache.viewer_user_id = activation.viewer_user_id
+            AND cache.share_id = activation.share_id
+            AND cache.session_id = activation.session_id AND cache.manage_access = 1
+          WHERE activation.session_id = sessions.id
+        )",
     )
     .execute(pool)
     .await?;

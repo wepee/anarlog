@@ -1,6 +1,9 @@
 pub mod parsing;
+mod segment;
 mod url_builder;
 
+mod alebex;
+mod amazon_bedrock;
 mod anarlog;
 pub(crate) mod aquavoice;
 mod argmax;
@@ -17,12 +20,16 @@ mod fireworks;
 mod gladia;
 mod google_cloud;
 pub(crate) mod google_generative_ai;
+mod gradium;
 mod groq;
 pub mod http;
+mod inworld;
 mod language;
 pub(crate) mod meta;
 mod mistral;
+mod modulate;
 pub(crate) mod nari;
+mod nvidia;
 mod openai;
 mod openai_compatible_batch;
 mod openrouter;
@@ -35,9 +42,12 @@ pub(crate) mod soniox;
 mod speechmatics;
 mod together;
 mod whispercpp;
+mod wisprflow;
 mod xai;
 mod zai;
 
+pub use alebex::*;
+pub use amazon_bedrock::*;
 pub use anarlog::*;
 pub use aquavoice::*;
 pub use argmax::*;
@@ -53,11 +63,15 @@ pub use fireworks::*;
 pub use gladia::*;
 pub use google_cloud::*;
 pub use google_generative_ai::*;
+pub use gradium::*;
 pub use groq::*;
+pub use inworld::*;
 pub use language::{LanguageQuality, LanguageSupport};
 pub use meta::*;
 pub use mistral::*;
+pub use modulate::*;
 pub use nari::*;
+pub use nvidia::*;
 pub use openai::*;
 pub use openrouter::*;
 pub use pyannote::*;
@@ -68,6 +82,7 @@ pub use soniox::*;
 pub use speechmatics::*;
 pub use together::*;
 pub use whispercpp::*;
+pub use wisprflow::*;
 pub use xai::*;
 pub use zai::*;
 
@@ -175,6 +190,10 @@ pub trait RealtimeSttAdapter: Clone + Default + Send + Sync + 'static {
         None
     }
 
+    fn initial_response_field(&self) -> &'static str {
+        "type"
+    }
+
     fn required_sample_rate(&self) -> Option<u32> {
         None
     }
@@ -205,6 +224,10 @@ pub trait RealtimeSttAdapter: Clone + Default + Send + Sync + 'static {
     fn keep_alive_message(&self) -> Option<Message>;
 
     fn finalize_message(&self) -> Message;
+
+    fn finalize_messages(&self) -> Vec<Message> {
+        vec![self.finalize_message()]
+    }
 
     fn audio_to_message(&self, audio: bytes::Bytes) -> Message {
         Message::Binary(audio)
@@ -469,6 +492,20 @@ pub struct BatchUploadLimit {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
 pub enum AdapterKind {
+    #[strum(serialize = "inworld")]
+    Inworld,
+    #[strum(serialize = "gradium")]
+    Gradium,
+    #[strum(serialize = "modulate")]
+    Modulate,
+    #[strum(serialize = "alebex")]
+    Alebex,
+    #[strum(serialize = "nvidia")]
+    Nvidia,
+    #[strum(serialize = "amazon_bedrock")]
+    AmazonBedrock,
+    #[strum(serialize = "wisprflow")]
+    WisprFlow,
     #[strum(serialize = "aquavoice")]
     AquaVoice,
     #[strum(serialize = "cartesia")]
@@ -539,6 +576,49 @@ impl AdapterKind {
     ) -> Self {
         use crate::providers::Provider;
 
+        if !is_anarlog_proxy(base_url)
+            && let Ok(url) = url::Url::parse(base_url)
+            && let Some(kind) = url
+                .query_pairs()
+                .find(|(key, _)| key == "provider")
+                .and_then(|(_, value)| value.parse::<Self>().ok())
+                .filter(|kind| {
+                    matches!(
+                        kind,
+                        Self::Inworld
+                            | Self::Gradium
+                            | Self::Modulate
+                            | Self::Alebex
+                            | Self::Nvidia
+                            | Self::AmazonBedrock
+                    )
+                })
+        {
+            return kind;
+        }
+        if host_matches(base_url, |host| {
+            host == "inworld.ai" || host.ends_with(".inworld.ai")
+        }) {
+            return Self::Inworld;
+        }
+        if host_matches(base_url, |host| {
+            host == "gradium.ai" || host.ends_with(".gradium.ai")
+        }) {
+            return Self::Gradium;
+        }
+        if host_matches(base_url, |host| {
+            host == "modulate.ai" || host.ends_with(".modulate.ai")
+        }) {
+            return Self::Modulate;
+        }
+        if host_matches(base_url, |host| {
+            host == "alebex.ai" || host.ends_with(".alebex.ai")
+        }) {
+            return Self::Alebex;
+        }
+        if host_matches(base_url, |host| host == "platform-api.wisprflow.ai") {
+            return Self::WisprFlow;
+        }
         if is_anarlog_proxy(base_url) {
             return Self::Anarlog;
         }
@@ -593,13 +673,15 @@ impl AdapterKind {
                 OPENAI_COMPATIBLE_MAX_UPLOAD_BYTES,
                 openai_batch_max_duration(model),
             ),
-            Self::Groq | Self::Together | Self::Xai => (
+            Self::Groq | Self::Together | Self::Xai | Self::AmazonBedrock => (
                 OPENAI_COMPATIBLE_MAX_UPLOAD_BYTES,
                 OPENAI_COMPATIBLE_MAX_DURATION,
             ),
             Self::GoogleGenerativeAi => (20 * 1024 * 1024, Duration::from_secs(15 * 60)),
             Self::Zai => (OPENAI_COMPATIBLE_MAX_UPLOAD_BYTES, Duration::from_secs(25)),
             Self::SiliconFlow => (50 * 1024 * 1024, Duration::from_secs(50 * 60)),
+            // Six-minute API limit; PCM16 mono at 16 kHz also stays below 25 MB.
+            Self::WisprFlow => (u64::MAX, Duration::from_secs(350)),
             // Pre-recorded requests cap at 250 MB and time out after 10 minutes,
             // and the docs recommend splitting anything longer.
             Self::SmallestAI => (250 * 1024 * 1024, Duration::from_secs(10 * 60)),
@@ -617,7 +699,8 @@ impl AdapterKind {
 
     pub fn has_live_mode(&self) -> bool {
         match self {
-            Self::AquaVoice
+            Self::AmazonBedrock
+            | Self::AquaVoice
             | Self::Argmax
             | Self::Pyannote
             | Self::Cohere
@@ -631,7 +714,12 @@ impl AdapterKind {
             | Self::RevAi
             | Self::Speechmatics
             | Self::Together => false,
-            Self::Soniox
+            Self::Inworld
+            | Self::Gradium
+            | Self::Modulate
+            | Self::Alebex
+            | Self::Nvidia
+            | Self::Soniox
             | Self::Cartesia
             | Self::Fireworks
             | Self::Deepgram
@@ -645,6 +733,7 @@ impl AdapterKind {
             | Self::Xai
             | Self::Nari
             | Self::SmallestAI
+            | Self::WisprFlow
             | Self::GoogleGenerativeAi
             | Self::Anarlog => true,
         }
@@ -656,6 +745,13 @@ impl AdapterKind {
         model: Option<&str>,
     ) -> LanguageSupport {
         match self {
+            Self::Inworld => InworldAdapter::language_support_live(languages, model),
+            Self::Gradium => GradiumAdapter::language_support_live(languages, model),
+            Self::Modulate => ModulateAdapter::language_support_live(languages, model),
+            Self::Alebex => AlebexAdapter::language_support_live(languages, model),
+            Self::Nvidia => NvidiaAdapter::language_support_live(languages, model),
+            Self::AmazonBedrock => LanguageSupport::NotSupported,
+            Self::WisprFlow => WisprFlowAdapter::language_support(languages),
             Self::AquaVoice => LanguageSupport::NotSupported,
             Self::Cartesia => CartesiaAdapter::language_support_live(languages),
             Self::Deepgram => {
@@ -697,6 +793,11 @@ impl AdapterKind {
         model: Option<&str>,
     ) -> LanguageSupport {
         match self {
+            Self::Inworld | Self::Gradium | Self::Modulate | Self::Alebex | Self::Nvidia => {
+                LanguageSupport::NotSupported
+            }
+            Self::AmazonBedrock => OpenAIAdapter::language_support_batch(languages),
+            Self::WisprFlow => WisprFlowAdapter::language_support(languages),
             Self::AquaVoice => AquaVoiceAdapter::language_support_batch(languages),
             Self::Cartesia => CartesiaAdapter::language_support_batch(languages),
             Self::Deepgram => {
@@ -816,3 +917,6 @@ fn openai_batch_max_duration(model: Option<&str>) -> Duration {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod streaming_providers_tests;

@@ -309,35 +309,21 @@ describe("session correction chat tool", () => {
     expect(plan.updates[0]?.nextMemo).toBe("Speaker 1: Char");
   });
 
-  it("does not plan a partial transcript row update", () => {
+  it.each([
+    ["partial transcript row", "Speaker 1: no correction here", "Y"],
+    ["blank replacement text", "Speaker 1: X", "   "],
+  ])("does not plan a correction for %s", (_scenario, memo, newText) => {
     const plan = sessionCorrectionTestInternals.planTranscriptCorrections({
       transcripts: [
         transcript({
           words: [
             { id: "w1", text: "X", start_ms: 0, end_ms: 100, channel: 0 },
           ],
-          memo: "Speaker 1: no correction here",
+          memo,
         }),
       ] as any,
       oldText: "X",
-      newText: "Y",
-    });
-
-    expect(plan).toEqual({ changes: [], updates: [] });
-  });
-
-  it("does not remove transcript words for blank replacement text", () => {
-    const plan = sessionCorrectionTestInternals.planTranscriptCorrections({
-      transcripts: [
-        transcript({
-          words: [
-            { id: "w1", text: "X", start_ms: 0, end_ms: 100, channel: 0 },
-          ],
-          memo: "Speaker 1: X",
-        }),
-      ] as any,
-      oldText: "X",
-      newText: "   ",
+      newText,
     });
 
     expect(plan).toEqual({ changes: [], updates: [] });
@@ -399,7 +385,7 @@ describe("session correction chat tool", () => {
     );
     let persistedDictionary = "";
     mocks.updateSettingValue.mockImplementation(async (_key, update) => {
-      persistedDictionary = update(JSON.stringify(["Anarlog"]));
+      persistedDictionary = update(JSON.stringify(["BlackMushi"]));
       return persistedDictionary;
     });
 
@@ -434,7 +420,7 @@ describe("session correction chat tool", () => {
     expect(
       mocks.applySessionContentCorrections.mock.invocationCallOrder[0],
     ).toBeLessThan(mocks.updateSettingValue.mock.invocationCallOrder[0]);
-    expect(persistedDictionary).toBe(JSON.stringify(["Anarlog", "Erebor"]));
+    expect(persistedDictionary).toBe(JSON.stringify(["BlackMushi", "Erebor"]));
   });
 
   it("updates the visible session title even when it is not in the summary body", async () => {
@@ -448,7 +434,7 @@ describe("session correction chat tool", () => {
     const result = await (buildTool() as any).execute({
       target: "summary",
       oldText: "Analog",
-      newText: "Anarlog",
+      newText: "BlackMushi",
     });
 
     expect(result).toMatchObject({
@@ -457,7 +443,7 @@ describe("session correction chat tool", () => {
       transcriptChanges: [],
       titleChange: {
         replacements: 1,
-        nextTitle: "Scratchpad Design and Anarlog vs Chyle Direction",
+        nextTitle: "Scratchpad Design and BlackMushi vs Chyle Direction",
       },
     });
     expect(mocks.applySessionContentCorrections).toHaveBeenCalledWith({
@@ -466,7 +452,7 @@ describe("session correction chat tool", () => {
       transcripts: [],
       title: {
         currentTitle: "Scratchpad Design and Analog vs Chyle Direction",
-        nextTitle: "Scratchpad Design and Anarlog vs Chyle Direction",
+        nextTitle: "Scratchpad Design and BlackMushi vs Chyle Direction",
       },
     });
   });

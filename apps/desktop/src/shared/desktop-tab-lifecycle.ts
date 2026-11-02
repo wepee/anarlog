@@ -1,8 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 
-import { isSessionEmpty, softDeleteSession } from "~/session/queries";
-import { listenerStore } from "~/store/zustand/listener/instance";
 import {
   restorePinnedTabsToStore,
   restoreRecentlyOpenedToStore,
@@ -20,13 +18,6 @@ type InitializeDesktopTabsOptions = {
   onInitialized?: (() => void) | null;
   onZeroTabs?: (() => void) | null;
   isTauriEnv?: boolean;
-};
-
-type SessionTabCloseHandlerOptions = {
-  invalidateSessionResource: (sessionId: string) => void;
-  getSessionMode?: (sessionId: string) => string | null | undefined;
-  isSessionEmptyFn?: typeof isSessionEmpty;
-  deleteSessionFn?: typeof softDeleteSession;
 };
 
 export async function initializeDesktopTabs({
@@ -54,48 +45,6 @@ export async function initializeDesktopTabs({
   onZeroTabs?.();
 }
 
-export function createSessionTabCloseHandler({
-  invalidateSessionResource,
-  getSessionMode = (sessionId) =>
-    listenerStore.getState().getSessionMode(sessionId),
-  isSessionEmptyFn = isSessionEmpty,
-  deleteSessionFn = softDeleteSession,
-}: SessionTabCloseHandlerOptions) {
-  return (tab: Tab) => {
-    if (tab.type !== "sessions") {
-      return;
-    }
-
-    const sessionId = tab.id;
-    const sessionMode = getSessionMode(sessionId);
-    if (
-      sessionMode === "active" ||
-      sessionMode === "finalizing" ||
-      sessionMode === "running_batch"
-    ) {
-      return;
-    }
-
-    void (async () => {
-      if (!(await isSessionEmptyFn(sessionId))) return;
-
-      const deleted = await deleteSessionFn(sessionId);
-      if (deleted) invalidateSessionResource(sessionId);
-    })().catch((error) => {
-      console.error("session close cleanup", error);
-    });
-  };
-}
-
-export function createDesktopTabCloseHandler(
-  sessionOptions: SessionTabCloseHandlerOptions,
-) {
-  const closeSession = createSessionTabCloseHandler(sessionOptions);
-  return (tab: Tab) => {
-    closeSession(tab);
-  };
-}
-
 export function useDesktopTabLifecycle({
   onEmpty,
   onInitialized,
@@ -105,8 +54,7 @@ export function useDesktopTabLifecycle({
   onInitialized?: (() => void) | null;
   onZeroTabs?: (() => void) | null;
 }) {
-  const { registerOnEmpty, registerCanClose, registerOnClose, openNew, pin } =
-    useTabs();
+  const { registerOnEmpty, registerCanClose, openNew, pin } = useTabs();
   const hasOpenedInitialTab = useRef(false);
 
   useEffect(() => {
@@ -136,14 +84,4 @@ export function useDesktopTabLifecycle({
   useEffect(() => {
     registerCanClose(() => true);
   }, [registerCanClose]);
-
-  useEffect(() => {
-    registerOnClose(
-      createDesktopTabCloseHandler({
-        invalidateSessionResource: (sessionId) => {
-          useTabs.getState().invalidateResource("sessions", sessionId);
-        },
-      }),
-    );
-  }, [registerOnClose]);
 }

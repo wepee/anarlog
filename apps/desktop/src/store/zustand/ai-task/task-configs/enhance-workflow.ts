@@ -14,16 +14,15 @@ import { createEnhanceValidator } from "./enhance-validator";
 import { appendPreferredNamesGuidance } from "./preferred-names";
 
 import {
-  formatSummaryLengthModeGuidance,
+  formatSummaryDetailGuidance,
   formatSummaryLengthGuidance,
-  getSummaryLengthPolicy,
 } from "~/services/enhancer/summary-length";
 import { normalizeBulletPoints } from "~/store/zustand/ai-task/shared/transform_impl";
 import { withEarlyValidationRetry } from "~/store/zustand/ai-task/shared/validate";
 import { assertCanonicalTemplateSections } from "~/templates/codec";
 
 const AI_GENERATION_MAX_RETRIES = 4;
-const SUMMARY_MAX_OUTPUT_TOKENS = 8192;
+const ANTHROPIC_SUMMARY_MAX_OUTPUT_TOKENS = 64_000;
 const IMAGE_CONTEXT_NOTE =
   "Attached note images are included as visual context. Use visible text, diagrams, screenshots, and other image content when it materially improves the summary.";
 
@@ -38,6 +37,14 @@ export const enhanceWorkflow: Pick<
   ],
 };
 
+// Anthropic requires max_tokens and the SDK clamps it to known model limits;
+// other providers default to the model's own maximum when omitted.
+function getSummaryMaxOutputTokens(model: LanguageModel): number | undefined {
+  return typeof model !== "string" && model.provider.startsWith("anthropic")
+    ? ANTHROPIC_SUMMARY_MAX_OUTPUT_TOKENS
+    : undefined;
+}
+
 async function* executeWorkflow(params: {
   model: LanguageModel;
   args: TaskArgsMapTransformed["enhance"];
@@ -49,9 +56,8 @@ async function* executeWorkflow(params: {
   const system = await getSystemPrompt(args);
   const prompt = withLengthGuidance(
     withImageContextNote(await getUserPrompt(args), args.imageContext.length),
-    args.transcripts,
-    Boolean(args.template?.sections.length),
-    args.summaryLength,
+    args.lengthPolicy,
+    args.template?.sections.length ?? 0,
     Boolean(args.formatOverride.trim()),
   );
 
@@ -77,8 +83,7 @@ async function getSystemPrompt(args: TaskArgsMapTransformed["enhance"]) {
     throw new Error(result.error);
   }
 
-  const modeGuidance = formatSummaryLengthModeGuidance(
-    args.summaryLength,
+  const detailGuidance = formatSummaryDetailGuidance(
     Boolean(args.template?.sections.length),
   );
 
@@ -87,7 +92,7 @@ async function getSystemPrompt(args: TaskArgsMapTransformed["enhance"]) {
 
 # Summary Mode
 
-${modeGuidance}`,
+${detailGuidance}`,
     args.dictionaryTerms,
   );
 }
@@ -169,7 +174,7 @@ IMPORTANT: Previous attempt failed. ${previousFeedback}`;
         ...createPromptInput(enhancedPrompt, args.imageContext),
         abortSignal: combinedController.signal,
         maxRetries: AI_GENERATION_MAX_RETRIES,
-        maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: getSummaryMaxOutputTokens(model),
       });
       return withCleanup(result.fullStream, () => {
         signal.removeEventListener("abort", abortFromOuter);
@@ -217,19 +222,15 @@ ${IMAGE_CONTEXT_NOTE}`;
 
 function withLengthGuidance(
   prompt: string,
-  transcripts: TaskArgsMapTransformed["enhance"]["transcripts"],
-  hasTemplateSections: boolean,
-  summaryLength: TaskArgsMapTransformed["enhance"]["summaryLength"],
+  lengthPolicy: TaskArgsMapTransformed["enhance"]["lengthPolicy"],
+  templateSectionCount: number,
   customFormat: boolean,
 ): string {
-  if (hasTemplateSections) {
-    return prompt;
-  }
-
-  const guidance = formatSummaryLengthGuidance(
-    getSummaryLengthPolicy(transcripts, summaryLength, customFormat),
+  const hasTemplateSections = templateSectionCount > 0;
+  const guidance = formatSummaryLengthGuidance(lengthPolicy, {
     customFormat,
-  );
+    hasTemplateSections,
+  });
   if (!guidance) return prompt;
 
   return `${prompt}

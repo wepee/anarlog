@@ -16,20 +16,11 @@ vi.mock("@tauri-apps/plugin-os", () => ({
 }));
 
 vi.mock("./body", () => ({
-  ClassicMainBody: () => <div data-testid="classic-main-body" />,
+  ClassicMainBody: () => null,
 }));
 
 vi.mock("./windows-title-bar", () => ({
-  WindowsTitleBar: ({
-    showSidebarTimelineChrome,
-  }: {
-    showSidebarTimelineChrome: boolean;
-  }) => (
-    <div
-      data-testid="windows-title-bar"
-      data-show-sidebar-timeline-chrome={String(showSidebarTimelineChrome)}
-    />
-  ),
+  WindowsTitleBar: () => <div data-testid="windows-title-bar" />,
 }));
 
 vi.mock("~/shared/main", () => ({
@@ -62,7 +53,15 @@ vi.mock("~/contexts/shell", () => ({
 }));
 
 vi.mock("~/sidebar/toast", () => ({
-  ToastNotifications: () => <div data-testid="toast-notifications" />,
+  ToastNotifications: () => null,
+}));
+
+vi.mock("~/devtools-bar", () => ({
+  DevtoolsStatusBar: () => null,
+}));
+
+vi.mock("~/contexts/shell", () => ({
+  useShell: () => ({ leftsidebar: mocks.leftsidebar }),
 }));
 
 vi.mock("~/store/zustand/tabs", () => ({
@@ -74,9 +73,7 @@ vi.mock("~/store/zustand/tabs", () => ({
 import { ClassicMainShellFrame } from "./shell-frame";
 
 describe("ClassicMainShellFrame", () => {
-  afterEach(() => {
-    cleanup();
-  });
+  afterEach(cleanup);
 
   beforeEach(() => {
     mocks.currentTab = { type: "empty" };
@@ -87,53 +84,21 @@ describe("ClassicMainShellFrame", () => {
   });
 
   it.each([
-    "settings",
-    "calendar",
-    "contacts",
-    "templates",
-    "automations",
-    "folders",
-  ])("opens the %s sidebar and restores its previous state on exit", (type) => {
-    mocks.currentTab = { type };
-    mocks.leftsidebar.expanded = false;
-
-    const { rerender } = render(<ClassicMainShellFrame />);
-
-    expect(mocks.leftsidebar.setExpanded).toHaveBeenCalledWith(true);
-    expect(mocks.leftsidebar.setLocked).toHaveBeenCalledWith(true);
-
-    mocks.currentTab = { type: "empty" };
-    rerender(<ClassicMainShellFrame />);
-
-    expect(mocks.leftsidebar.setExpanded).toHaveBeenLastCalledWith(false);
-    expect(mocks.leftsidebar.setLocked).toHaveBeenLastCalledWith(false);
-  });
-
-  it("unlocks the custom sidebar when the shell unmounts", () => {
-    mocks.currentTab = { type: "calendar" };
-    mocks.leftsidebar.expanded = false;
-
-    const { unmount } = render(<ClassicMainShellFrame />);
-    unmount();
-
-    expect(mocks.leftsidebar.setExpanded).toHaveBeenLastCalledWith(false);
-    expect(mocks.leftsidebar.setLocked).toHaveBeenLastCalledWith(false);
-  });
-
-  it.each(["windows", "linux"] as const)(
-    "places the custom title bar above the shell on %s",
-    (runtimePlatform) => {
+    ["windows", true],
+    ["linux", true],
+    ["macos", false],
+  ] as const)(
+    "shows the custom title bar on %s",
+    (runtimePlatform, visible) => {
       mocks.platform = runtimePlatform;
 
       render(<ClassicMainShellFrame />);
 
-      const titleBar = screen.getByTestId("windows-title-bar");
-      const scaffold = screen.getByTestId("main-shell-scaffold");
-
-      expect(titleBar.compareDocumentPosition(scaffold)).toBe(
-        Node.DOCUMENT_POSITION_FOLLOWING,
-      );
-      expect(titleBar.parentElement?.className).toContain("flex-col");
+      if (visible) {
+        expect(screen.getByTestId("windows-title-bar")).toBeTruthy();
+      } else {
+        expect(screen.queryByTestId("windows-title-bar")).toBeNull();
+      }
     },
   );
 

@@ -18,6 +18,8 @@ pub enum ErrorKind {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("sqlite error {code}: {message}")]
+    Sqlite { code: i32, message: String },
     #[error("sqlx error: {0}")]
     Sqlx(#[from] sqlx::Error),
     #[error("io error: {0}")]
@@ -56,6 +58,9 @@ pub enum Error {
 impl Error {
     pub fn kind(&self) -> ErrorKind {
         match self {
+            Self::Sqlite { code, message } => {
+                return classify_database_error(Some(&code.to_string()), message);
+            }
             Self::Sqlx(sqlx_err) => {
                 if let Some(db_err) = sqlx_err.as_database_error() {
                     return classify_database_error(db_err.code().as_deref(), db_err.message());
@@ -108,6 +113,7 @@ fn classify_error_message(message: &str) -> Option<ErrorKind> {
                         Some("409"),
                         Some("already_exists" | "apply_batch_superseded")
                     ) | (Some("404"), Some("not_found"))
+                        | (Some("429" | "500" | "502" | "503" | "504"), _)
                 )
             })
             .then_some(ErrorKind::Transient);
@@ -182,6 +188,30 @@ mod tests {
         assert_eq!(
             classify_io_error(&std::io::Error::other(format!("sqlx error: {message}"))),
             ErrorKind::Transient
+        );
+    }
+
+    #[test]
+    fn temporary_cloud_http_failures_retry_instead_of_stopping_sync() {
+        let message = r#"{"errors":[{"status":"503","code":"database_unreachable","title":"Service Unavailable"}]}"#;
+        assert_eq!(
+            Error::Sqlite {
+                code: 1,
+                message: message.to_string()
+            }
+            .kind(),
+            ErrorKind::Transient
+        );
+        assert_eq!(
+            Error::Io(std::io::Error::other(format!("sqlite error 1: {message}"))).kind(),
+            ErrorKind::Transient
+        );
+        assert_eq!(
+            Error::Sqlite {
+                code: 1,
+                message: r#"{"errors":[{"status":"503","code":"database_unreachable"},{"status":"403","code":"forbidden"}]}"#.to_string(),
+            }.kind(),
+            ErrorKind::Fatal
         );
     }
 

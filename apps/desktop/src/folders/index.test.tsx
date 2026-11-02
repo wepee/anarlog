@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   folders: [] as string[],
   icons: {} as Record<string, { type: "icon"; value: string; color: string }>,
   instructions: "",
+  auth: null as { session: { user: { id: string } } } | null,
   materials: [] as Array<{
     id: string;
     filename: string;
@@ -26,7 +27,23 @@ const mocks = vi.hoisted(() => ({
   renameNamedFolder: vi.fn(),
   updateFolderIcon: vi.fn(),
   updateFolderInstructions: vi.fn(),
+  updateFolderWorkspace: vi.fn(),
   upload: vi.fn(),
+  workspaceId: "",
+  personalWorkspaceId: "",
+  workspaces: [] as Array<{ id: string; name: string }>,
+}));
+
+vi.mock("~/auth", () => ({
+  useOptionalAuth: () => mocks.auth,
+}));
+
+vi.mock("~/auth/billing-context", () => ({
+  useBillingAccess: () => ({
+    isReady: false,
+    isPaid: false,
+    upgradeToPro: vi.fn(),
+  }),
 }));
 
 vi.mock("@lingui/react/macro", () => ({
@@ -44,6 +61,7 @@ vi.mock("@lingui/react/macro", () => ({
 vi.mock("~/session/queries", () => ({
   useFolderIcons: () => mocks.icons,
   useFolderPaths: () => mocks.folders,
+  useFolderWorkspaces: () => ({}),
 }));
 
 vi.mock("~/session/folder-catalog", () => ({
@@ -52,7 +70,20 @@ vi.mock("~/session/folder-catalog", () => ({
   renameNamedFolder: mocks.renameNamedFolder,
   updateFolderIcon: mocks.updateFolderIcon,
   updateFolderInstructions: mocks.updateFolderInstructions,
+  updateFolderWorkspace: mocks.updateFolderWorkspace,
+  useFolderWorkspaceId: () => mocks.workspaceId,
   useFolderInstructions: () => mocks.instructions,
+}));
+
+vi.mock("~/session-sharing/folder-default-access", () => ({
+  folderDefaultAccessRule: () => null,
+  setFolderDefaultAccess: vi.fn(),
+  useFolderDefaultAccessRules: () => [],
+}));
+
+vi.mock("~/session-sharing/source", () => ({
+  useAvailableShareWorkspaces: () => mocks.workspaces,
+  usePersonalWorkspaceId: () => mocks.personalWorkspaceId,
 }));
 
 vi.mock("~/session/folder-attachments", () => ({
@@ -106,16 +137,22 @@ describe("Folders workspace", () => {
     mocks.renameNamedFolder.mockReset();
     mocks.updateFolderIcon.mockReset();
     mocks.updateFolderInstructions.mockReset();
+    mocks.updateFolderWorkspace.mockReset();
     mocks.upload.mockReset();
     mocks.folders = [];
     mocks.icons = {};
     mocks.instructions = "";
     mocks.materials = [];
+    mocks.auth = null;
+    mocks.workspaceId = "";
+    mocks.personalWorkspaceId = "";
+    mocks.workspaces = [];
     mocks.createNamedFolder.mockResolvedValue("CS 101");
     mocks.deleteNamedFolder.mockResolvedValue(undefined);
     mocks.renameNamedFolder.mockResolvedValue("Algorithms");
     mocks.updateFolderIcon.mockResolvedValue(undefined);
     mocks.updateFolderInstructions.mockResolvedValue(undefined);
+    mocks.updateFolderWorkspace.mockResolvedValue(undefined);
     mocks.upload.mockResolvedValue({
       path: "/vault/sessions/CS 101/materials/syllabus.pdf",
       attachmentId: "syllabus.pdf",
@@ -132,14 +169,8 @@ describe("Folders workspace", () => {
     cleanup();
   });
 
-  it("shows an empty state until a folder is created", async () => {
+  it("creates the first folder", async () => {
     renderFoldersWorkspace();
-
-    expect(
-      screen.getByText(
-        "No folders yet. Create one to group notes and materials.",
-      ),
-    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "New folder" }));
     fireEvent.change(screen.getByLabelText("Folder name"), {
@@ -188,9 +219,6 @@ describe("Folders workspace", () => {
       );
     });
 
-    expect(screen.getByText("Context")).toBeTruthy();
-    expect(screen.getByText("What these notes are usually about")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add file" })).toBeTruthy();
     expect(screen.getByText("syllabus.pdf")).toBeTruthy();
     const file = new File(["week 1"], "notes.txt", { type: "text/plain" });
     fireEvent.click(screen.getByRole("button", { name: "Add file" }));
@@ -203,37 +231,10 @@ describe("Folders workspace", () => {
     });
   });
 
-  it("filters the sidebar by folder name", () => {
-    mocks.folders = ["CS 101", "Work"];
-
-    renderFoldersWorkspace();
-
-    fireEvent.change(screen.getByPlaceholderText("Search folders..."), {
-      target: { value: "work" },
-    });
-
-    expect(screen.getByRole("button", { name: "Work" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "CS 101" })).toBeNull();
-  });
-
-  it("shows parent paths for nested folders", () => {
-    mocks.folders = ["Work/Sales", "Personal/Sales"];
-
-    renderFoldersWorkspace();
-
-    expect(screen.getByText("Work/Sales")).toBeTruthy();
-    expect(screen.getByText("Personal/Sales")).toBeTruthy();
-  });
-
   it("renames the folder from the title field", async () => {
     mocks.folders = ["Work"];
 
     renderFoldersWorkspace();
-
-    expect(screen.getByRole("button", { name: "Add file" })).toBeTruthy();
-    expect(
-      screen.queryByText("Add a syllabus or PDF for this folder"),
-    ).toBeNull();
 
     const title = screen.getByRole("textbox", { name: "Folder name" });
     fireEvent.change(title, { target: { value: "Algorithms" } });

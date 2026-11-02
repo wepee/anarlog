@@ -229,7 +229,7 @@ jobs:
           rm -rf "$staging" && mkdir -p "$staging"
           ditto "$app" "$staging/$(basename "$app")"
           ln -s /Applications "$staging/Applications"
-          hdiutil create -volname "Anarlog" -srcfolder "$staging" -ov -format UDZO "$dmg"
+          hdiutil create -volname "BlackMushi" -srcfolder "$staging" -ov -format UDZO "$dmg"
 
           {
             echo "app_name=$(basename "$app")"
@@ -275,7 +275,7 @@ jobs:
 
           manifest = {
               "version": version,
-              "notes": f"Anarlog {version}",
+              "notes": f"BlackMushi {version}",
               "pub_date": __import__("datetime").datetime.now(
                   __import__("datetime").timezone.utc
               ).isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -300,7 +300,7 @@ jobs:
           DRAFT: ${{ inputs.draft }}
         run: |
           set -euo pipefail
-          args=(--title "Anarlog $APP_VERSION" --notes "Anarlog $APP_VERSION")
+          args=(--title "BlackMushi $APP_VERSION" --notes "BlackMushi $APP_VERSION")
           if [[ "$DRAFT" == "true" ]]; then
             args+=(--draft)
           fi

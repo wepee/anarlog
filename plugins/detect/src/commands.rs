@@ -1,4 +1,6 @@
-use crate::DetectPluginExt;
+use tauri::Manager;
+
+use crate::{DetectPluginExt, ScreenShareSamplerState, ax_worker::AxWorker};
 
 #[derive(Debug, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -128,9 +130,9 @@ pub(crate) async fn list_default_ignored_bundle_ids<R: tauri::Runtime>(
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn inspect_meeting_accessibility<R: tauri::Runtime>(
-    _app: tauri::AppHandle<R>,
+    app: tauri::AppHandle<R>,
 ) -> Result<Vec<anlg_detect::MeetingAccessibilityInspection>, String> {
-    Ok(anlg_detect::inspect_meeting_accessibility())
+    app.state::<AxWorker>().inspect().await
 }
 
 #[tauri::command]
@@ -147,10 +149,9 @@ pub(crate) async fn send_meeting_chat_message<R: tauri::Runtime>(
     let verified_bundle_ids =
         intersect_mic_active_bundle_ids(&mic_active_bundle_ids, &current_mic_apps);
 
-    Ok(anlg_detect::send_meeting_chat_message(
-        message,
-        verified_bundle_ids,
-    ))
+    app.state::<AxWorker>()
+        .run(move || anlg_detect::send_meeting_chat_message(message, verified_bundle_ids))
+        .await
 }
 
 #[tauri::command]
@@ -167,9 +168,77 @@ pub(crate) async fn capture_meeting_chat_messages<R: tauri::Runtime>(
         .map(|application| application.id)
         .collect::<Vec<_>>();
 
-    Ok(anlg_detect::capture_meeting_chat_messages(
-        verified_bundle_ids,
-    ))
+    app.state::<AxWorker>()
+        .run(move || anlg_detect::capture_meeting_chat_messages(verified_bundle_ids))
+        .await
+}
+
+#[derive(Debug, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MeetingScreenShareCapture {
+    sharing: bool,
+    app: Option<anlg_detect::MeetingApp>,
+    platform: Option<anlg_detect::MeetingPlatform>,
+    jpeg: Option<Vec<u8>>,
+    width: u32,
+    height: u32,
+}
+
+/// Samples the meeting window while someone else is sharing their screen and
+/// returns a JPEG only when a new, settled frame appears.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn capture_meeting_screen_share<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    reset: bool,
+) -> Result<MeetingScreenShareCapture, String> {
+    let sampler = app.state::<ScreenShareSamplerState>().inner().clone();
+    app.state::<AxWorker>()
+        .run(move || {
+            let mut sampler = sampler.lock().map_err(|error| error.to_string())?;
+            if reset {
+                *sampler = anlg_detect::ScreenShareSampler::default();
+            }
+
+            let Some(inspection) = sampler.follow(&anlg_detect::inspect_meeting_accessibility())
+            else {
+                sampler.pause();
+                return Ok(MeetingScreenShareCapture {
+                    sharing: false,
+                    app: None,
+                    platform: None,
+                    jpeg: None,
+                    width: 0,
+                    height: 0,
+                });
+            };
+
+            let image = anlg_detect::capture_meeting_window(
+                inspection.pid,
+                inspection.window_title.as_deref(),
+            )
+            .inspect_err(|_| {
+                sampler.unfollow();
+                sampler.pause();
+            })?;
+            let keep = sampler.observe(anlg_detect::FrameSignature::of(&image));
+            let (jpeg, width, height) = if keep {
+                let (jpeg, width, height) = anlg_detect::encode_capture_jpeg(&image)?;
+                (Some(jpeg), width, height)
+            } else {
+                (None, 0, 0)
+            };
+
+            Ok(MeetingScreenShareCapture {
+                sharing: true,
+                app: Some(inspection.app),
+                platform: Some(inspection.platform),
+                jpeg,
+                width,
+                height,
+            })
+        })
+        .await?
 }
 
 #[tauri::command]

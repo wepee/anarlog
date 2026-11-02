@@ -108,7 +108,23 @@ pub(crate) async fn fetch_identity(
         }
 
         // https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/UserInfo
-        "google-drive" | "google-meet" => {
+        "google-drive" => {
+            let resp = proxy
+                .base_url_override("https://www.googleapis.com")
+                .get("/drive/v3/about?fields=user(emailAddress,displayName)")
+                .map_err(|e| e.to_string())?
+                .send()
+                .await
+                .map_err(|e| e.to_string())?
+                .error_for_status()
+                .map_err(|e| e.to_string())?;
+            let about: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+            Ok((
+                about["user"]["emailAddress"].as_str().map(str::to_owned),
+                about["user"]["displayName"].as_str().map(str::to_owned),
+            ))
+        }
+        "google-meet" => {
             let request = if integration_id == "google-meet" {
                 proxy
                     .base_url_override("https://www.googleapis.com")
@@ -470,7 +486,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/proxy/graphql"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "data": { "organization": { "name": "Anarlog" } }
+                "data": { "organization": { "name": "BlackMushi" } }
             })))
             .mount(&nango_mock)
             .await;
@@ -479,7 +495,7 @@ mod tests {
         let (identity, display_name) = fetch_identity(&nango, "linear", "conn-linear")
             .await
             .unwrap();
-        assert_eq!(identity.as_deref(), Some("Anarlog"));
+        assert_eq!(identity.as_deref(), Some("BlackMushi"));
         assert_eq!(display_name, None);
     }
 }

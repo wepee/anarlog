@@ -5,7 +5,7 @@ import { type ReactNode } from "react";
 
 import { FolderOpen } from "@anlg/ui/components/icons";
 import { Button } from "@anlg/ui/components/ui/button";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 import { cn, formatDistanceToNow } from "@anlg/utils";
 
 import {
@@ -107,7 +107,7 @@ export function MarkdownExportConfig({
         await setSettingValue("automation_markdown_export_directory", selected);
       }
     },
-    onError: () => sonnerToast.error(t`Could not update the export folder`),
+    onError: () => toast.error(t`Could not update the export folder`),
   });
 
   return (

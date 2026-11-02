@@ -165,24 +165,47 @@ pub fn exit_for_running_peer_channel(identifier: &str, peer: &str) -> ! {
 
 fn channel_product_name(identifier: &str) -> &'static str {
     if identifier == crate::db::NIGHTLY_BUNDLE_ID {
-        "Anarlog Nightly"
+        "BlackMushi Nightly"
     } else {
-        "Anarlog"
+        "BlackMushi"
     }
 }
 
 pub fn exit_for_already_running_instance() -> ! {
-    eprintln!("another Anarlog process holds the launch lock; exiting");
+    eprintln!("another BlackMushi process holds the launch lock; exiting");
 
     #[cfg(target_os = "macos")]
     {
-        let alert = "display alert \"Anarlog is already starting\" message \"Another Anarlog process is preparing your data, possibly finishing an update. The app will open automatically when it is ready.\" buttons {\"OK\"} default button \"OK\"";
+        let alert = "display alert \"BlackMushi is already starting\" message \"Another BlackMushi process is preparing your data, possibly finishing an update. The app will open automatically when it is ready.\" buttons {\"OK\"} default button \"OK\"";
         let _ = std::process::Command::new("/usr/bin/osascript")
             .args(["-e", alert])
             .spawn();
     }
 
     std::process::exit(0);
+}
+
+// Older versions let users point notes and recordings at a custom folder,
+// typically an Obsidian vault, while the database stayed in the app data
+// directory. Everything now lives in the app data directory; the first launch
+// after updating moves the custom folder's contents back before any plugin
+// resolves the storage location. Runs under the launch lock.
+pub fn consolidate_custom_storage(identifier: &str) {
+    let Some(base) = anlg_storage::global::compute_default_base(identifier) else {
+        return;
+    };
+    match anlg_storage::vault::consolidate_custom_vault(&base, &base) {
+        Ok(Some(previous)) if previous != base => eprintln!(
+            "moved notes and recordings from {} to {}",
+            previous.display(),
+            base.display()
+        ),
+        Ok(_) => {}
+        Err(error) => eprintln!(
+            "failed to move notes and recordings into {}; will retry on next launch: {error}",
+            base.display()
+        ),
+    }
 }
 
 // Database open and plugin setup can still take a few seconds before the
@@ -233,7 +256,7 @@ impl SlowStartupIndicator {
 
 #[cfg(target_os = "macos")]
 fn spawn_indicator_alert() -> Option<std::process::Child> {
-    let alert = "display alert \"Updating your data\" message \"Anarlog is updating your data. This can take several minutes for a large library.\\n\\nPlease keep Anarlog running; it will open automatically when the update finishes.\" buttons {\"OK\"} default button \"OK\"";
+    let alert = "display alert \"Updating your data\" message \"BlackMushi is updating your data. This can take several minutes for a large library.\\n\\nPlease keep BlackMushi running; it will open automatically when the update finishes.\" buttons {\"OK\"} default button \"OK\"";
     std::process::Command::new("/usr/bin/osascript")
         .args(["-e", alert])
         .spawn()
@@ -251,12 +274,8 @@ mod tests {
     use crate::db::{NIGHTLY_BUNDLE_ID, STABLE_BUNDLE_ID};
 
     #[test]
-    fn linux_webkit_workaround_defaults_dmabuf_off_when_unset() {
+    fn linux_webkit_workaround_defaults_dmabuf_off_unless_overridden() {
         assert_eq!(linux_webkit_dmabuf_override(None), Some("1"));
-    }
-
-    #[test]
-    fn linux_webkit_workaround_preserves_an_explicit_override() {
         assert_eq!(
             linux_webkit_dmabuf_override(Some(std::ffi::OsStr::new("0"))),
             None
@@ -349,9 +368,9 @@ mod tests {
     fn channel_product_names_follow_the_bundle_identifier() {
         assert_eq!(
             channel_product_name(NIGHTLY_BUNDLE_ID),
-            "Anarlog Nightly"
+            "BlackMushi Nightly"
         );
-        assert_eq!(channel_product_name(STABLE_BUNDLE_ID), "Anarlog");
+        assert_eq!(channel_product_name(STABLE_BUNDLE_ID), "BlackMushi");
     }
 
     #[test]

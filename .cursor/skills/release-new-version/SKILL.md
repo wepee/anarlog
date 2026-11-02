@@ -1,6 +1,6 @@
 ---
 name: release-new-version
-description: Release a new stable Anarlog desktop version from this fork's own GitHub Releases, which feed the in-app updater. Use when asked to cut, publish, or prepare a stable desktop release after checking and merging the changelog.
+description: Release a new stable BlackMushi desktop version from this fork's own GitHub Releases, which feed the in-app updater. Use when asked to cut, publish, or prepare a stable desktop release after checking and merging the changelog.
 metadata:
   internal: true
 ---
@@ -12,5 +12,6 @@ canonical, universal instructions live at:
 
 `../../../.agents/skills/release-new-version/SKILL.md`
 
-Read that file completely and follow it. Do not maintain a second release
-checklist here; changes belong in `.agents/skills/release-new-version/`.
+Read that coordinator completely, then its required focused skills and the
+applicable desktop/mobile procedure references. Do not maintain a second release
+checklist here; changes belong in `.agents/skills/`.
