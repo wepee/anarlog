@@ -164,7 +164,6 @@ export function useEditorTabs({
     hasTranscript && sessionMode === "inactive",
   );
 
-
   return createEditorTabs({
     enhancedNoteIds,
     canShowTranscript,

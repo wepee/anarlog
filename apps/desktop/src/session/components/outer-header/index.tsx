@@ -161,7 +161,9 @@ function HeaderMeetingControl({
   const isRecording =
     sessionMode === "active" || sessionMode === "running_batch";
   if (!isRecording && (ended || hasTranscript || audioExists)) {
-    return <HeaderExportAction sessionId={sessionId} currentView={currentView} />;
+    return (
+      <HeaderExportAction sessionId={sessionId} currentView={currentView} />
+    );
   }
 
   return (

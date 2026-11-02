@@ -125,8 +125,8 @@ export function AutoFormatExamplesDialog({
           </DialogTitle>
           <DialogDescription>
             <Trans>
-              Attach up to three past summaries you like. BlackMushi will learn how
-              you prefer meeting notes to be structured and written.
+              Attach up to three past summaries you like. BlackMushi will learn
+              how you prefer meeting notes to be structured and written.
             </Trans>
           </DialogDescription>
         </DialogHeader>

@@ -808,7 +808,10 @@ mod tests {
         );
         for (_, uri, _) in &template_contract {
             assert!(mcp_docs.contains(uri), "MCP docs are missing `{uri}`");
-            assert!(mcp_skill.contains(uri), "BlackMushi skill is missing `{uri}`");
+            assert!(
+                mcp_skill.contains(uri),
+                "BlackMushi skill is missing `{uri}`"
+            );
         }
         assert_eq!(resources.len(), 1);
         assert_eq!(resources[0].name, "Planning");

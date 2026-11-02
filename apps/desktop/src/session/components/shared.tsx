@@ -59,7 +59,6 @@ export function useCurrentNoteTab(
     hasTranscript && sessionMode === "inactive",
   );
 
-
   return useMemo(() => {
     return computeCurrentNoteTab(
       tab.state.view ?? null,
@@ -68,12 +67,7 @@ export function useCurrentNoteTab(
       canShowTranscript,
       EMPTY_SHARED_NOTE_IDS,
     );
-  }, [
-    tab.state.view,
-    isLiveSessionActive,
-    enhancedNoteIds,
-    canShowTranscript,
-  ]);
+  }, [tab.state.view, isLiveSessionActive, enhancedNoteIds, canShowTranscript]);
 }
 
 export function useCanShowTranscript(

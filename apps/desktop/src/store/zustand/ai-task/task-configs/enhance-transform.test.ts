@@ -1460,7 +1460,10 @@ describe("enhanceTransform.transformArgs", () => {
       { sessionId: "session-1", enhancedNoteId: "note-1" },
       {
         ...settingsValues,
-        personalization_dictionary_terms: JSON.stringify(["BlackMushi", "Char"]),
+        personalization_dictionary_terms: JSON.stringify([
+          "BlackMushi",
+          "Char",
+        ]),
       },
     );
 

@@ -24,11 +24,11 @@ import {
   useNativeContextMenu,
 } from "~/shared/hooks/useNativeContextMenu";
 import { useListener } from "~/stt/contexts";
+import { useSessionTranscriptMetadata } from "~/stt/queries";
 import {
   useSessionTranscriptLanguage,
   useTranscriptionLanguageChoices,
 } from "~/stt/session-language";
-import { useSessionTranscriptMetadata } from "~/stt/queries";
 import { useStartListeningWithBatchOverride } from "~/stt/useStartListeningWithBatchOverride";
 import {
   isMainWebviewWindow,

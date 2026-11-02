@@ -128,7 +128,9 @@ function StartupErrorView({ error }: { error: Error }) {
     >
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
         <h1 className="text-foreground text-base font-semibold">
-          {needsUpdate ? "BlackMushi needs an update" : "BlackMushi could not start"}
+          {needsUpdate
+            ? "BlackMushi needs an update"
+            : "BlackMushi could not start"}
         </h1>
         <p className="text-muted-foreground text-sm leading-relaxed">
           {needsUpdate

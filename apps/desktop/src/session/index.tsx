@@ -195,12 +195,7 @@ function TabContentNoteInner({
       canShowTranscript,
       EMPTY_SHARED_NOTE_IDS,
     );
-  }, [
-    tab.state.view,
-    isLiveSessionActive,
-    enhancedNoteIds,
-    canShowTranscript,
-  ]);
+  }, [tab.state.view, isLiveSessionActive, enhancedNoteIds, canShowTranscript]);
   useAutoFocusEditor({
     sessionId,
     noteInputRef,

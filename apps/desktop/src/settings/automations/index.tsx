@@ -420,9 +420,7 @@ function StarterAutomationDetails({ starterId }: { starterId: StarterId }) {
       return setSettingValues(updates);
     },
     onSuccess: (_, { enabled }) =>
-      toast.success(
-        enabled ? t`Automation enabled` : t`Automation disabled`,
-      ),
+      toast.success(enabled ? t`Automation enabled` : t`Automation disabled`),
     onError: () => toast.error(t`Could not update the automation`),
   });
 

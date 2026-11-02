@@ -46,12 +46,12 @@ import {
 } from "~/services/audio-retention";
 import { getEnhancerService } from "~/services/enhancer";
 import { maybeExtractVoiceprintCandidates } from "~/services/voiceprint";
-import { flushSessionEditorChanges } from "~/session/editor-registry";
 import {
   catalogLocalSessionAudio,
   markSessionAudioTranscriptionComplete,
 } from "~/session/attachments";
 import { enqueueSessionAudioOperation } from "~/session/audio-operations";
+import { flushSessionEditorChanges } from "~/session/editor-registry";
 import {
   isSessionDeleted,
   useSession,

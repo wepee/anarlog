@@ -497,7 +497,10 @@ mod tests {
 
         for path in paths {
             assert!(docs.contains(&path), "CLI docs are missing `{path}`");
-            assert!(skill.contains(&path), "BlackMushi skill is missing `{path}`");
+            assert!(
+                skill.contains(&path),
+                "BlackMushi skill is missing `{path}`"
+            );
         }
         assert_options_are_documented(&command, docs);
     }
