@@ -34,6 +34,18 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> FsSync<'a, R, M> {
         Ok(deleted)
     }
 
+    /// [fork] Moves the session's finished recording into `archive_dir`, leaving
+    /// a link in its place. Callers must hold `lock_session_audio`.
+    pub fn archive_session_audio_locked(
+        &self,
+        session_id: &str,
+        archive_dir: &std::path::Path,
+    ) -> Result<crate::audio::ArchiveOutcome, String> {
+        let app = self.manager.app_handle();
+        let session_dir = crate::commands::resolve_session_dir(app, session_id)?;
+        crate::audio::archive(&session_dir, archive_dir, session_id).map_err(|e| e.to_string())
+    }
+
     pub fn list_folders(&self) -> Result<crate::ListFoldersResult, crate::Error> {
         self.core()?.list_folders()
     }

@@ -443,7 +443,10 @@ pub(crate) async fn audio_path<R: tauri::Runtime>(
     session_id: String,
 ) -> Result<String, String> {
     let session_dir = resolve_session_dir(&app, &session_id)?;
+    // [fork] Resolve an archived recording's link so the asset protocol is
+    // granted the file it actually reads.
     let path = crate::audio::path(&session_dir)
+        .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
         .map(|p| p.to_string_lossy().to_string())
         .ok_or_else(|| "audio_path_not_found".to_string())?;
     // The webview plays this file through the asset protocol via

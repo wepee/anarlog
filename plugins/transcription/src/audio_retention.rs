@@ -11,12 +11,16 @@ use crate::{BatchSessionRegistry, ListenerPluginExt};
 
 const SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 const VOICEPRINT_CLEANUP_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+const ARCHIVE_INTERVAL: Duration = Duration::from_secs(10 * 60);
+const ARCHIVE_EVICT_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 const AUDIO_RETENTION_SETTING_ID: &str = "audio_retention";
 const SAVE_RECORDINGS_SETTING_ID: &str = "save_recordings";
 const LEGACY_SETTINGS_ID: &str = "legacy_settings_document";
 const LEGACY_MAIN_VALUES_ID: &str = "legacy_main_values_document";
+const AUDIO_ARCHIVE_DIRECTORY_SETTING_ID: &str = "audio_archive_directory";
+const AUDIO_ARCHIVE_AFTER_SETTING_ID: &str = "audio_archive_after";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AudioRetentionPolicy {
@@ -278,11 +282,155 @@ async fn sweep<R: tauri::Runtime>(
     Ok(())
 }
 
+// [fork] Archiving: recordings older than the chosen delay move to a folder of
+// the user's choice (typically iCloud Drive) instead of being deleted, and the
+// session keeps a link to them. The retention policy still applies on top.
+struct ArchiveSettings {
+    directory: std::path::PathBuf,
+    after_ms: i64,
+}
+
+fn parse_archive_settings(directory: Option<&str>, after: Option<&str>) -> Option<ArchiveSettings> {
+    let parse_str = |json: Option<&str>| {
+        json.and_then(|json| serde_json::from_str::<Value>(json).ok())
+            .and_then(|value| value.as_str().map(str::to_string))
+    };
+    let directory = parse_str(directory)?;
+    let directory = directory.trim();
+    if directory.is_empty() {
+        return None;
+    }
+    let after = match parse_str(after).as_deref() {
+        Some("oneDay") => AudioRetentionPolicy::OneDay,
+        Some("threeDays") => AudioRetentionPolicy::ThreeDays,
+        Some("oneMonth") => AudioRetentionPolicy::OneMonth,
+        _ => AudioRetentionPolicy::OneWeek,
+    };
+    Some(ArchiveSettings {
+        directory: std::path::PathBuf::from(directory),
+        after_ms: after.duration_ms()?,
+    })
+}
+
+async fn load_archive_settings(pool: &SqlitePool) -> Result<Option<ArchiveSettings>, sqlx::Error> {
+    let directory =
+        anlg_db_app::get_app_setting_json(pool, AUDIO_ARCHIVE_DIRECTORY_SETTING_ID).await?;
+    let after = anlg_db_app::get_app_setting_json(pool, AUDIO_ARCHIVE_AFTER_SETTING_ID).await?;
+    Ok(parse_archive_settings(
+        directory.as_deref(),
+        after.as_deref(),
+    ))
+}
+
+async fn archive_sweep<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    pool: &SqlitePool,
+    evict: bool,
+) -> Result<(), String> {
+    let Some(settings) = load_archive_settings(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    else {
+        return Ok(());
+    };
+    // An unplugged drive or a folder that is gone must never turn into a
+    // freshly created local directory that silently keeps the audio here.
+    if !settings.directory.is_dir() {
+        return Ok(());
+    }
+
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let candidates = anlg_db_app::list_session_audio_retention_candidates(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    for candidate in candidates {
+        let old_enough = candidate
+            .created_at_ms
+            .is_some_and(|created_at| now_ms >= created_at.saturating_add(settings.after_ms));
+        if !old_enough {
+            continue;
+        }
+        let session_id = candidate.session_id;
+        let _guard = app.fs_sync().lock_session_audio(&session_id).await;
+        if !session_audio_is_idle(app, &session_id).await {
+            continue;
+        }
+        match app
+            .fs_sync()
+            .archive_session_audio_locked(&session_id, &settings.directory)
+        {
+            Ok(tauri_plugin_fs_sync::audio::ArchiveOutcome::Archived(target)) => {
+                tracing::info!(%session_id, target = %target.display(), "session_audio_archived");
+            }
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(%session_id, %error, "session_audio_archive_failed");
+            }
+        }
+    }
+
+    if evict {
+        evict_uploaded_archives(&settings.directory);
+    }
+    Ok(())
+}
+
+/// Copying into iCloud Drive frees nothing while macOS keeps the local copy,
+/// and it only evicts under disk pressure. Ask it to drop archives that have
+/// had time to upload; `brctl` refuses files that are not uploaded yet, and
+/// those are simply retried on the next pass.
+#[cfg(target_os = "macos")]
+fn evict_uploaded_archives(directory: &std::path::Path) {
+    const BRCTL: &str = "/usr/bin/brctl";
+    const UPLOAD_GRACE: Duration = Duration::from_secs(60 * 60);
+
+    let in_icloud = directory
+        .to_string_lossy()
+        .contains("/Library/Mobile Documents/");
+    if !in_icloud || !std::path::Path::new(BRCTL).exists() {
+        return;
+    }
+    let Ok(sessions) = std::fs::read_dir(directory) else {
+        return;
+    };
+    for session in sessions.flatten() {
+        let Ok(files) = std::fs::read_dir(session.path()) else {
+            continue;
+        };
+        for file in files.flatten() {
+            let path = file.path();
+            let is_audio = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("audio."));
+            let settled = file
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| modified.elapsed().ok())
+                .is_some_and(|age| age >= UPLOAD_GRACE);
+            if is_audio && settled {
+                let _ = std::process::Command::new(BRCTL)
+                    .arg("evict")
+                    .arg(&path)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status();
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn evict_uploaded_archives(_directory: &std::path::Path) {}
+
 pub(crate) fn spawn<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(SWEEP_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut last_voiceprint_cleanup: Option<Instant> = None;
+        let mut last_archive: Option<Instant> = None;
+        let mut last_evict: Option<Instant> = None;
         loop {
             interval.tick().await;
             let Some(pool) = db_pool(&app) else {
@@ -290,6 +438,16 @@ pub(crate) fn spawn<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
             };
             if let Err(error) = sweep(&app, &pool).await {
                 tracing::warn!(%error, "audio_retention_sweep_failed");
+            }
+            if last_archive.is_none_or(|at| at.elapsed() >= ARCHIVE_INTERVAL) {
+                last_archive = Some(Instant::now());
+                let evict = last_evict.is_none_or(|at| at.elapsed() >= ARCHIVE_EVICT_INTERVAL);
+                if evict {
+                    last_evict = Some(Instant::now());
+                }
+                if let Err(error) = archive_sweep(&app, &pool, evict).await {
+                    tracing::warn!(%error, "audio_archive_sweep_failed");
+                }
             }
             if last_voiceprint_cleanup.is_none_or(|at| at.elapsed() >= VOICEPRINT_CLEANUP_INTERVAL)
             {
@@ -395,5 +553,22 @@ mod tests {
         assert!(batch_session_belongs_to("s1", "s1"));
         assert!(batch_session_belongs_to("s1:recovery", "s1"));
         assert!(!batch_session_belongs_to("s10", "s1"));
+    }
+
+    #[test]
+    fn archiving_needs_a_folder_and_defaults_to_one_week() {
+        assert!(parse_archive_settings(None, Some(r#""oneDay""#)).is_none());
+        assert!(parse_archive_settings(Some(r#""  ""#), Some(r#""oneDay""#)).is_none());
+
+        let settings = parse_archive_settings(Some(r#""/Users/me/iCloud""#), None).unwrap();
+        assert_eq!(
+            settings.directory,
+            std::path::PathBuf::from("/Users/me/iCloud")
+        );
+        assert_eq!(settings.after_ms, 7 * DAY_MS);
+
+        let settings =
+            parse_archive_settings(Some(r#""/Users/me/iCloud""#), Some(r#""oneMonth""#)).unwrap();
+        assert_eq!(settings.after_ms, 30 * DAY_MS);
     }
 }

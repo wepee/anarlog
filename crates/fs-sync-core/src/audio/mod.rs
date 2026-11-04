@@ -11,8 +11,10 @@ use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
 mod activity;
+mod archive;
 mod peaks;
 pub use activity::has_speech;
+pub use archive::{ArchiveOutcome, archive, archived_target};
 pub use peaks::{AudioPeaks, PEAKS_PER_CHANNEL, cached_peaks, compute_peaks};
 
 const AUDIO_FORMATS: [&str; 3] = ["audio.mp3", "audio.wav", "audio.ogg"];
@@ -58,7 +60,30 @@ pub fn delete(session_dir: &Path) -> std::io::Result<bool> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
         Err(error) => return Err(error),
     };
-    let audio_deleted = delete_with(session_dir, |path| std::fs::remove_file(path))?;
+    // [fork] An archived recording is a link: drop the archived file with it,
+    // and still clear the link when the archive is unreachable.
+    let archived_deleted = match archive::archived_target(session_dir)? {
+        Some(target) => {
+            match std::fs::remove_file(&target) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+                _ => {}
+            }
+            if let Some(parent) = target.parent() {
+                let _ = std::fs::remove_dir(parent);
+            }
+            AUDIO_FORMATS
+                .iter()
+                .map(|format| session_dir.join(format))
+                .filter(|path| {
+                    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+                })
+                .try_for_each(std::fs::remove_file)?;
+            true
+        }
+        None => false,
+    };
+    let audio_deleted =
+        delete_with(session_dir, |path| std::fs::remove_file(path))? || archived_deleted;
     match std::fs::remove_file(session_dir.join(".delete-audio-on-stop")) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
         _ => {}

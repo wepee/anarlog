@@ -8,6 +8,7 @@ import { commands as listenerCommands } from "@anlg/plugin-transcription";
 import { CircleNotch } from "@anlg/ui/components/icons";
 
 import { AppSettingsView } from "./app-settings";
+import { AudioArchiveRow } from "./audio-archive";
 import { AudioSettingsView } from "./audio-settings";
 import {
   CORE_TRANSCRIPTION_LANGUAGE_CODES,
@@ -402,6 +403,9 @@ function SettingsSectionContent({
                   setSettingValues({ remember_speakers: value }),
               }}
             />
+            <div className="mt-4">
+              <AudioArchiveRow />
+            </div>
           </div>
         </>
       )}

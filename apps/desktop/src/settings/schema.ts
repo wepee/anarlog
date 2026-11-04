@@ -170,6 +170,17 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "audio_retention"],
     default: "forever" as string,
   },
+  // [fork] Folder where finished recordings are moved; empty keeps them here.
+  audio_archive_directory: {
+    type: "string",
+    path: ["general", "audio_archive_directory"],
+    default: "" as string,
+  },
+  audio_archive_after: {
+    type: "string",
+    path: ["general", "audio_archive_after"],
+    default: "oneWeek" as string,
+  },
   remember_speakers: {
     type: "boolean",
     path: ["general", "remember_speakers"],
