@@ -309,6 +309,22 @@ msgstr "Additional spoken languages"
 msgid "Advanced"
 msgstr "Advanced"
 
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 day"
+msgstr "After 1 day"
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 month"
+msgstr "After 1 month"
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 week"
+msgstr "After 1 week"
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 3 days"
+msgstr "After 3 days"
+
 #: src/settings/ai/stt/local-file-model.tsx
 #: src/settings/ai/stt/select.tsx
 msgid "After recording"
@@ -414,6 +430,14 @@ msgstr "Apply to memo"
 #: src/edit/tab-content.tsx
 msgid "Apply to summary"
 msgstr "Apply to summary"
+
+#: src/settings/general/audio-archive.tsx
+msgid "Archive delay"
+msgstr "Archive delay"
+
+#: src/settings/general/audio-archive.tsx
+msgid "Archive recordings"
+msgstr "Archive recordings"
 
 #: src/chat/components/input/index.tsx
 #: src/shared/chat-cta.tsx
@@ -837,6 +861,7 @@ msgid "Choose files exported from this app."
 msgstr "Choose files exported from this app."
 
 #: src/settings/automations/starter-config.tsx
+#: src/settings/general/audio-archive.tsx
 #: src/settings/general/storage/export-location.tsx
 msgid "Choose folder"
 msgstr "Choose folder"
@@ -873,6 +898,10 @@ msgstr "Choose template icon"
 #: src/settings/general/audio-settings.tsx
 msgid "Choose the microphone that captures your voice."
 msgstr "Choose the microphone that captures your voice."
+
+#: src/settings/general/audio-archive.tsx
+msgid "Choose where to archive recordings"
+msgstr "Choose where to archive recordings"
 
 #: src/settings/general/week-start.tsx
 msgid "Choose which day begins your calendar week."
@@ -1208,6 +1237,10 @@ msgstr "Could not start voice input"
 #: src/chat/components/input/use-dictation.ts
 msgid "Could not transcribe voice input"
 msgstr "Could not transcribe voice input"
+
+#: src/settings/general/audio-archive.tsx
+msgid "Could not update the archive settings"
+msgstr "Could not update the archive settings"
 
 #: src/settings/automations/index.tsx
 #: src/settings/automations/workflow-builder.tsx
@@ -1955,6 +1988,10 @@ msgstr "Hours transcribed"
 msgid "How much the model thinks before answering. Default leaves it to the provider."
 msgstr "How much the model thinks before answering. Default leaves it to the provider."
 
+#: src/settings/general/audio-archive.tsx
+msgid "How old a recording must be before it moves."
+msgstr "How old a recording must be before it moves."
+
 #: src/settings/ai/llm/subscriptions/connect.tsx
 msgid "How to get a Kimi Code key"
 msgstr "How to get a Kimi Code key"
@@ -2445,6 +2482,10 @@ msgstr "Most conversations: {busiestDay}"
 msgid "Move down"
 msgstr "Move down"
 
+#: src/settings/general/audio-archive.tsx
+msgid "Move older recordings to this folder, for example in iCloud Drive, to free up space. They stay playable from the note and download again when you play them. Audio file retention still applies."
+msgstr "Move older recordings to this folder, for example in iCloud Drive, to free up space. They stay playable from the note and download again when you play them. Audio file retention still applies."
+
 #: src/calendar/components/event-chip.tsx
 msgid "Move this note"
 msgstr "Move this note"
@@ -2731,6 +2772,10 @@ msgstr "Now"
 #: src/templates/template-icon-picker.tsx
 msgid "Objects"
 msgstr "Objects"
+
+#: src/settings/general/audio-archive.tsx
+msgid "Off: recordings stay on this device"
+msgstr "Off: recordings stay on this device"
 
 #: src/settings/general/storage/legacy-cleanup.tsx
 msgid "Older files that differ from your current data were kept as recovery copies. No action is required."
@@ -3807,6 +3852,10 @@ msgstr "Stone"
 #: src/session/components/outer-header/index.tsx
 msgid "Stop"
 msgstr "Stop"
+
+#: src/settings/general/audio-archive.tsx
+msgid "Stop archiving"
+msgstr "Stop archiving"
 
 #: src/calendar/components/event-chip.tsx
 msgid "Stop auto-add"

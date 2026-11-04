@@ -309,6 +309,22 @@ msgstr "अतिरिक्त बोलिने भाषाहरू"
 msgid "Advanced"
 msgstr ""
 
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 day"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 month"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 week"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 3 days"
+msgstr ""
+
 #: src/settings/ai/stt/local-file-model.tsx
 #: src/settings/ai/stt/select.tsx
 msgid "After recording"
@@ -413,6 +429,14 @@ msgstr ""
 
 #: src/edit/tab-content.tsx
 msgid "Apply to summary"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Archive delay"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Archive recordings"
 msgstr ""
 
 #: src/chat/components/input/index.tsx
@@ -837,6 +861,7 @@ msgid "Choose files exported from this app."
 msgstr ""
 
 #: src/settings/automations/starter-config.tsx
+#: src/settings/general/audio-archive.tsx
 #: src/settings/general/storage/export-location.tsx
 msgid "Choose folder"
 msgstr ""
@@ -872,6 +897,10 @@ msgstr ""
 #: src/settings/dictation.tsx
 #: src/settings/general/audio-settings.tsx
 msgid "Choose the microphone that captures your voice."
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Choose where to archive recordings"
 msgstr ""
 
 #: src/settings/general/week-start.tsx
@@ -1207,6 +1236,10 @@ msgstr ""
 
 #: src/chat/components/input/use-dictation.ts
 msgid "Could not transcribe voice input"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Could not update the archive settings"
 msgstr ""
 
 #: src/settings/automations/index.tsx
@@ -1955,6 +1988,10 @@ msgstr ""
 msgid "How much the model thinks before answering. Default leaves it to the provider."
 msgstr ""
 
+#: src/settings/general/audio-archive.tsx
+msgid "How old a recording must be before it moves."
+msgstr ""
+
 #: src/settings/ai/llm/subscriptions/connect.tsx
 msgid "How to get a Kimi Code key"
 msgstr ""
@@ -2445,6 +2482,10 @@ msgstr ""
 msgid "Move down"
 msgstr ""
 
+#: src/settings/general/audio-archive.tsx
+msgid "Move older recordings to this folder, for example in iCloud Drive, to free up space. They stay playable from the note and download again when you play them. Audio file retention still applies."
+msgstr ""
+
 #: src/calendar/components/event-chip.tsx
 msgid "Move this note"
 msgstr ""
@@ -2730,6 +2771,10 @@ msgstr ""
 
 #: src/templates/template-icon-picker.tsx
 msgid "Objects"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Off: recordings stay on this device"
 msgstr ""
 
 #: src/settings/general/storage/legacy-cleanup.tsx
@@ -3806,6 +3851,10 @@ msgstr ""
 #: src/composer/index.tsx
 #: src/session/components/outer-header/index.tsx
 msgid "Stop"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Stop archiving"
 msgstr ""
 
 #: src/calendar/components/event-chip.tsx
