@@ -1,3 +1,5 @@
+use std::sync::PoisonError;
+
 use crate::Store2PluginExt;
 use crate::chunked::{self, ChunkedError};
 
@@ -389,6 +391,47 @@ fn read_secret_blocking_for<R: tauri::Runtime>(
     key: &str,
 ) -> Result<Option<String>, String> {
     validate_secret_coordinate(caller, scope, key)?;
+    let account = format!("{scope}:{key}");
+    let migrated = with_vault(app, |vault| {
+        read_through_vault(vault, &account, || {
+            read_keychain_secret(app, scope, key, prompts_are_not_worth_it(scope))
+        })
+    });
+    match migrated {
+        Some(Ok(VaultRead::Migrated(secret))) => {
+            forget_keychain_secret(app, scope, key);
+            Ok(Some(secret))
+        }
+        Some(Ok(VaultRead::Value(secret))) => Ok(secret),
+        Some(Err(error)) => Err(error),
+        None => read_keychain_secret(app, scope, key, false),
+    }
+}
+
+/// The pre-vault behaviour: one keychain item per secret. `silent` reads only
+/// what the keychain hands over without asking.
+fn read_keychain_secret<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    scope: &str,
+    key: &str,
+    silent: bool,
+) -> Result<Option<String>, String> {
+    let _keychain = KEYCHAIN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    if silent {
+        // A silent refusal is expected here and must not switch the keychain
+        // off for the rest of the session.
+        return without_keychain_prompts(|| read_keychain_item(app, scope, key, false))
+            .or(Ok(None));
+    }
+    read_keychain_item(app, scope, key, true)
+}
+
+fn read_keychain_item<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    scope: &str,
+    key: &str,
+    remember_refusal: bool,
+) -> Result<Option<String>, String> {
     if KEYCHAIN_ACCESS_DENIED.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok(None);
     }
@@ -411,11 +454,13 @@ fn read_secret_blocking_for<R: tauri::Runtime>(
             Ok(None)
         }
         Err(error) => {
-            if let ChunkedError::Keyring(keyring_error) = &error {
-                if is_access_denied(keyring_error) {
+            if let ChunkedError::Keyring(keyring_error) = &error
+                && is_access_denied(keyring_error)
+            {
+                if remember_refusal {
                     KEYCHAIN_ACCESS_DENIED.store(true, std::sync::atomic::Ordering::Relaxed);
-                    return Ok(None);
                 }
+                return Ok(None);
             }
             Err(chunked_error(error))
         }
@@ -474,6 +519,13 @@ fn write_secret_blocking_for<R: tauri::Runtime>(
     value: &str,
 ) -> Result<(), String> {
     validate_secret_coordinate(caller, scope, key)?;
+    let account = format!("{scope}:{key}");
+    if let Some(result) = with_vault(app, |vault| vault.put(&account, value)) {
+        result?;
+        forget_keychain_secret(app, scope, key);
+        return Ok(());
+    }
+    let _keychain = KEYCHAIN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     secret_location(app, scope, key)?.write(value)?;
     for legacy_entry in legacy_secret_entries(app, scope, key)? {
         let _ = legacy_entry.delete_credential();
@@ -520,6 +572,13 @@ fn delete_secret_blocking_for<R: tauri::Runtime>(
     key: &str,
 ) -> Result<(), String> {
     validate_secret_coordinate(caller, scope, key)?;
+    let account = format!("{scope}:{key}");
+    if let Some(result) = with_vault(app, |vault| vault.delete(&account)) {
+        result?;
+        forget_keychain_secret(app, scope, key);
+        return Ok(());
+    }
+    let _keychain = KEYCHAIN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     for legacy_entry in legacy_secret_entries(app, scope, key)? {
         match legacy_entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry | keyring::Error::PlatformFailure(_)) => {}
@@ -529,9 +588,197 @@ fn delete_secret_blocking_for<R: tauri::Runtime>(
     secret_location(app, scope, key)?.delete()
 }
 
+// [fork] Vault plumbing, see `vault.rs`.
+const VAULT_FILENAME: &str = "secure-store.vault.json";
+const VAULT_SCOPE: &str = "vault";
+const VAULT_KEY: &str = "master-key";
+// Voiceprint candidates are numerous, short-lived and rebuilt from the next
+// meetings: migrating them is not worth a prompt each, so they are read from
+// the old keychain items only when that needs no confirmation.
+const SILENT_MIGRATION_SCOPES: &[&str] = &["voiceprint_candidates"];
+
+// Serialises keychain access, so prompts never overlap and the window where
+// keychain interaction is switched off cannot swallow a legitimate prompt.
+// Lock order: VAULT, then KEYCHAIN_LOCK.
+static KEYCHAIN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static VAULT: std::sync::Mutex<VaultSlot> = std::sync::Mutex::new(VaultSlot::Unopened);
+
+enum VaultSlot {
+    Unopened,
+    Ready(crate::vault::Vault),
+    /// The master key was refused: keep to the per-item behaviour.
+    Unavailable,
+}
+
+enum VaultRead {
+    Value(Option<String>),
+    /// Read from its old keychain item and now kept in the vault.
+    Migrated(String),
+}
+
+fn prompts_are_not_worth_it(scope: &str) -> bool {
+    SILENT_MIGRATION_SCOPES.contains(&scope)
+}
+
+fn read_through_vault(
+    vault: &mut crate::vault::Vault,
+    account: &str,
+    read_keychain: impl FnOnce() -> Result<Option<String>, String>,
+) -> Result<VaultRead, String> {
+    match vault.get(account) {
+        Ok(crate::vault::Lookup::Found(secret)) => return Ok(VaultRead::Value(Some(secret))),
+        Ok(crate::vault::Lookup::Deleted) => return Ok(VaultRead::Value(None)),
+        // An entry that no longer decrypts falls back to the keychain copy.
+        Ok(crate::vault::Lookup::Unknown) | Err(_) => {}
+    }
+    // Nothing is recorded when the keychain has no copy: a refused keychain
+    // also answers "none", and a tombstone would then hide a real secret.
+    match read_keychain()? {
+        Some(secret) => {
+            vault.put(account, &secret)?;
+            Ok(VaultRead::Migrated(secret))
+        }
+        None => Ok(VaultRead::Value(None)),
+    }
+}
+
+fn with_vault<R: tauri::Runtime, T>(
+    app: &tauri::AppHandle<R>,
+    operation: impl FnOnce(&mut crate::vault::Vault) -> T,
+) -> Option<T> {
+    let mut slot = VAULT.lock().unwrap_or_else(PoisonError::into_inner);
+    if matches!(*slot, VaultSlot::Unopened) {
+        *slot = open_vault(app);
+    }
+    match &mut *slot {
+        VaultSlot::Ready(vault) => Some(operation(vault)),
+        VaultSlot::Unopened | VaultSlot::Unavailable => None,
+    }
+}
+
+fn open_vault<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VaultSlot {
+    let _keychain = KEYCHAIN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    if KEYCHAIN_ACCESS_DENIED.load(std::sync::atomic::Ordering::Relaxed) {
+        return VaultSlot::Unavailable;
+    }
+    let identifier = &app.config().identifier;
+    let Ok(entry) = keyring::Entry::new(
+        &secure_store_service(identifier),
+        &secure_store_account(identifier, VAULT_SCOPE, VAULT_KEY),
+    ) else {
+        return VaultSlot::Unopened;
+    };
+    let key = match entry.get_password() {
+        Ok(encoded) => match crate::vault::decode_key(&encoded) {
+            Some(key) => key,
+            // Never overwrite a master key we cannot read: the vault behind it
+            // would become unreadable.
+            None => return VaultSlot::Unavailable,
+        },
+        Err(keyring::Error::NoEntry) => {
+            let Ok(key) = crate::vault::generate_key() else {
+                return VaultSlot::Unopened;
+            };
+            if entry.set_password(&crate::vault::encode_key(&key)).is_err() {
+                return VaultSlot::Unopened;
+            }
+            key
+        }
+        Err(error) if is_access_denied(&error) => {
+            KEYCHAIN_ACCESS_DENIED.store(true, std::sync::atomic::Ordering::Relaxed);
+            return VaultSlot::Unavailable;
+        }
+        Err(_) => return VaultSlot::Unopened,
+    };
+    let Ok(dir) = crate::ext::resolve_store_dir(app) else {
+        return VaultSlot::Unopened;
+    };
+    match crate::vault::Vault::open(dir.join(VAULT_FILENAME), &key) {
+        Ok(vault) => VaultSlot::Ready(vault),
+        Err(_) => VaultSlot::Unopened,
+    }
+}
+
+/// Removes a secret's old keychain items once the vault holds it. Silent: an
+/// item this build may not touch without asking simply stays behind, unread.
+fn forget_keychain_secret<R: tauri::Runtime>(app: &tauri::AppHandle<R>, scope: &str, key: &str) {
+    let _keychain = KEYCHAIN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    without_keychain_prompts(|| {
+        if let Ok(location) = secret_location(app, scope, key) {
+            let _ = location.delete();
+        }
+        if let Ok(entries) = legacy_secret_entries(app, scope, key) {
+            for entry in entries {
+                let _ = entry.delete_credential();
+            }
+        }
+    });
+}
+
+#[cfg(target_os = "macos")]
+fn without_keychain_prompts<T>(operation: impl FnOnce() -> T) -> T {
+    struct RestorePrompts;
+    impl Drop for RestorePrompts {
+        fn drop(&mut self) {
+            #[allow(deprecated)]
+            let _ = unsafe { objc2_security::SecKeychain::set_user_interaction_allowed(true) };
+        }
+    }
+
+    #[allow(deprecated)]
+    let _ = unsafe { objc2_security::SecKeychain::set_user_interaction_allowed(false) };
+    let _restore = RestorePrompts;
+    operation()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn without_keychain_prompts<T>(operation: impl FnOnce() -> T) -> T {
+    operation()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temp_vault() -> (tempfile::TempDir, crate::vault::Vault) {
+        let dir = tempfile::tempdir().unwrap();
+        let key = crate::vault::generate_key().unwrap();
+        let vault = crate::vault::Vault::open(dir.path().join(VAULT_FILENAME), &key).unwrap();
+        (dir, vault)
+    }
+
+    #[test]
+    fn a_secret_is_read_from_the_keychain_once_then_from_the_vault() {
+        let (_dir, mut vault) = temp_vault();
+        let first = read_through_vault(&mut vault, "scope:key", || Ok(Some("legacy".into())));
+        assert!(matches!(first, Ok(VaultRead::Migrated(secret)) if secret == "legacy"));
+
+        let second = read_through_vault(&mut vault, "scope:key", || {
+            panic!("the keychain must not be asked again")
+        });
+        assert!(matches!(second, Ok(VaultRead::Value(Some(secret))) if secret == "legacy"));
+    }
+
+    #[test]
+    fn a_deleted_secret_is_not_revived_from_its_old_keychain_item() {
+        let (_dir, mut vault) = temp_vault();
+        vault.delete("scope:key").unwrap();
+
+        let read = read_through_vault(&mut vault, "scope:key", || {
+            panic!("a deleted secret must not hit the keychain")
+        });
+        assert!(matches!(read, Ok(VaultRead::Value(None))));
+    }
+
+    #[test]
+    fn a_missing_keychain_copy_is_not_remembered_as_deleted() {
+        let (_dir, mut vault) = temp_vault();
+        let missing = read_through_vault(&mut vault, "scope:key", || Ok(None));
+        assert!(matches!(missing, Ok(VaultRead::Value(None))));
+
+        let later = read_through_vault(&mut vault, "scope:key", || Ok(Some("granted".into())));
+        assert!(matches!(later, Ok(VaultRead::Migrated(secret)) if secret == "granted"));
+    }
 
     #[test]
     fn renaming_the_bundle_keeps_pointing_at_the_same_secrets() {

@@ -58,6 +58,25 @@ un artefact signé par la clé d'upstream est rejeté à la vérification. La cl
 privée correspondante vit dans le secret GitHub `TAURI_SIGNING_PRIVATE_KEY`
 du dépôt ; sans elle, plus aucune mise à jour ne peut être publiée.
 
+## 2 ter. Un seul élément dans le trousseau
+
+Upstream range chaque secret dans son propre élément du trousseau macOS :
+clés API, identifiants d'import, et chaque échantillon d'empreinte vocale.
+Un élément n'autorise que la signature de code qui l'a créé. Or les builds
+du fork sont signés ad-hoc, avec une signature qui change à chaque build :
+chaque élément redemandait donc l'accès séparément. Le nettoyage des empreintes
+expirées, lancé au démarrage, suffisait à enchaîner des dizaines de demandes.
+
+| Fichier | Changement |
+|---|---|
+| `plugins/store2/src/vault.rs` | coffre : secrets chiffrés (XChaCha20-Poly1305) dans `secure-store.vault.json`, clé maîtresse dans un seul élément du trousseau |
+| `plugins/store2/src/commands.rs` | lecture coffre d'abord ; un ancien élément est lu une dernière fois puis migré ; suppressions dans le trousseau sans interaction (`SecKeychainSetUserInteractionAllowed`) |
+
+Il reste au plus une demande par nouveau build, pour la clé maîtresse. Les
+empreintes candidates (`voiceprint_candidates`) ne sont migrées que si le
+trousseau les livre sans demander. Si la clé maîtresse est refusée, le
+comportement d'origine, un élément par secret, reprend.
+
 ## 3. Déverrouillage des fonctions Pro
 
 Une seule ligne, volontairement : `isPro: true` dans le contexte de

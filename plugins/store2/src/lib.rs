@@ -2,6 +2,7 @@ mod chunked;
 mod commands;
 mod error;
 mod ext;
+mod vault;
 
 pub use commands::{
     delete_secret_blocking, read_secret, read_secret_blocking, write_secret, write_secret_blocking,

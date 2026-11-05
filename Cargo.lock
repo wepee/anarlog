@@ -17155,6 +17155,9 @@ name = "tauri-plugin-store2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "getrandom 0.3.4",
  "keyring",
  "objc2-security",
  "security-framework",
@@ -17169,6 +17172,7 @@ dependencies = [
  "tauri-plugin-settings",
  "tauri-plugin-store",
  "tauri-specta",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
 ]

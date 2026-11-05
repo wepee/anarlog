@@ -30,7 +30,7 @@ fn load_store_defaults(
     }
 }
 
-fn resolve_store_dir<R: tauri::Runtime>(
+pub(crate) fn resolve_store_dir<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<PathBuf, crate::Error> {
     let bundle_id: &str = app.config().identifier.as_ref();
