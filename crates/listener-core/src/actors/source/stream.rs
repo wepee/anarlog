@@ -81,31 +81,53 @@ fn resolve_capture_settings(
 // needs a PulseAudio/PipeWire mic capture path.
 const SWAPS_BLUETOOTH_DEFAULT_MIC: bool = cfg!(any(target_os = "macos", target_os = "windows"));
 
+// An explicit selection is always respected. Otherwise the system default is replaced when it is
+// not the mic the user talks into: the meeting app captures from another mic, or the default is
+// a closed MacBook's built-in mic, which hears nothing.
+//
 // Opening a Bluetooth headset's mic on Windows forces HFP: the headset gates the mic to silence
 // between words and the wearer's audio drops to 16 kHz. On macOS a HAL open does not, so capture
-// later sets the headset as the default input to complete A2DP→HFP/SCO. Only the system default
-// is swapped to wired; an explicit selection is respected.
+// later sets the headset as the default input to complete A2DP→HFP/SCO. A Bluetooth default is
+// therefore swapped to wired too.
 pub(super) fn active_mic_device(
     explicit: Option<String>,
     audio: &dyn AudioProvider,
 ) -> Option<String> {
-    if explicit.is_some() || !SWAPS_BLUETOOTH_DEFAULT_MIC {
+    if explicit.is_some() {
         return explicit;
     }
 
-    let replacement = anlg_audio_device::wired_input_replacing_bluetooth_default()?;
+    let (replacement, reason) = match anlg_audio_device::input_replacing_default() {
+        Some(replacement) => (
+            replacement.device,
+            replacement_log_reason(replacement.reason),
+        ),
+        None if SWAPS_BLUETOOTH_DEFAULT_MIC => (
+            anlg_audio_device::wired_input_replacing_bluetooth_default()?,
+            "bluetooth_default_mic",
+        ),
+        None => return None,
+    };
     let active = audio
         .list_mic_devices()
         .into_iter()
         .find(|name| *name == replacement.name);
     match &active {
-        Some(device) => tracing::info!(device = %device, "bluetooth_default_mic_replaced"),
+        Some(device) => tracing::info!(device = %device, reason, "default_mic_replaced"),
         None => tracing::warn!(
             device = %replacement.name,
-            "bluetooth_default_mic_replacement_unavailable"
+            reason,
+            "default_mic_replacement_unavailable"
         ),
     }
     active
+}
+
+fn replacement_log_reason(reason: anlg_audio_device::InputReplacementReason) -> &'static str {
+    match reason {
+        anlg_audio_device::InputReplacementReason::InUseByAnotherApp => "mic_in_use_by_another_app",
+        anlg_audio_device::InputReplacementReason::ClosedLid => "built_in_mic_lid_closed",
+    }
 }
 
 async fn start_streams(

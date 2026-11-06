@@ -81,8 +81,129 @@ fn resolve_headphone_only_output(
 pub fn wired_input_replacing_bluetooth_default() -> Option<AudioDevice> {
     let backend = backend();
     let default = backend.get_default_input_device().ok().flatten()?;
-    let inputs = backend.list_input_devices().unwrap_or_default();
+    let lid_closed = built_in_mic_silenced_by_closed_lid();
+    let inputs = backend
+        .list_input_devices()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|device| !(lid_closed && device.transport_type == TransportType::BuiltIn))
+        .collect();
     resolve_wired_input_replacement(&default, inputs)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputReplacementReason {
+    /// Another app, typically the meeting, is capturing from this mic.
+    InUseByAnotherApp,
+    /// The default is a laptop's built-in mic, which the hardware silences while the lid is closed.
+    ClosedLid,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InputReplacement {
+    pub device: AudioDevice,
+    pub reason: InputReplacementReason,
+}
+
+/// The mic to capture instead of the system default when the user has not picked one.
+///
+/// macOS keeps the built-in mic as the default input when a USB mic is plugged in, while the
+/// meeting app may use any mic it was set to. The mic another app is capturing from is the one
+/// the user set up for the call, so it wins over the default; with no such app, a default that
+/// cannot hear anything (a closed MacBook's built-in mic) is replaced by the best other input.
+pub fn input_replacing_default() -> Option<InputReplacement> {
+    let backend = backend();
+    let default = backend.get_default_input_device().ok().flatten();
+    let inputs = backend.list_input_devices().unwrap_or_default();
+    let in_use = backend.running_input_devices().unwrap_or_default();
+    resolve_input_replacing_default(
+        default.as_ref(),
+        inputs,
+        &in_use,
+        built_in_mic_silenced_by_closed_lid(),
+    )
+}
+
+fn resolve_input_replacing_default(
+    default: Option<&AudioDevice>,
+    inputs: Vec<AudioDevice>,
+    in_use: &[AudioDevice],
+    lid_closed: bool,
+) -> Option<InputReplacement> {
+    let can_hear = |device: &AudioDevice| {
+        device.direction == AudioDirection::Input
+            && !(lid_closed && device.transport_type == TransportType::BuiltIn)
+            && !name_suggests_non_microphone(&device.name)
+    };
+
+    let default_in_use =
+        default.is_some_and(|default| in_use.iter().any(|device| device.id == default.id));
+    if !(default_in_use && default.is_some_and(can_hear)) {
+        let others: Vec<&AudioDevice> = in_use
+            .iter()
+            .filter(|device| can_hear(device))
+            .filter(|device| default.is_none_or(|default| device.id != default.id))
+            .collect();
+        // Virtual inputs are often loopbacks, such as a meeting app capturing shared sound. One
+        // that calls itself a microphone (a noise-cancelling mic) is taken only when no physical
+        // mic is in use.
+        let meeting_mic = others
+            .iter()
+            .find(|device| device.transport_type != TransportType::Virtual)
+            .or_else(|| {
+                others
+                    .iter()
+                    .find(|device| name_suggests_microphone(&device.name))
+            });
+        if let Some(device) = meeting_mic {
+            return Some(InputReplacement {
+                device: (*device).clone(),
+                reason: InputReplacementReason::InUseByAnotherApp,
+            });
+        }
+    }
+
+    let default = default?;
+    if !(lid_closed && default.transport_type == TransportType::BuiltIn) {
+        return None;
+    }
+
+    inputs
+        .into_iter()
+        .filter(|device| device.id != default.id && can_hear(device))
+        .filter_map(|device| {
+            closed_lid_input_rank(device.transport_type).map(|rank| (rank, device))
+        })
+        .min_by_key(|(rank, device)| (*rank, !name_suggests_microphone(&device.name)))
+        .map(|(_, device)| InputReplacement {
+            device,
+            reason: InputReplacementReason::ClosedLid,
+        })
+}
+
+// A USB mic is the usual reason to work with the lid closed. A headset the system did not make
+// the default is likely not being worn, and a display's mic is far from the user.
+fn closed_lid_input_rank(transport: TransportType) -> Option<u8> {
+    match transport {
+        TransportType::Usb => Some(0),
+        TransportType::Pci | TransportType::Unknown => Some(1),
+        TransportType::Bluetooth => Some(2),
+        TransportType::Hdmi => Some(3),
+        TransportType::BuiltIn | TransportType::Virtual => None,
+    }
+}
+
+/// Whether a laptop lid is closed, which disconnects its built-in microphone in hardware.
+pub fn built_in_mic_silenced_by_closed_lid() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos::lid_closed()
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
 }
 
 fn resolve_wired_input_replacement(
@@ -409,6 +530,11 @@ pub trait AudioDeviceBackend {
         Ok(Vec::new())
     }
 
+    /// Input devices that another process is capturing from right now.
+    fn running_input_devices(&self) -> Result<Vec<AudioDevice>, Error> {
+        Ok(Vec::new())
+    }
+
     fn list_input_devices(&self) -> Result<Vec<AudioDevice>, Error> {
         Ok(self
             .list_devices()?
@@ -570,6 +696,73 @@ mod tests {
 
     fn input(id: &str, transport: TransportType) -> AudioDevice {
         AudioDevice::new(id, id, AudioDirection::Input, transport)
+    }
+
+    fn replacement(
+        default: &AudioDevice,
+        inputs: &[AudioDevice],
+        in_use: &[AudioDevice],
+        lid_closed: bool,
+    ) -> Option<(String, InputReplacementReason)> {
+        resolve_input_replacing_default(Some(default), inputs.to_vec(), in_use, lid_closed)
+            .map(|replacement| (replacement.device.id.0, replacement.reason))
+    }
+
+    #[test]
+    fn follows_the_mic_a_meeting_app_captures_instead_of_the_default() {
+        let builtin = input("builtin", TransportType::BuiltIn);
+        let usb = input("usb", TransportType::Usb);
+        let inputs = [builtin.clone(), usb.clone()];
+
+        assert_eq!(
+            replacement(&builtin, &inputs, std::slice::from_ref(&usb), false),
+            Some(("usb".into(), InputReplacementReason::InUseByAnotherApp))
+        );
+        assert_eq!(
+            replacement(&builtin, &inputs, &[builtin.clone(), usb], false),
+            None,
+            "the default stays when the meeting uses it too"
+        );
+    }
+
+    #[test]
+    fn ignores_loopbacks_but_follows_a_virtual_microphone() {
+        let builtin = input("builtin", TransportType::BuiltIn);
+        let loopback = input("ZoomAudioDevice", TransportType::Virtual);
+        let krisp = input("Krisp Microphone", TransportType::Virtual);
+
+        assert_eq!(
+            replacement(&builtin, &[], std::slice::from_ref(&loopback), false),
+            None
+        );
+        assert_eq!(
+            replacement(&builtin, &[], &[loopback, krisp], false),
+            Some((
+                "Krisp Microphone".into(),
+                InputReplacementReason::InUseByAnotherApp
+            ))
+        );
+    }
+
+    #[test]
+    fn replaces_the_built_in_mic_of_a_closed_laptop() {
+        let builtin = input("builtin", TransportType::BuiltIn);
+        let inputs = [
+            builtin.clone(),
+            input("airpods", TransportType::Bluetooth),
+            input("usb", TransportType::Usb),
+        ];
+
+        assert_eq!(
+            replacement(&builtin, &inputs, &[], true),
+            Some(("usb".into(), InputReplacementReason::ClosedLid))
+        );
+        assert_eq!(replacement(&builtin, &inputs, &[], false), None);
+        assert_eq!(
+            replacement(&builtin, &inputs, std::slice::from_ref(&builtin), true),
+            Some(("usb".into(), InputReplacementReason::ClosedLid)),
+            "a meeting stuck on the silenced mic does not keep it"
+        );
     }
 
     #[test]
