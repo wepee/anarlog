@@ -20,6 +20,8 @@ permissions = [
     "allow-audio-has-speech",
     "allow-audio-path",
     "allow-audio-peaks",
+    "allow-audio-availability",
+    "allow-audio-download",
     "allow-audio-copy",
     "allow-session-dir",
     "allow-load-session-content",

@@ -18,6 +18,8 @@ const COMMANDS: &[&str] = &[
     "audio_has_speech",
     "audio_path",
     "audio_peaks",
+    "audio_availability",
+    "audio_download",
     "audio_copy",
     "session_dir",
     "load_session_content",

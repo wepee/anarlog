@@ -14,7 +14,10 @@ mod activity;
 mod archive;
 mod peaks;
 pub use activity::has_speech;
-pub use archive::{ArchiveOutcome, archive, archived_target};
+pub use archive::{
+    ArchiveOutcome, AudioAvailability, archive, archived_target, archives_to_offload, availability,
+    download, is_offloaded, mark_opened, opened_within,
+};
 pub use peaks::{AudioPeaks, PEAKS_PER_CHANNEL, cached_peaks, compute_peaks};
 
 const AUDIO_FORMATS: [&str; 3] = ["audio.mp3", "audio.wav", "audio.ogg"];

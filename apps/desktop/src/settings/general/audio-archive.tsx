@@ -24,6 +24,7 @@ import {
 import { SETTING_CONTROL_CLASS, SettingRow } from "~/settings/setting-row";
 
 const ARCHIVE_AFTER_OPTIONS = [
+  "immediately",
   "oneDay",
   "threeDays",
   "oneWeek",
@@ -67,6 +68,7 @@ export function AudioArchiveRow() {
   const disabled =
     settings.isLoading || !!settings.error || changeMutation.isPending;
   const copyByValue = {
+    immediately: t`Right after the meeting`,
     oneDay: t`After 1 day`,
     threeDays: t`After 3 days`,
     oneWeek: t`After 1 week`,
@@ -116,9 +118,10 @@ export function AudioArchiveRow() {
       </div>
       <p className="text-muted-foreground text-xs">
         <Trans>
-          Move older recordings to this folder, for example in iCloud Drive, to
-          free up space. They stay playable from the note and download again
-          when you play them. Audio file retention still applies.
+          Move recordings to this folder, for example in iCloud Drive, to free
+          up space. In iCloud, this Mac keeps only a placeholder: the recording
+          stays in the note and downloads when you press play. Audio file
+          retention still applies.
         </Trans>
       </p>
       {directory && (

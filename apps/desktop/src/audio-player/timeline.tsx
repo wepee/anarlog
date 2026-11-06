@@ -1,6 +1,7 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { useCallback, useMemo, useState } from "react";
 
-import { Pause, Play } from "@anlg/ui/components/icons";
+import { CircleNotch, Cloud, Pause, Play } from "@anlg/ui/components/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +33,11 @@ export function Timeline({
     setPlaybackRate,
     deleteRecording,
     isDeletingRecording,
+    audioOffloaded,
+    isDownloadingAudio,
+    audioDownloadFailed,
   } = useAudioPlayer();
+  const { t } = useLingui();
   const time = useAudioTime();
   const [showRateMenu, setShowRateMenu] = useState(false);
 
@@ -92,6 +97,10 @@ export function Timeline({
       leading={
         <button
           onClick={handleClick}
+          disabled={isDownloadingAudio}
+          aria-label={
+            audioOffloaded ? t`Download from iCloud and play` : undefined
+          }
           className={cn([
             "flex items-center justify-center",
             "h-7 w-7 rounded-full",
@@ -100,7 +109,14 @@ export function Timeline({
             "shrink-0 shadow-xs select-none",
           ])}
         >
-          {state === "playing" ? (
+          {isDownloadingAudio ? (
+            <CircleNotch
+              className="text-foreground h-3.5 w-3.5 animate-spin"
+              aria-hidden="true"
+            />
+          ) : audioOffloaded ? (
+            <Cloud className="text-foreground h-3.5 w-3.5" aria-hidden="true" />
+          ) : state === "playing" ? (
             <Pause className="text-foreground h-3.5 w-3.5" />
           ) : (
             <Play className="text-foreground h-3.5 w-3.5" />
@@ -158,11 +174,32 @@ export function Timeline({
         </>
       }
       main={
-        <div
-          ref={registerContainer}
-          className="h-6 min-w-0 flex-1"
-          style={{ width: "100%" }}
-        />
+        audioOffloaded ? (
+          <p
+            className={cn([
+              "flex h-6 min-w-0 flex-1 items-center truncate text-xs",
+              audioDownloadFailed ? "text-red-500" : "text-muted-foreground",
+            ])}
+            role={audioDownloadFailed ? "alert" : undefined}
+          >
+            {isDownloadingAudio ? (
+              <Trans>Downloading the recording from iCloud…</Trans>
+            ) : audioDownloadFailed ? (
+              <Trans>
+                Could not download the recording. Check your connection and try
+                again.
+              </Trans>
+            ) : (
+              <Trans>In iCloud: press play to download it.</Trans>
+            )}
+          </p>
+        ) : (
+          <div
+            ref={registerContainer}
+            className="h-6 min-w-0 flex-1"
+            style={{ width: "100%" }}
+          />
+        )
       }
     />
   );

@@ -117,23 +117,30 @@ elle était activée en dur par le mode debug.
 
 Upstream ne laisse plus choisir où vivent les enregistrements (fastrepl/anarlog#7723) : tout
 reste dans le dossier de l'app. Le fork ajoute à la place un archivage, sans
-toucher à ce choix : passé un délai (1 jour à 1 mois), l'audio d'une réunion
+toucher à ce choix : juste après la réunion (une fois la transcription faite)
+ou passé un délai (1 jour à 1 mois), l'audio d'une réunion
 est copié dans un dossier choisi par l'utilisateur, typiquement iCloud Drive,
 et le fichier local est remplacé par un lien symbolique. La lecture, les
 pics d'onde et la retranscription suivent ce lien sans le savoir.
 
 | Fichier | Changement |
 |---|---|
-| `crates/fs-sync-core/src/audio/archive.rs` | copie vérifiée, puis remplacement atomique du fichier par un lien |
+| `crates/fs-sync-core/src/audio/archive.rs` | copie vérifiée (date de modification conservée pour le cache des pics), remplacement atomique par un lien ; disponibilité (`SF_DATALESS`), téléchargement à la demande, sélection des fichiers à libérer |
 | `crates/fs-sync-core/src/audio/mod.rs` | supprimer un audio archivé supprime aussi le fichier archivé |
-| `plugins/fs-sync/src/{ext,commands}.rs` | `archive_session_audio_locked` ; `audio_path` renvoie le chemin résolu |
-| `plugins/transcription/src/audio_retention.rs` | passe d'archivage toutes les 10 min, puis éviction iCloud (`brctl evict`) |
+| `plugins/fs-sync/src/{ext,commands}.rs` | `archive_session_audio_locked` ; commandes `audio_availability` et `audio_download` ; `audio_path` renvoie le chemin résolu |
+| `plugins/transcription/src/audio_retention.rs` | passe d'archivage toutes les 2 min, puis éviction iCloud (`brctl evict`) |
+| `apps/desktop/src/audio-player/{provider,timeline}.tsx` | un audio retiré du Mac n'est pas chargé à l'ouverture de la note : « In iCloud », puis téléchargement au clic sur lecture |
 | `apps/desktop/src/settings/general/audio-archive.tsx` | réglage dans Réunions → Audio |
 
 Copier dans iCloud Drive ne libère rien tant que macOS garde la copie
 locale, et il ne l'évince que sous pression disque : d'où l'éviction
-explicite, une heure après la copie. Un dossier d'archive absent (disque
-débranché) suspend l'archivage au lieu de recréer le dossier en local.
+explicite, dix minutes après la copie (le temps du téléversement ; `brctl`
+refuse tant qu'il n'est pas fini et l'éviction est retentée). Un audio écouté
+il y a moins de 30 minutes n'est pas évincé. Un dossier d'archive absent
+(disque débranché) suspend l'archivage au lieu de recréer le dossier en local.
+
+Le lecteur d'upstream télécharge tout le fichier dès l'ouverture d'une note :
+sans le contrôle de disponibilité, chaque note ouverte rapatrierait son audio.
 
 ## 5. Après une mise à jour upstream
 

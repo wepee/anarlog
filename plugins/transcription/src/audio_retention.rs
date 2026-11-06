@@ -11,8 +11,8 @@ use crate::{BatchSessionRegistry, ListenerPluginExt};
 
 const SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 const VOICEPRINT_CLEANUP_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
-const ARCHIVE_INTERVAL: Duration = Duration::from_secs(10 * 60);
-const ARCHIVE_EVICT_INTERVAL: Duration = Duration::from_secs(60 * 60);
+const ARCHIVE_INTERVAL: Duration = Duration::from_secs(2 * 60);
+const ARCHIVE_EVICT_INTERVAL: Duration = Duration::from_secs(2 * 60);
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 const AUDIO_RETENTION_SETTING_ID: &str = "audio_retention";
@@ -288,6 +288,8 @@ async fn sweep<R: tauri::Runtime>(
 struct ArchiveSettings {
     directory: std::path::PathBuf,
     after_ms: i64,
+    /// "Right after the meeting": wait for the transcript rather than a delay.
+    needs_transcript: bool,
 }
 
 fn parse_archive_settings(directory: Option<&str>, after: Option<&str>) -> Option<ArchiveSettings> {
@@ -301,6 +303,13 @@ fn parse_archive_settings(directory: Option<&str>, after: Option<&str>) -> Optio
         return None;
     }
     let after = match parse_str(after).as_deref() {
+        Some("immediately") => {
+            return Some(ArchiveSettings {
+                directory: std::path::PathBuf::from(directory),
+                after_ms: 0,
+                needs_transcript: true,
+            });
+        }
         Some("oneDay") => AudioRetentionPolicy::OneDay,
         Some("threeDays") => AudioRetentionPolicy::ThreeDays,
         Some("oneMonth") => AudioRetentionPolicy::OneMonth,
@@ -309,6 +318,7 @@ fn parse_archive_settings(directory: Option<&str>, after: Option<&str>) -> Optio
     Some(ArchiveSettings {
         directory: std::path::PathBuf::from(directory),
         after_ms: after.duration_ms()?,
+        needs_transcript: false,
     })
 }
 
@@ -347,7 +357,7 @@ async fn archive_sweep<R: tauri::Runtime>(
         let old_enough = candidate
             .created_at_ms
             .is_some_and(|created_at| now_ms >= created_at.saturating_add(settings.after_ms));
-        if !old_enough {
+        if !old_enough || (settings.needs_transcript && !candidate.has_words) {
             continue;
         }
         let session_id = candidate.session_id;
@@ -375,6 +385,11 @@ async fn archive_sweep<R: tauri::Runtime>(
     Ok(())
 }
 
+// Time for iCloud to upload a fresh copy; `brctl` refuses earlier evictions.
+const UPLOAD_GRACE: Duration = Duration::from_secs(10 * 60);
+// A recording the user just played stays local while they listen.
+const RECENTLY_PLAYED: Duration = Duration::from_secs(30 * 60);
+
 /// Copying into iCloud Drive frees nothing while macOS keeps the local copy,
 /// and it only evicts under disk pressure. Ask it to drop archives that have
 /// had time to upload; `brctl` refuses files that are not uploaded yet, and
@@ -382,7 +397,6 @@ async fn archive_sweep<R: tauri::Runtime>(
 #[cfg(target_os = "macos")]
 fn evict_uploaded_archives(directory: &std::path::Path) {
     const BRCTL: &str = "/usr/bin/brctl";
-    const UPLOAD_GRACE: Duration = Duration::from_secs(60 * 60);
 
     let in_icloud = directory
         .to_string_lossy()
@@ -390,39 +404,25 @@ fn evict_uploaded_archives(directory: &std::path::Path) {
     if !in_icloud || !std::path::Path::new(BRCTL).exists() {
         return;
     }
-    let Ok(sessions) = std::fs::read_dir(directory) else {
-        return;
-    };
-    for session in sessions.flatten() {
-        let Ok(files) = std::fs::read_dir(session.path()) else {
-            continue;
-        };
-        for file in files.flatten() {
-            let path = file.path();
-            let is_audio = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("audio."));
-            let settled = file
-                .metadata()
-                .and_then(|metadata| metadata.modified())
-                .ok()
-                .and_then(|modified| modified.elapsed().ok())
-                .is_some_and(|age| age >= UPLOAD_GRACE);
-            if is_audio && settled {
-                let _ = std::process::Command::new(BRCTL)
-                    .arg("evict")
-                    .arg(&path)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .status();
-            }
-        }
+    for path in
+        tauri_plugin_fs_sync::audio::archives_to_offload(directory, UPLOAD_GRACE, RECENTLY_PLAYED)
+    {
+        let _ = std::process::Command::new(BRCTL)
+            .arg("evict")
+            .arg(&path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn evict_uploaded_archives(_directory: &std::path::Path) {}
+fn evict_uploaded_archives(directory: &std::path::Path) {
+    // Only iCloud needs an explicit eviction; keep the selection compiled
+    // and exercised on every platform.
+    let _ =
+        tauri_plugin_fs_sync::audio::archives_to_offload(directory, UPLOAD_GRACE, RECENTLY_PLAYED);
+}
 
 pub(crate) fn spawn<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
@@ -566,6 +566,13 @@ mod tests {
             std::path::PathBuf::from("/Users/me/iCloud")
         );
         assert_eq!(settings.after_ms, 7 * DAY_MS);
+        assert!(!settings.needs_transcript);
+
+        let settings =
+            parse_archive_settings(Some(r#""/Users/me/iCloud""#), Some(r#""immediately""#))
+                .unwrap();
+        assert_eq!(settings.after_ms, 0);
+        assert!(settings.needs_transcript);
 
         let settings =
             parse_archive_settings(Some(r#""/Users/me/iCloud""#), Some(r#""oneMonth""#)).unwrap();

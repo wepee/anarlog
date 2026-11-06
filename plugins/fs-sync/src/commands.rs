@@ -459,7 +459,30 @@ pub(crate) async fn audio_path<R: tauri::Runtime>(
     app.asset_protocol_scope()
         .allow_file(&path)
         .map_err(|error| error.to_string())?;
+    crate::audio::mark_opened(std::path::Path::new(&path));
     Ok(path)
+}
+
+/// [fork] Whether the recording is on this disk or only in its archive.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn audio_availability<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    session_id: String,
+) -> Result<crate::audio::AudioAvailability, String> {
+    let session_dir = resolve_session_dir(&app, &session_id)?;
+    spawn_blocking!({ crate::audio::availability(&session_dir).map_err(|e| e.to_string()) })
+}
+
+/// [fork] Downloads an offloaded archived recording; resolves once it is local.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn audio_download<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    session_id: String,
+) -> Result<(), String> {
+    let session_dir = resolve_session_dir(&app, &session_id)?;
+    spawn_blocking!({ crate::audio::download(&session_dir).map_err(|e| e.to_string()) })
 }
 
 #[tauri::command]
