@@ -2474,6 +2474,44 @@ describe("General Listener Slice", () => {
       consoleError.mockRestore();
     });
 
+    test("warns with the mic's name while it hears nothing", async () => {
+      await store.getState().start({
+        session_id: "session-a",
+        languages: [],
+        onboarding: false,
+        model: "test-model",
+        base_url: "http://localhost",
+        api_key: "test-key",
+        keywords: [],
+      });
+      const progressHandler =
+        listenCaptureStatusMock.mock.calls[
+          listenCaptureStatusMock.mock.calls.length - 1
+        ]?.[0];
+      const warning = vi
+        .spyOn(toast, "warning")
+        .mockImplementation(() => "warning");
+      const dismiss = vi.spyOn(toast, "dismiss");
+      const payload = {
+        type: "audio_error",
+        session_id: "session-a",
+        device: "MacBook Air Microphone",
+        is_fatal: false,
+      };
+
+      progressHandler?.({ payload: { ...payload, error: "audio_mic_silent" } });
+      expect(toast.warning).toHaveBeenCalledWith(
+        "MacBook Air Microphone isn't picking up any sound",
+        expect.objectContaining({ id: "audio-mic-silent-session-a" }),
+      );
+
+      progressHandler?.({ payload: { ...payload, error: "audio_mic_signal" } });
+      expect(toast.dismiss).toHaveBeenCalledWith("audio-mic-silent-session-a");
+      expect(store.getState().live.lastError).toBeNull();
+      warning.mockRestore();
+      dismiss.mockRestore();
+    });
+
     test("notifies about preserved audio without marking capture as failed", async () => {
       await store.getState().start({
         session_id: "session-a",

@@ -239,6 +239,30 @@ const clearLiveEventUnlisteners = (unlisteners?: (() => void)[]) => {
   unlisteners?.forEach((fn) => fn());
 };
 
+const openDeviceSettings = () => {
+  void import("~/store/zustand/tabs").then(({ useTabs }) =>
+    useTabs.getState().openNew({ type: "settings", state: { tab: "general" } }),
+  );
+};
+
+const notifySilentMicrophone = (
+  targetSessionId: string,
+  device: string | null,
+) => {
+  toast.warning(
+    device
+      ? `${device} isn't picking up any sound`
+      : "Your microphone isn't picking up any sound",
+    {
+      id: `audio-mic-silent-${targetSessionId}`,
+      duration: Infinity,
+      description:
+        "Your voice is not being recorded. Choose the microphone you are speaking into. A MacBook's built-in microphone is off while its lid is closed.",
+      action: { label: "Device settings", onClick: openDeviceSettings },
+    },
+  );
+};
+
 const notifyCaptureWarning = <T extends GeneralState>(
   get: StoreApi<T>["getState"],
   targetSessionId: string,
@@ -281,13 +305,7 @@ const notifyCaptureWarning = <T extends GeneralState>(
       secondaryAction: {
         dismissOnClick: false,
         label: "Device settings",
-        onClick: () => {
-          void import("~/store/zustand/tabs").then(({ useTabs }) =>
-            useTabs
-              .getState()
-              .openNew({ type: "settings", state: { tab: "general" } }),
-          );
-        },
+        onClick: openDeviceSettings,
       },
     });
   } else {
@@ -308,8 +326,10 @@ const createSessionEventHandlers = <T extends LiveStore>(
       return;
     }
 
-    if (payload.type === "stopped")
+    if (payload.type === "stopped") {
       toast.dismiss(`audio-capture-${targetSessionId}`);
+      toast.dismiss(`audio-mic-silent-${targetSessionId}`);
+    }
     if (payload.type === "started") {
       startSpeakerContextCapture(targetSessionId);
       const currentLive = get().live;
@@ -529,6 +549,22 @@ const createSessionEventHandlers = <T extends LiveStore>(
 
     if (
       payload.type === "audio_error" &&
+      payload.error === "audio_mic_silent"
+    ) {
+      notifySilentMicrophone(targetSessionId, payload.device);
+      return;
+    }
+
+    if (
+      payload.type === "audio_error" &&
+      payload.error === "audio_mic_signal"
+    ) {
+      toast.dismiss(`audio-mic-silent-${targetSessionId}`);
+      return;
+    }
+
+    if (
+      payload.type === "audio_error" &&
       !payload.is_fatal &&
       payload.error === "recording_recovered"
     ) {
@@ -556,9 +592,11 @@ const createSessionEventHandlers = <T extends LiveStore>(
           available:
             payload.device !== null || get().live.captureHealth.mic === true,
         });
-      else if (payload.error === "audio_mic_ready")
+      else if (payload.error === "audio_mic_ready") {
+        // Another mic opened; it is watched afresh.
+        toast.dismiss(`audio-mic-silent-${targetSessionId}`);
         observeSpeakerMicrophone(targetSessionId, { available: true });
-      else if (payload.error.startsWith("audio_mic_unavailable"))
+      } else if (payload.error.startsWith("audio_mic_unavailable"))
         observeSpeakerMicrophone(targetSessionId, {
           device: null,
           available: false,

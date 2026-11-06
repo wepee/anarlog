@@ -1,3 +1,4 @@
+mod mic_silence;
 mod pipeline;
 mod stream;
 
@@ -19,6 +20,7 @@ use crate::{
 };
 use anlg_audio::{AudioProvider, CaptureChannel, CaptureFrame};
 
+use mic_silence::{MicSilence, MicSilenceMonitor};
 use pipeline::Pipeline;
 use stream::start_source_loop;
 
@@ -40,6 +42,7 @@ pub enum SourceMsg {
     ChannelFailed(CaptureChannel, String),
     RetryCapture(Option<String>),
     InputChanged,
+    CheckMicRoute,
     OutputChanged,
     StreamFailed(String),
 }
@@ -89,6 +92,10 @@ pub struct SourceState {
     /// The device the current stream actually opened. Differs from `mic_device` when a Bluetooth
     /// default input was swapped for a wired one.
     pub(super) active_mic_device: Option<String>,
+    /// The last replacement mic the route check asked for, so a slow or failed open is not
+    /// requested again on every poll.
+    requested_mic_route: Option<String>,
+    mic_silence: MicSilenceMonitor,
     pub(super) onboarding: bool,
     pub(super) capture_mic_isolated: bool,
     pub(super) mic_muted: Arc<AtomicBool>,
@@ -166,6 +173,10 @@ impl DeviceChangeWatcher {
                     let _ = actor.cast(SourceMsg::OutputChanged);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // A meeting app can start or switch mics without the default input moving.
+                    if !anlg_audio_device::bluetooth_input_owns_system_defaults() {
+                        let _ = actor.cast(SourceMsg::CheckMicRoute);
+                    }
                     let Some(routing) = routing.as_mut() else {
                         continue;
                     };
@@ -269,6 +280,24 @@ fn emit_mic_isolation(st: &SourceState) {
     }
 }
 
+// The mic channel pads silence until it is ready, so only frames from an open mic count.
+fn observe_mic_silence(st: &mut SourceState, frame: &SourceFrame) {
+    if !frame.captured
+        || st.current_mode == ChannelMode::SpeakerOnly
+        || st.capture_health.mic != Some(true)
+    {
+        return;
+    }
+    match st.mic_silence.observe(&frame.capture.raw_mic) {
+        Some(MicSilence::Detected) => {
+            tracing::warn!(device = ?st.active_mic_device, "mic_silent_since_opened");
+            emit_channel_status(st, "audio_mic_silent".into());
+        }
+        Some(MicSilence::Ended) => emit_channel_status(st, "audio_mic_signal".into()),
+        None => {}
+    }
+}
+
 fn emit_channel_status(st: &SourceState, error: String) {
     st.runtime.emit_error(SessionErrorEvent::AudioError {
         session_id: st.session_id.clone(),
@@ -316,6 +345,8 @@ impl Actor for SourceActor {
                 session_id: args.session_id,
                 mic_device,
                 active_mic_device: None,
+                requested_mic_route: None,
+                mic_silence: MicSilenceMonitor::default(),
                 onboarding: args.onboarding,
                 capture_mic_isolated: false,
                 mic_muted: Arc::new(AtomicBool::new(false)),
@@ -412,6 +443,7 @@ impl Actor for SourceActor {
                     if st.mic_device.is_some() {
                         return Ok(());
                     }
+                    st.requested_mic_route = None;
                     st.capture_mic_isolated = mic_isolated(&st.mic_device, st.audio.as_ref());
                     if let Some(retry) = &st.capture_retry {
                         let _ = retry.send((
@@ -420,7 +452,31 @@ impl Actor for SourceActor {
                         ));
                     }
                 }
+                SourceMsg::CheckMicRoute => {
+                    if st.mic_device.is_some() || st.current_mode == ChannelMode::SpeakerOnly {
+                        return Ok(());
+                    }
+                    // Only a new replacement moves the mic. When the meeting stops capturing, the
+                    // mic it used stays, so muting in the meeting app does not bounce capture.
+                    let Some(replacement) = anlg_audio_device::input_replacing_default() else {
+                        return Ok(());
+                    };
+                    let name = Some(replacement.device.name);
+                    if name == st.active_mic_device || name == st.requested_mic_route {
+                        return Ok(());
+                    }
+                    let Some(device) = stream::active_mic_device(None, st.audio.as_ref()) else {
+                        return Ok(());
+                    };
+                    tracing::info!(device = %device, "mic_route_changed_retrying_microphone");
+                    st.requested_mic_route = Some(device.clone());
+                    st.capture_mic_isolated = mic_isolated(&st.mic_device, st.audio.as_ref());
+                    if let Some(retry) = &st.capture_retry {
+                        let _ = retry.send((Some(device), true));
+                    }
+                }
                 SourceMsg::RetryCapture(device) => {
+                    st.requested_mic_route = None;
                     st.mic_device = device.clone();
                     st.capture_mic_isolated = mic_isolated(&st.mic_device, st.audio.as_ref());
                     if let Some(retry) = &st.capture_retry {
@@ -448,6 +504,7 @@ impl Actor for SourceActor {
                     }
                     if channel == CaptureChannel::Mic {
                         st.active_mic_device = device;
+                        st.mic_silence.reset();
                         let swapped = st.mic_device.as_ref().map_or(
                             stream::active_mic_device(None, st.audio.as_ref()).is_some(),
                             |requested| st.active_mic_device.as_ref() != Some(requested),
@@ -498,6 +555,7 @@ impl Actor for SourceActor {
                         let Some(frame) = frame else {
                             break;
                         };
+                        observe_mic_silence(st, &frame);
                         let now = std::time::Instant::now();
                         if !frame.captured {
                             st.healthy_since = None;
