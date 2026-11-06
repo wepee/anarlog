@@ -1198,6 +1198,10 @@ msgstr "Could not delete the automation"
 msgid "Could not delete this note. Please try again."
 msgstr "Could not delete this note. Please try again."
 
+#: src/audio-player/timeline.tsx
+msgid "Could not download the recording. Check your connection and try again."
+msgstr "Could not download the recording. Check your connection and try again."
+
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Could not export. Check the export location in Settings and try again."
 msgstr "Could not export. Check the export location in Settings and try again."
@@ -1507,6 +1511,10 @@ msgstr "Don't save"
 msgid "Download"
 msgstr "Download"
 
+#: src/audio-player/timeline.tsx
+msgid "Download from iCloud and play"
+msgstr "Download from iCloud and play"
+
 #: src/settings/general/e2ee-setup.tsx
 msgid "Download recovery key (.txt)"
 msgstr "Download recovery key (.txt)"
@@ -1528,6 +1536,10 @@ msgstr "Downloading BlackMushi {0}{progress}"
 #: src/sidebar/toast/registry.tsx
 msgid "Downloading model"
 msgstr "Downloading model"
+
+#: src/audio-player/timeline.tsx
+msgid "Downloading the recording from iCloud…"
+msgstr "Downloading the recording from iCloud…"
 
 #: src/settings/automations/index.tsx
 #: src/settings/automations/workflow-builder.tsx
@@ -2057,6 +2069,10 @@ msgstr "In {totalSeconds}s"
 msgid "in {weeks} weeks"
 msgstr "in {weeks} weeks"
 
+#: src/audio-player/timeline.tsx
+msgid "In iCloud: press play to download it."
+msgstr "In iCloud: press play to download it."
+
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Include"
 msgstr "Include"
@@ -2483,8 +2499,8 @@ msgid "Move down"
 msgstr "Move down"
 
 #: src/settings/general/audio-archive.tsx
-msgid "Move older recordings to this folder, for example in iCloud Drive, to free up space. They stay playable from the note and download again when you play them. Audio file retention still applies."
-msgstr "Move older recordings to this folder, for example in iCloud Drive, to free up space. They stay playable from the note and download again when you play them. Audio file retention still applies."
+msgid "Move recordings to this folder, for example in iCloud Drive, to free up space. In iCloud, this Mac keeps only a placeholder: the recording stays in the note and downloads when you press play. Audio file retention still applies."
+msgstr "Move recordings to this folder, for example in iCloud Drive, to free up space. In iCloud, this Mac keeps only a placeholder: the recording stays in the note and downloads when you press play. Audio file retention still applies."
 
 #: src/calendar/components/event-chip.tsx
 msgid "Move this note"
@@ -3294,6 +3310,10 @@ msgstr "Review summary"
 #: src/settings/developers/api-key-row.tsx
 msgid "Revoke"
 msgstr "Revoke"
+
+#: src/settings/general/audio-archive.tsx
+msgid "Right after the meeting"
+msgstr "Right after the meeting"
 
 #: src/settings/dictation-shortcut.tsx
 msgid "Right Command"
