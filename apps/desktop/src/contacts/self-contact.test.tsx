@@ -1,10 +1,12 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { HumanRecord } from "./queries";
+import type { HumanRecord, OrganizationRecord } from "./queries";
 
 const mocks = vi.hoisted(() => ({
   humans: [] as HumanRecord[],
+  organizations: [] as OrganizationRecord[],
   togglePin: vi.fn(),
   selectContact: vi.fn(),
   contextMenu: vi.fn(),
@@ -16,6 +18,10 @@ vi.mock("~/auth", () => ({
   useOptionalAuth: () => ({
     session: mocks.authId ? { user: { id: mocks.authId } } : null,
   }),
+  useAuth: () => null,
+}));
+vi.mock("~/auth/useConnections", () => ({
+  useConnections: () => ({ data: [] }),
 }));
 vi.mock("~/shared/owner-user", () => ({ useOwnerUserId: () => mocks.ownerId }));
 vi.mock("~/shared/hooks/useNativeContextMenu", () => ({
@@ -31,7 +37,7 @@ vi.mock("~/store/zustand/tabs", () => ({
 }));
 vi.mock("./queries", () => ({
   useHumans: () => mocks.humans,
-  useOrganizations: () => [],
+  useOrganizations: () => mocks.organizations,
   useHumanSessions: () => [],
   toggleContactPin: mocks.togglePin,
   deleteHuman: vi.fn(),
@@ -48,6 +54,12 @@ vi.mock("./contact-summary", () => ({
 }));
 vi.mock("./related-notes", () => ({ RelatedNotesSection: () => null }));
 vi.mock("./new-person-form", () => ({ NewPersonForm: () => null }));
+vi.mock("~/crm/connection", () => ({
+  crmProvidersQueryOptions: () => ({
+    queryKey: ["crm", "providers"],
+    queryFn: () => Promise.resolve([{ id: "attio", name: "Attio" }]),
+  }),
+}));
 vi.mock("./shared", () => ({
   ContactFacehash: () => null,
   ColumnHeader: ({
@@ -82,6 +94,7 @@ function human(id: string, name: string, pinned = false): HumanRecord {
     pinOrder: 0,
     avatarDataUrl: null,
     summary: null,
+    additionalEmails: [],
   };
 }
 
@@ -90,6 +103,7 @@ beforeEach(() => {
   mocks.ownerId = "self";
   mocks.authId = null;
   mocks.humans = [human("other", "Alice", true), human("self", "Zoe")];
+  mocks.organizations = [];
   mocks.togglePin.mockResolvedValue(undefined);
 });
 afterEach(cleanup);
@@ -118,29 +132,25 @@ it("keeps your unpinned card before draggable pins and visible during search", (
 });
 
 it("renders your details without edit, photo, merge, or delete controls", () => {
-  const { rerender } = render(
-    <DetailsColumn
-      human={mocks.humans[1]}
-      humans={mocks.humans}
-      organizations={[]}
-      handleSessionClick={vi.fn()}
-      onDelete={vi.fn()}
-    />,
+  const queryClient = new QueryClient();
+  const details = (human: HumanRecord) => (
+    <QueryClientProvider client={queryClient}>
+      <DetailsColumn
+        human={human}
+        humans={mocks.humans}
+        organizations={[]}
+        handleSessionClick={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    </QueryClientProvider>
   );
+  const { rerender } = render(details(mocks.humans[1]));
   expect(screen.queryByRole("textbox")).toBeNull();
   expect(screen.queryByRole("button", { name: "Change photo" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Contact options" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Merge" })).toBeNull();
   expect(screen.getByText("Engineer")).not.toBeNull();
-  rerender(
-    <DetailsColumn
-      human={mocks.humans[0]}
-      humans={mocks.humans}
-      organizations={[]}
-      handleSessionClick={vi.fn()}
-      onDelete={vi.fn()}
-    />,
-  );
+  rerender(details(mocks.humans[0]));
   expect(screen.getAllByRole("textbox").length).toBeGreaterThan(0);
   expect(
     screen.getByRole("button", { name: "Contact options" }),

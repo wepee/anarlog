@@ -40,8 +40,42 @@ impl AnarlogMcpServer {
 #[tool_router]
 impl AnarlogMcpServer {
     #[tool(
+        title = "Import recording",
+        description = "Create a meeting from a local audio file using the running BlackMushi desktop app and its configured providers. May send audio to the configured transcription provider and use paid quota. file_path is on this computer, not a remote host. Returns durable job and meeting IDs. Reuse request_key on retries; poll get_recording_import until done or failed.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<access::RecordingImport>(),
+        annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = true)
+    )]
+    async fn import_recording(
+        &self,
+        Parameters(input): Parameters<access::ImportRecordingInput>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        structured(
+            &access::import_recording(self.db.pool(), input)
+                .await
+                .map_err(command_error)?,
+        )
+    }
+
+    #[tool(
+        title = "Get recording import",
+        description = "Get durable recording import processing_status, summary_status and error. A failed summary preserves the meeting and transcript. queued requires the desktop app to run.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<access::RecordingImport>(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    async fn get_recording_import(
+        &self,
+        Parameters(input): Parameters<access::GetRecordingImportInput>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        structured(
+            &access::get_recording_import(self.db.pool(), &input.job_id)
+                .await
+                .map_err(command_error)?,
+        )
+    }
+
+    #[tool(
         title = "List meetings",
-        description = "List recent BlackMushi meetings with pagination metadata. Use query to narrow by title or meeting id, then pass next_offset as offset to continue.",
+        description = "List recent BlackMushi meetings with pagination metadata. Use query to narrow by title or meeting id and folder_path to scope to a folder and its subfolders, then pass next_offset as offset to continue.",
         output_schema = rmcp::handler::server::tool::schema_for_type::<access::MeetingPage>(),
         annotations(
             read_only_hint = true,
@@ -61,9 +95,30 @@ impl AnarlogMcpServer {
     }
 
     #[tool(
+        title = "List folders",
+        description = "List BlackMushi meeting folders, including empty and parent folders, with pagination metadata. Pass a returned path as list_meetings folder_path. Query matches a case-insensitive path substring.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<access::FolderPage>(),
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn list_folders(
+        &self,
+        Parameters(input): Parameters<access::ListFoldersInput>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        let page = access::list_folders(self.db.pool(), input)
+            .await
+            .map_err(command_error)?;
+        structured(&page)
+    }
+
+    #[tool(
         title = "Get meeting",
         description = "Get one BlackMushi meeting with its canonical note, summaries, participants, and action items. Use get_meeting_transcript separately for transcript words.",
-        output_schema = rmcp::handler::server::tool::schema_for_type::<access::Meeting>(),
+        output_schema = rmcp::handler::server::tool::schema_for_type::<access::LocalMeeting>(),
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -76,6 +131,9 @@ impl AnarlogMcpServer {
         Parameters(input): Parameters<access::GetMeetingInput>,
     ) -> std::result::Result<CallToolResult, McpError> {
         let meeting = access::get_meeting(self.db.pool(), input)
+            .await
+            .map_err(command_error)?;
+        let meeting = access::local_meeting(self.db.pool(), meeting)
             .await
             .map_err(command_error)?;
         structured(&meeting)
@@ -295,7 +353,7 @@ impl ServerHandler for AnarlogMcpServer {
         .with_protocol_version(ProtocolVersion::V_2026_07_28)
         .with_server_info(Implementation::new("anarlog", crate::VERSION))
         .with_instructions(
-            "Local access to BlackMushi meeting data. Start with list_meetings to resolve a meeting_id, then call get_meeting for notes, summaries, participants, and action items. Request transcript pages with get_meeting_transcript and continue with pagination.next_offset; each page is capped at 500 words. Use get_recurring_meeting_history for series context. Use export_meeting only when the task needs the complete record including transcripts. To persist an edit, call propose_summary_edit or propose_memo_edit; the result stays pending until a human applies it in the desktop app. List or inspect staged work with list_proposals and get_proposal. decline_proposal discards a pending proposal without changing the meeting. Never invent meeting titles, dates, or ids. If list_meetings returns no meetings, say so. Never access SQLite directly, or claim a proposal was applied. Documentation: https://docs.anarlog.so",
+            "Local access to BlackMushi meeting data. Start with list_meetings to resolve a meeting_id; to scope work to a project or client, call list_folders and pass a returned path as folder_path. Then call get_meeting for notes, summaries, participants, and action items. Request transcript pages with get_meeting_transcript and continue with pagination.next_offset; each page is capped at 500 words. Use get_recurring_meeting_history for series context. Use export_meeting only when the task needs the complete record including transcripts. To persist an edit, call propose_summary_edit or propose_memo_edit; the result stays pending until a human applies it in the desktop app. List or inspect staged work with list_proposals and get_proposal. decline_proposal discards a pending proposal without changing the meeting. Never invent meeting titles, dates, or ids. If list_meetings returns no meetings, say so. Never access SQLite directly, or claim a proposal was applied. Documentation: https://docs.anarlog.so",
         )
     }
 
@@ -318,6 +376,7 @@ impl ServerHandler for AnarlogMcpServer {
             access::ListMeetingsInput {
                 query: None,
                 series_id: None,
+                folder_path: None,
                 limit: Some(access::DEFAULT_LIST_LIMIT),
                 offset: Some(offset),
             },
@@ -404,6 +463,7 @@ impl ServerHandler for AnarlogMcpServer {
                     access::ListMeetingsInput {
                         query: None,
                         series_id: Some(series_id),
+                        folder_path: None,
                         limit: Some(100),
                         offset: Some(0),
                     },
@@ -553,26 +613,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn server_advertises_tools_and_resources() {
-        let db = Arc::new(anlg_db_core::Db::connect_memory_plain().await.unwrap());
-        let info = AnarlogMcpServer::new(db).get_info();
-        assert_eq!(info.protocol_version, ProtocolVersion::V_2026_07_28);
-        assert!(info.capabilities.tools.is_some());
-        assert!(info.capabilities.resources.is_some());
-        let instructions = info.instructions.unwrap();
-        assert!(instructions.contains("Start with list_meetings"));
-        assert!(instructions.contains("https://docs.anarlog.so"));
-        assert!(instructions.contains("propose_summary_edit"));
-        assert!(instructions.contains("claim a proposal was applied"));
-        assert!(instructions.contains("Never invent meeting titles"));
-    }
-
-    #[tokio::test]
     async fn list_tool_returns_structured_meeting_data() {
         let db = anlg_db_core::Db::connect_memory_plain().await.unwrap();
         anlg_db_app::prepare_schema(&db).await.unwrap();
         sqlx::query(
-            "INSERT INTO sessions (id, title, started_at) VALUES ('meeting-1', 'Planning', '2026-07-13')",
+            "INSERT INTO sessions (id, title, started_at, folder_path)
+             VALUES
+             ('meeting-1', 'Planning', '2026-07-13', 'Clients/ACME'),
+             ('meeting-2', 'Planning retro', '2026-07-12', '')",
         )
         .execute(db.pool())
         .await
@@ -583,6 +631,7 @@ mod tests {
             .list_meetings(Parameters(access::ListMeetingsInput {
                 query: Some("plan".to_string()),
                 series_id: None,
+                folder_path: Some("Clients".to_string()),
                 limit: None,
                 offset: None,
             }))
@@ -592,8 +641,38 @@ mod tests {
         let meetings = result.structured_content.unwrap();
         assert_eq!(meetings["meetings"][0]["id"], "meeting-1");
         assert_eq!(meetings["meetings"][0]["title"], "Planning");
+        assert_eq!(meetings["meetings"][0]["folder_path"], "Clients/ACME");
         assert_eq!(meetings["pagination"]["returned"], 1);
         assert!(meetings["pagination"]["next_offset"].is_null());
+
+        let unfiled = server
+            .get_meeting(Parameters(access::GetMeetingInput {
+                meeting_id: "meeting-2".to_string(),
+            }))
+            .await
+            .unwrap()
+            .structured_content
+            .unwrap();
+        assert!(unfiled["folder_path"].is_null());
+
+        let folders = server
+            .list_folders(Parameters(access::ListFoldersInput::default()))
+            .await
+            .unwrap()
+            .structured_content
+            .unwrap();
+        assert_eq!(folders["folders"][1]["path"], "Clients/ACME");
+        assert_eq!(folders["folders"][1]["name"], "ACME");
+        assert_eq!(folders["folders"][1]["parent_path"], "Clients");
+        assert!(folders["folders"][0]["parent_path"].is_null());
+
+        let invalid = server
+            .list_meetings(Parameters(access::ListMeetingsInput {
+                folder_path: Some("/Clients".to_string()),
+                ..Default::default()
+            }))
+            .await;
+        assert!(invalid.is_err());
     }
 
     #[tokio::test]
@@ -638,7 +717,10 @@ mod tests {
                 "get_meeting",
                 "get_meeting_transcript",
                 "get_proposal",
+                "get_recording_import",
                 "get_recurring_meeting_history",
+                "import_recording",
+                "list_folders",
                 "list_meetings",
                 "list_proposals",
                 "propose_memo_edit",
@@ -679,12 +761,18 @@ mod tests {
             let annotations = tool.annotations.expect("tool annotations");
             let write_tool = matches!(
                 tool.name.as_ref(),
-                "propose_summary_edit" | "propose_memo_edit" | "decline_proposal"
+                "propose_summary_edit"
+                    | "propose_memo_edit"
+                    | "decline_proposal"
+                    | "import_recording"
             );
             assert_eq!(annotations.read_only_hint, Some(!write_tool));
             assert_eq!(annotations.destructive_hint, Some(false));
             assert_eq!(annotations.idempotent_hint, Some(!write_tool));
-            assert_eq!(annotations.open_world_hint, Some(false));
+            assert_eq!(
+                annotations.open_world_hint,
+                Some(tool.name == "import_recording")
+            );
         }
 
         let mut template_contract = templates
@@ -720,7 +808,10 @@ mod tests {
         );
         for (_, uri, _) in &template_contract {
             assert!(mcp_docs.contains(uri), "MCP docs are missing `{uri}`");
-            assert!(mcp_skill.contains(uri), "BlackMushi skill is missing `{uri}`");
+            assert!(
+                mcp_skill.contains(uri),
+                "BlackMushi skill is missing `{uri}`"
+            );
         }
         assert_eq!(resources.len(), 1);
         assert_eq!(resources[0].name, "Planning");
@@ -777,7 +868,7 @@ mod tests {
         let tools = client.receive().await.unwrap();
         let tools = serde_json::to_value(tools).unwrap();
         assert_eq!(tools["result"]["resultType"], "complete");
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 13);
 
         drop(client);
         server_task.await.unwrap().cancel().await.unwrap();

@@ -1,3 +1,4 @@
+@import "@anlg/ui/globals.css";
 @import "./fonts.css";
 @import "./scrollbar.css" layer(base);
 @import "./scrollbar.utilities.css";
@@ -16,6 +17,10 @@ html[data-live-caption],
 html[data-live-caption] body,
 html[data-live-caption] #root {
   background: transparent !important;
+}
+
+html[data-rounded-window] #root {
+  border: 1px solid hsl(var(--border));
 }
 
 .undo-delete-toast-gauge {
@@ -303,28 +308,6 @@ html[data-live-caption] #root {
 .ProseMirror-active-search-match {
   background-color: rgb(234 179 8) !important;
   border-radius: 2px;
-}
-
-/* Sonner switches to an edge-to-edge mobile layout when the viewport is under
-   600px; a narrow desktop window should keep the regular bottom-right toast
-   layout. Selectors are doubled to out-rank sonner's mobile rules regardless
-   of stylesheet order. */
-@media (max-width: 600px) {
-  [data-sonner-toaster][data-sonner-toaster] {
-    width: var(--width);
-    left: auto;
-    right: var(--offset-right);
-  }
-
-  [data-sonner-toaster][data-sonner-toaster][data-y-position="bottom"] {
-    bottom: var(--offset-bottom);
-  }
-
-  [data-sonner-toaster][data-sonner-toaster] [data-sonner-toast] {
-    left: auto;
-    right: auto;
-    width: var(--width);
-  }
 }
 
 /*

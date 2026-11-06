@@ -1,3 +1,5 @@
+mod accepted;
+
 use anlg_api_auth::AuthContext;
 use axum::{
     Extension, Json, Router,
@@ -17,7 +19,9 @@ const MAX_EVENTS_PER_BATCH: usize = 64;
 const MAX_EVENT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_WITNESS_REQUEST_BYTES: usize = 64 * 1024 * 1024;
 const MAX_WITNESS_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
-const MAX_WITNESS_PAGE_BYTES: i32 = 48 * 1024 * 1024;
+// Keeps each page short enough to download on slow mobile networks. The first
+// event is always returned, so a maximum-size event still fits.
+const MAX_WITNESS_PAGE_BYTES: i32 = 16 * 1024 * 1024;
 const WITNESS_PAGE_SIZE: i32 = 1024;
 const LEGACY_WITNESS_PAGE_SIZE: i32 = 3;
 const WITNESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
@@ -148,8 +152,18 @@ struct PostgrestError {
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(read_e2ee_witness, publish_e2ee_witness, wait_e2ee_witness),
+    paths(
+        read_e2ee_witness,
+        publish_e2ee_witness,
+        wait_e2ee_witness,
+        accepted::read,
+        accepted::accept
+    ),
     components(schemas(
+        accepted::AcceptRequest,
+        accepted::AcceptResponse,
+        accepted::Receipt,
+        accepted::AcceptedPage,
         E2eeWitnessEvent,
         PublishE2eeWitnessRequest,
         PublishE2eeWitnessResponse,
@@ -166,6 +180,7 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 pub fn router() -> Router<ReplicaState> {
     Router::new()
+        .merge(accepted::router())
         .route(
             "/e2ee/witness/{workspace_id}",
             get(read_e2ee_witness).post(publish_e2ee_witness),
@@ -415,6 +430,7 @@ async fn read_witness_page(
         (status = 401, description = "Authentication required"),
         (status = 403, description = "Witness workspace access denied"),
         (status = 409, description = "Legacy witness requires an established device"),
+        (status = 503, description = "Publication busy; retry after the Retry-After delay"),
         (status = 502, description = "Witness service unavailable")
     )
 )]
@@ -429,6 +445,10 @@ async fn publish_e2ee_witness(
 )> {
     require_witness_workspace(&auth, &workspace_id)?;
     validate_publish_request(&request)?;
+    let _permit = state
+        .witness_writes
+        .try_acquire(&workspace_id)
+        .ok_or(SyncError::E2eeWitnessBusy)?;
     let events = request
         .events
         .iter()
@@ -641,7 +661,9 @@ fn map_postgrest_error(status: HttpStatusCode, bytes: &[u8]) -> SyncError {
             SyncError::E2eeWitnessForbidden
         }
         (_, Some("22023")) => SyncError::BadRequest("E2EE witness request is invalid".to_string()),
+        (_, Some("A0002")) => SyncError::CloudsyncUpgradeRequired,
         (_, Some("55000")) => SyncError::E2eeWitnessUninitialized,
+        (_, Some("55P03")) => SyncError::E2eeWitnessBusy,
         _ => SyncError::E2eeWitnessServiceUnavailable,
     }
 }
@@ -682,21 +704,91 @@ mod tests {
     const PAYLOAD_HASH: &str = "bSKYhMEmi7CrMtjaMV0P5S-RRyKL2DCje8n7KKlUlA0";
 
     fn test_router(server: &MockServer) -> Router {
-        router()
-            .with_state(ReplicaState::new(
+        test_router_with_state(
+            ReplicaState::new(
                 ReplicaConfig::new(server.uri(), "anon-key", "service-role-key").unwrap(),
+            ),
+            OWNER,
+        )
+    }
+
+    fn test_router_with_state(state: ReplicaState, workspace: &str) -> Router {
+        router().with_state(state).layer(Extension(AuthContext {
+            token: "user-token".to_string(),
+            claims: Claims {
+                sub: workspace.to_string(),
+                email: None,
+                entitlements: ["hyprnote_pro".to_string()].into_iter().collect(),
+                subscription_status: None,
+                trial_end: None,
+                has_payment_method: None,
+                referral_extension: None,
+            },
+        }))
+    }
+
+    #[tokio::test]
+    async fn witness_writes_cannot_exhaust_the_database_pool_across_workspaces() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/v1/rpc/publish_e2ee_freshness_events"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(std::time::Duration::from_millis(500))
+                    .set_body_json(
+                        json!([{"initialized_at":"2026-10-05T00:00:00Z","head_sequence":1}]),
+                    ),
+            )
+            .mount(&server)
+            .await;
+        let state = ReplicaState::new(
+            ReplicaConfig::new(server.uri(), "anon-key", "service-role-key").unwrap(),
+        );
+        let mut pending = Vec::new();
+        for index in 1..=4 {
+            let workspace = format!("00000000-0000-4000-8000-{index:012}");
+            pending.push(tokio::spawn(
+                test_router_with_state(state.clone(), &workspace).oneshot(request(
+                    Method::POST,
+                    &format!("/e2ee/witness/{workspace}"),
+                    Some(publish_body()),
+                )),
+            ));
+        }
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while server.received_requests().await.unwrap().len() < 4 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let router = test_router_with_state(state, OWNER);
+        let overloaded = router
+            .clone()
+            .oneshot(request(
+                Method::POST,
+                &format!("/e2ee/witness/{OWNER}"),
+                Some(publish_body()),
             ))
-            .layer(Extension(AuthContext {
-                token: "user-token".to_string(),
-                claims: Claims {
-                    sub: OWNER.to_string(),
-                    email: None,
-                    entitlements: ["hyprnote_pro".to_string()].into_iter().collect(),
-                    subscription_status: None,
-                    trial_end: None,
-                    has_payment_method: None,
-                },
-            }))
+            .await
+            .unwrap();
+        assert_eq!(overloaded.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(overloaded.headers()[header::RETRY_AFTER], "1");
+        for request in pending {
+            assert_eq!(request.await.unwrap().unwrap().status(), StatusCode::OK);
+        }
+        assert_eq!(
+            router
+                .oneshot(request(
+                    Method::POST,
+                    &format!("/e2ee/witness/{OWNER}"),
+                    Some(publish_body())
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
     }
 
     fn request(method: Method, path: &str, body: Option<Value>) -> Request<Body> {
@@ -716,6 +808,167 @@ mod tests {
         serde_json::from_slice(&bytes).unwrap()
     }
 
+    fn witness_row(initialized_at: Option<&str>, head: i64) -> Value {
+        json!({
+            "initialized_at": initialized_at,
+            "head_sequence": head,
+            "through_sequence": head,
+            "event_sequence": null,
+            "record_id": null,
+            "payload_hash": null,
+            "payload": null
+        })
+    }
+
+    fn publish_body() -> Value {
+        json!({
+            "initialize": false,
+            "events": [{
+                "recordId": RECORD_ID,
+                "payloadHash": PAYLOAD_HASH,
+                "payload": "opaque"
+            }]
+        })
+    }
+
+    #[tokio::test]
+    async fn acceptance_validates_receipts_and_exposes_a_retryable_base_conflict() {
+        for case in ["accepted", "wrong_receipt", "stale_base", "busy"] {
+            let server = MockServer::start().await;
+            let mutation = "11111111-1111-4111-8111-111111111111";
+            let upstream = if case == "busy" {
+                ResponseTemplate::new(500).set_body_json(json!({"code":"55P03"}))
+            } else if case == "stale_base" {
+                ResponseTemplate::new(409).set_body_json(json!({"code":"40001"}))
+            } else {
+                ResponseTemplate::new(200).set_body_json(json!([{
+                    "initialized_at":"2026-10-05T00:00:00Z", "head_sequence":1, "cloud_authority_after":0,
+                    "mutation_id": mutation, "receipts":[{"sequence":1,"recordId": RECORD_ID,
+                        "payloadHash": if case == "wrong_receipt" { RECORD_ID } else { PAYLOAD_HASH }}]
+                }]))
+            };
+            Mock::given(method("POST")).and(path("/rest/v1/rpc/accept_e2ee_replica_batch"))
+                .and(body_partial_json(json!({"p_actor_user_id":OWNER,"p_workspace_id":OWNER,"p_mutation_id":mutation,"p_base_sequence":0})))
+                .respond_with(upstream).mount(&server).await;
+            let mut body = publish_body();
+            body["mutationId"] = json!(mutation);
+            body["baseSequence"] = json!(0);
+            let response = test_router(&server)
+                .oneshot(request(
+                    Method::POST,
+                    &format!("/e2ee/witness/{OWNER}/accepted"),
+                    Some(body),
+                ))
+                .await
+                .unwrap();
+            let expected = match case {
+                "accepted" => StatusCode::OK,
+                "stale_base" => StatusCode::CONFLICT,
+                "busy" => StatusCode::SERVICE_UNAVAILABLE,
+                _ => StatusCode::BAD_GATEWAY,
+            };
+            assert_eq!(response.status(), expected, "{case}");
+            if case == "busy" {
+                assert_eq!(response.headers()[header::RETRY_AFTER], "1");
+            }
+            let body = response_json(response).await;
+            if case == "accepted" {
+                assert_eq!(body["receipts"][0]["sequence"], 1);
+            }
+            if case == "stale_base" {
+                assert_eq!(body["error"]["code"], "e2ee_replica_base_changed");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn busy_publication_does_not_queue_another_database_write_or_block_reads() {
+        let server = MockServer::start().await;
+        let mutation = "11111111-1111-4111-8111-111111111111";
+        Mock::given(method("POST"))
+            .and(path("/rest/v1/rpc/accept_e2ee_replica_batch"))
+            .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(200)).set_body_json(json!([{
+                "initialized_at":"2026-10-05T00:00:00Z", "head_sequence":1, "cloud_authority_after":0,
+                "mutation_id":mutation, "receipts":[{"sequence":1,"recordId":RECORD_ID,"payloadHash":PAYLOAD_HASH}]
+            }])))
+            .mount(&server).await;
+        Mock::given(method("POST"))
+            .and(path("/rest/v1/rpc/read_e2ee_freshness_page_v2"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!([witness_row(Some("2026-10-05T00:00:00Z"), 0)])),
+            )
+            .mount(&server)
+            .await;
+        let router = test_router(&server);
+        let mut body = publish_body();
+        body["mutationId"] = json!(mutation);
+        body["baseSequence"] = json!(0);
+        let pending = tokio::spawn(router.clone().oneshot(request(
+            Method::POST,
+            &format!("/e2ee/witness/{OWNER}/accepted"),
+            Some(body.clone()),
+        )));
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while server.received_requests().await.unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        for path in [
+            format!("/e2ee/witness/{OWNER}/accepted"),
+            format!("/e2ee/witness/{OWNER}"),
+        ] {
+            let request_body = if path.ends_with("accepted") {
+                body.clone()
+            } else {
+                publish_body()
+            };
+            let response = router
+                .clone()
+                .oneshot(request(Method::POST, &path, Some(request_body)))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(response.headers()[header::RETRY_AFTER], "1");
+        }
+        let read = router
+            .clone()
+            .oneshot(request(
+                Method::GET,
+                &format!("/e2ee/witness/{OWNER}"),
+                None,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(read.status(), StatusCode::OK);
+        assert_eq!(pending.await.unwrap().unwrap().status(), StatusCode::OK);
+        let throttled = router
+            .clone()
+            .oneshot(request(
+                Method::POST,
+                &format!("/e2ee/witness/{OWNER}/accepted"),
+                Some(body.clone()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(throttled.status(), StatusCode::SERVICE_UNAVAILABLE);
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        assert_eq!(
+            router
+                .oneshot(request(
+                    Method::POST,
+                    &format!("/e2ee/witness/{OWNER}/accepted"),
+                    Some(body)
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+    }
+
     #[tokio::test]
     async fn reads_a_stable_witness_page_through_the_service_role() {
         let server = MockServer::start().await;
@@ -729,7 +982,7 @@ mod tests {
                 "p_workspace_id": OWNER,
                 "p_after_sequence": 0,
                 "p_limit": 1024,
-                "p_max_bytes": 50331648
+                "p_max_bytes": 16777216
             })))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
                 "initialized_at": "2026-07-17T00:00:00Z",
@@ -777,15 +1030,10 @@ mod tests {
                 "p_after_sequence": 0,
                 "p_limit": 3
             })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
-                "initialized_at": "2026-07-17T00:00:00Z",
-                "head_sequence": 0,
-                "through_sequence": 0,
-                "event_sequence": null,
-                "record_id": null,
-                "payload_hash": null,
-                "payload": null
-            }])))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!([witness_row(Some("2026-07-17T00:00:00Z"), 0)])),
+            )
             .expect(1)
             .mount(&server)
             .await;
@@ -831,14 +1079,7 @@ mod tests {
             .oneshot(request(
                 Method::POST,
                 &format!("/e2ee/witness/{OWNER}"),
-                Some(json!({
-                    "initialize": false,
-                    "events": [{
-                        "recordId": RECORD_ID,
-                        "payloadHash": PAYLOAD_HASH,
-                        "payload": payload
-                    }]
-                })),
+                Some(publish_body()),
             ))
             .await
             .unwrap();
@@ -847,78 +1088,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn wait_returns_immediately_when_the_head_is_ahead() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/rest/v1/rpc/read_e2ee_freshness_page_v2"))
-            .and(body_partial_json(json!({
-                "p_actor_user_id": OWNER,
-                "p_workspace_id": OWNER,
-                "p_through_sequence": 0,
-                "p_limit": 1,
-                "p_max_bytes": 1024
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
-                "initialized_at": "2026-07-17T00:00:00Z",
-                "head_sequence": 5,
-                "through_sequence": 5,
-                "event_sequence": null,
-                "record_id": null,
-                "payload_hash": null,
-                "payload": null
-            }])))
-            .mount(&server)
-            .await;
+    async fn wait_resolves_immediately_when_head_is_ahead_or_uninitialized() {
+        for (case, initialized_at, head, after_sequence, expected_initialized) in [
+            (
+                "head ahead of the requested sequence",
+                Some("2026-07-17T00:00:00Z"),
+                5,
+                3,
+                true,
+            ),
+            ("uninitialized witness", None, 0, 0, false),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/rest/v1/rpc/read_e2ee_freshness_page_v2"))
+                .and(body_partial_json(json!({
+                    "p_actor_user_id": OWNER,
+                    "p_workspace_id": OWNER,
+                    "p_through_sequence": 0,
+                    "p_limit": 1,
+                    "p_max_bytes": 1024
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(json!([witness_row(initialized_at, head)])),
+                )
+                .mount(&server)
+                .await;
 
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            test_router(&server).oneshot(request(
-                Method::GET,
-                &format!("/e2ee/witness/{OWNER}/wait?afterSequence=3"),
-                None,
-            )),
-        )
-        .await
-        .expect("an advanced head must resolve the wait immediately")
-        .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = response_json(response).await;
-        assert_eq!(body["initialized"], true);
-        assert_eq!(body["headSequence"], 5);
-    }
-
-    #[tokio::test]
-    async fn wait_reports_an_uninitialized_witness_immediately() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/rest/v1/rpc/read_e2ee_freshness_page_v2"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
-                "initialized_at": null,
-                "head_sequence": 0,
-                "through_sequence": 0,
-                "event_sequence": null,
-                "record_id": null,
-                "payload_hash": null,
-                "payload": null
-            }])))
-            .mount(&server)
-            .await;
-
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            test_router(&server).oneshot(request(
-                Method::GET,
-                &format!("/e2ee/witness/{OWNER}/wait?afterSequence=0"),
-                None,
-            )),
-        )
-        .await
-        .expect("an uninitialized witness must resolve the wait immediately")
-        .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = response_json(response).await;
-        assert_eq!(body["initialized"], false);
-        assert_eq!(body["headSequence"], 0);
+            let response = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                test_router(&server).oneshot(request(
+                    Method::GET,
+                    &format!("/e2ee/witness/{OWNER}/wait?afterSequence={after_sequence}"),
+                    None,
+                )),
+            )
+            .await
+            .expect("witness waits should resolve immediately")
+            .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{case}");
+            let body = response_json(response).await;
+            assert_eq!(body["initialized"], expected_initialized, "{case}");
+            assert_eq!(body["headSequence"], head, "{case}");
+        }
     }
 
     #[derive(Clone)]
@@ -929,15 +1142,8 @@ mod tests {
     impl wiremock::Respond for HeadFromCounter {
         fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
             let head = self.head.load(std::sync::atomic::Ordering::SeqCst);
-            ResponseTemplate::new(200).set_body_json(json!([{
-                "initialized_at": "2026-07-17T00:00:00Z",
-                "head_sequence": head,
-                "through_sequence": head,
-                "event_sequence": null,
-                "record_id": null,
-                "payload_hash": null,
-                "payload": null
-            }]))
+            ResponseTemplate::new(200)
+                .set_body_json(json!([witness_row(Some("2026-07-17T00:00:00Z"), head)]))
         }
     }
 
@@ -996,14 +1202,7 @@ mod tests {
             .oneshot(request(
                 Method::POST,
                 &format!("/e2ee/witness/{OWNER}"),
-                Some(json!({
-                    "initialize": false,
-                    "events": [{
-                        "recordId": RECORD_ID,
-                        "payloadHash": PAYLOAD_HASH,
-                        "payload": "opaque"
-                    }]
-                })),
+                Some(publish_body()),
             ))
             .await
             .unwrap();
@@ -1052,15 +1251,10 @@ mod tests {
                 "p_actor_user_id": OWNER,
                 "p_workspace_id": OTHER
             })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
-                "initialized_at": "2026-08-15T00:00:00Z",
-                "head_sequence": 0,
-                "through_sequence": 0,
-                "event_sequence": null,
-                "record_id": null,
-                "payload_hash": null,
-                "payload": null
-            }])))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!([witness_row(Some("2026-08-15T00:00:00Z"), 0)])),
+            )
             .expect(1)
             .mount(&server)
             .await;
@@ -1077,88 +1271,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn maps_revoked_shared_workspace_access_to_forbidden() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/rest/v1/rpc/read_e2ee_freshness_page_v2"))
-            .respond_with(ResponseTemplate::new(500).set_body_json(json!({
-                "code": "42501",
-                "message": "E2EE freshness read is not permitted"
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-
-        let response = test_router(&server)
-            .oneshot(request(
+    async fn maps_database_errors_to_client_statuses() {
+        for (case, request_method, request_path, rpc_name, pg_code, expected_status) in [
+            (
+                "revoked shared workspace access",
                 Method::GET,
-                &format!("/e2ee/witness/{OTHER}"),
-                None,
-            ))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
-        server.verify().await;
-    }
-
-    #[tokio::test]
-    async fn maps_invalid_witness_events_to_bad_request() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/rest/v1/rpc/publish_e2ee_freshness_events"))
-            .respond_with(
-                ResponseTemplate::new(500)
-                    .set_body_json(json!({ "code": "22023", "message": "invalid event" })),
-            )
-            .mount(&server)
-            .await;
-        let response = test_router(&server)
-            .oneshot(request(
+                format!("/e2ee/witness/{OTHER}"),
+                "read_e2ee_freshness_page_v2",
+                "42501",
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                "invalid witness events",
                 Method::POST,
-                &format!("/e2ee/witness/{OWNER}"),
-                Some(json!({
-                    "initialize": false,
-                    "events": [{
-                        "recordId": RECORD_ID,
-                        "payloadHash": PAYLOAD_HASH,
-                        "payload": "opaque"
-                    }]
-                })),
-            ))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn maps_uninitialized_legacy_witnesses_to_conflict() {
-        let server = MockServer::start().await;
-        let payload = "opaque";
-        Mock::given(method("POST"))
-            .and(path("/rest/v1/rpc/publish_e2ee_freshness_events"))
-            .respond_with(
-                ResponseTemplate::new(500)
-                    .set_body_json(json!({ "code": "55000", "message": "uninitialized" })),
-            )
-            .mount(&server)
-            .await;
-        let response = test_router(&server)
-            .oneshot(request(
+                format!("/e2ee/witness/{OWNER}"),
+                "publish_e2ee_freshness_events",
+                "22023",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                "uninitialized legacy witness",
                 Method::POST,
-                &format!("/e2ee/witness/{OWNER}"),
-                Some(json!({
-                    "initialize": false,
-                    "events": [{
-                        "recordId": RECORD_ID,
-                        "payloadHash": PAYLOAD_HASH,
-                        "payload": payload
-                    }]
-                })),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CONFLICT);
+                format!("/e2ee/witness/{OWNER}"),
+                "publish_e2ee_freshness_events",
+                "55000",
+                StatusCode::CONFLICT,
+            ),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path(format!("/rest/v1/rpc/{rpc_name}")))
+                .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+                    "code": pg_code,
+                    "message": "database error"
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let body = (request_method == Method::POST).then(publish_body);
+            let response = test_router(&server)
+                .oneshot(request(request_method, &request_path, body))
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), expected_status, "{case}");
+            server.verify().await;
+        }
     }
 }

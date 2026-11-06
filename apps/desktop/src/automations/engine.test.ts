@@ -141,7 +141,7 @@ describe("runMeetingCompletedAutomations (markdown export)", () => {
     });
     mocks.exportMeetingMarkdown.mockResolvedValue({
       status: "ok",
-      data: "/exports/2026-08-07 Standup [abc123].md",
+      data: { path: "/exports/2026-08-07 Standup [abc123].md", sha256: "hash" },
     });
 
     await runMeetingCompletedAutomations("session-1");
@@ -149,6 +149,8 @@ describe("runMeetingCompletedAutomations (markdown export)", () => {
     expect(mocks.exportMeetingMarkdown).toHaveBeenCalledWith(
       "session-1",
       "/exports",
+      null,
+      null,
     );
     expect(recordedRun("automation_markdown_export_last_run")).toMatchObject({
       status: "success",

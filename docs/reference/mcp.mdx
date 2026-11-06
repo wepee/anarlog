@@ -13,12 +13,25 @@ Run the server with `anarlog mcp`. It supports the current MCP `2026-07-28` prot
 | --- | --- | --- | --- |
 | `query` | string | — | Case-insensitive title or meeting ID substring. An empty result list means no matches; do not invent meetings. |
 | `series_id` | string | — | Exact recurring series ID. |
+| `folder_path` | string | — | Folder path from `list_folders`, such as `Projects/Launch`. Includes meetings in its subfolders. |
 | `limit` | integer | `20` | Clamped to `1..200`. |
 | `offset` | integer | `0` | Number of results to skip. |
 
+Each meeting includes `folder_path`, which is `null` when the meeting is not in a folder.
+
+### `list_folders`
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `query` | string | — | Case-insensitive folder path substring. |
+| `limit` | integer | `100` | Clamped to `1..200`. |
+| `offset` | integer | `0` | Number of results to skip. |
+
+Returns `folders` sorted by path, plus `pagination`. Each folder contains `path`, `name`, and `parent_path` (`null` for top-level folders). The list includes empty folders and parent folders. Pass a returned `path` as `list_meetings` `folder_path`.
+
 ### `get_meeting`
 
-Accepts required string `meeting_id`. Returns meeting metadata, the canonical memo, summaries, participants, and action items. Transcript words are intentionally separate.
+Accepts required string `meeting_id`. Returns meeting metadata, including `folder_path`, the canonical memo, summaries, participants, and action items. Transcript words are intentionally separate.
 
 ### `get_meeting_transcript`
 
@@ -37,6 +50,8 @@ Accepts required string `meeting_id` plus optional integer `limit` and `offset`.
 ### `export_meeting`
 
 Accepts required string `meeting_id`. Returns the complete structured meeting record, including metadata, notes, summaries, participants, action items, and transcripts. Prefer the smaller detail or transcript tools unless the task explicitly needs a full export.
+
+When available, `speakers` provides the names referenced by transcript speaker assignments, and `speaker_context` records microphone and call context. These fields are optional; older or trimmed Cloud snapshots may omit them.
 
 ### `propose_summary_edit`
 
@@ -83,3 +98,15 @@ Accepts required string `proposal_id`. Marks a pending proposal declined without
 | `anarlog://series/{series_id}` | `text/markdown` | Up to 100 meetings in a recurring series. |
 
 Resource listing returns recent meeting resources in pages of 20. Its cursor is a numeric result offset.
+
+### `import_recording` (local only)
+
+Create a meeting from a recording on the MCP server's computer. The updated desktop app must be open on the same database. This writes a meeting and may send audio to the configured transcription provider and incur charges. It uses the desktop's current speech-to-text, Intelligence and retention settings. Hosted MCP does not expose this tool.
+
+Parameters: required `file_path`; optional `title`, `folder_path` (an existing folder) and `request_key` (1–200 bytes). Reuse a request key only to retry the same logical submission; it returns the original job, including after failure. Supported files: WAV, MP3, OGG, MP4, M4A, FLAC, WebM, AAC. SRT/VTT import is not included.
+
+Returns `meeting_id`, `job_id`, `processing_status`, `summary_status` and nullable `error`. The source is copied before returning; the desktop cleans up that temporary copy after a terminal result. Poll `get_recording_import` until `done` or `failed`. Preserve the returned IDs if the client disconnects. Interrupted jobs retain their meeting and any completed transcript; they are not automatically resubmitted.
+
+### `get_recording_import` (local only)
+
+Required parameter: `job_id`. Read the durable result without starting work. Processing states: `queued`, `importing`, `transcribing`, `summarizing`, `done`, `failed`. Summary states: `pending`, `done`, `skipped_no_model`, `skipped_too_short`, `failed`. A successful import can have a skipped summary. Local `get_meeting` also includes nullable `processing_status` and `recording_import`; hosted meeting snapshots do not include this machine-local execution state.

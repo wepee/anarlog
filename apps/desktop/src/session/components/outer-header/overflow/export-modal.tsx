@@ -30,12 +30,22 @@ import {
   useSessionParticipants,
 } from "~/session/queries";
 import { getSessionEvent } from "~/session/utils";
-import { getStoredSettingValues } from "~/settings/queries";
+import {
+  getStoredSettingValues,
+  useSetSettingValues,
+  useStoredSettingValuesQuery,
+} from "~/settings/queries";
 import { isAppStoreBuild } from "~/shared/app-store";
 import type { EditorView } from "~/store/zustand/tabs/schema";
 import { useSessionTranscriptMetadata } from "~/stt/queries";
 
 type FileFormat = "pdf" | "txt" | "md" | "org";
+
+function parseExportFormat(value: string | undefined): FileFormat {
+  return value === "pdf" || value === "txt" || value === "md" || value === "org"
+    ? value
+    : "pdf";
+}
 
 function markdownToText(content: string): string {
   return content
@@ -64,22 +74,67 @@ function markdownToOrg(content: string): string {
     .trim();
 }
 
-export function ExportModal({
-  sessionId,
-  currentView,
-  open,
-  onOpenChange,
-}: {
+type ExportModalProps = {
   sessionId: string;
   currentView: EditorView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+};
+
+type ExportConfig = {
+  format: FileFormat;
+  includeMemo: boolean;
+  includeSummary: boolean;
+  includeTranscript: boolean;
+};
+
+function readExportConfig(values: {
+  export_format?: string;
+  export_include_memo?: boolean;
+  export_include_summary?: boolean;
+  export_include_transcript?: boolean;
+}): ExportConfig {
+  return {
+    format: parseExportFormat(values.export_format),
+    includeMemo: values.export_include_memo ?? false,
+    includeSummary: values.export_include_summary ?? true,
+    includeTranscript: values.export_include_transcript ?? false,
+  };
+}
+
+export function ExportModal(props: ExportModalProps) {
+  const settingsQuery = useStoredSettingValuesQuery();
+  if (settingsQuery.isLoading) {
+    return null;
+  }
+  // Read here, not in the content: a fresh live-query handle reports empty
+  // on its first render, so the content must receive settled values as props
+  // or its draft state freezes the empty first read.
+  return (
+    <ExportModalContent
+      initialConfig={readExportConfig(settingsQuery.data?.values ?? {})}
+      {...props}
+    />
+  );
+}
+
+function ExportModalContent({
+  sessionId,
+  currentView,
+  open,
+  onOpenChange,
+  initialConfig,
+}: ExportModalProps & { initialConfig: ExportConfig }) {
   const { t } = useLingui();
-  const [format, setFormat] = useState<FileFormat>("pdf");
-  const [includeMemo, setIncludeMemo] = useState(false);
-  const [includeSummary, setIncludeSummary] = useState(true);
-  const [includeTranscript, setIncludeTranscript] = useState(false);
+  const persistExportConfig = useSetSettingValues();
+  const [format, setFormat] = useState<FileFormat>(initialConfig.format);
+  const [includeMemo, setIncludeMemo] = useState(initialConfig.includeMemo);
+  const [includeSummary, setIncludeSummary] = useState(
+    initialConfig.includeSummary,
+  );
+  const [includeTranscript, setIncludeTranscript] = useState(
+    initialConfig.includeTranscript,
+  );
 
   const session = useSession(sessionId);
   const sessionTitle = session?.title;
@@ -90,6 +145,7 @@ export function ExportModal({
 
   const enhancedNoteId = currentView.type === "enhanced" ? currentView.id : "";
   const enhancedNoteContent = useEnhancedNote(enhancedNoteId)?.content;
+  const summaryContent = enhancedNoteContent;
   const participants = useSessionParticipants(sessionId);
 
   const participantNames = useMemo(
@@ -138,9 +194,9 @@ export function ExportModal({
   };
 
   const getSummaryMd = (): string => {
-    if (!enhancedNoteContent) return "";
+    if (!summaryContent) return "";
     try {
-      const parsed = JSON.parse(enhancedNoteContent);
+      const parsed = JSON.parse(summaryContent);
       return json2md(parsed);
     } catch {
       return "";
@@ -157,7 +213,8 @@ export function ExportModal({
       .join("\n\n");
   };
 
-  const buildMdContent = (): string => {
+  const buildMdContent = (config: ExportConfig): string => {
+    const { includeMemo, includeSummary, includeTranscript } = config;
     const sections: string[] = [];
     const title = sessionTitle || t`Untitled`;
     sections.push(`# ${title}`);
@@ -204,7 +261,8 @@ export function ExportModal({
     return sections.join("\n");
   };
 
-  const buildTxtContent = (): string => {
+  const buildTxtContent = (config: ExportConfig): string => {
+    const { includeMemo, includeSummary, includeTranscript } = config;
     const sections: string[] = [];
     const title = sessionTitle || t`Untitled`;
     sections.push(title);
@@ -255,7 +313,8 @@ export function ExportModal({
     return sections.join("\n");
   };
 
-  const buildOrgContent = (): string => {
+  const buildOrgContent = (config: ExportConfig): string => {
+    const { includeMemo, includeSummary, includeTranscript } = config;
     const sections: string[] = [];
     const title = sessionTitle || t`Untitled`;
     sections.push(`#+TITLE: ${title}`);
@@ -309,12 +368,15 @@ export function ExportModal({
     return sections.join("\n");
   };
 
-  const buildPdfContent = (): {
+  const buildPdfContent = (
+    config: ExportConfig,
+  ): {
     enhancedMd: string;
     memoMd: string | null;
     transcript: { items: TranscriptItem[] } | null;
     metadata: ExportMetadata | null;
   } => {
+    const { includeMemo, includeSummary, includeTranscript } = config;
     const metadata: ExportMetadata = {
       title: sessionTitle || t`Untitled`,
       createdAt: sessionCreatedAt ? formatDate(sessionCreatedAt) : "",
@@ -348,37 +410,46 @@ export function ExportModal({
   };
 
   const { mutate, isPending, error } = useMutation({
-    mutationFn: async () => {
+    // The submitted options travel as mutation variables: React Query runs
+    // the latest render's callbacks, so reading state in onSuccess (or even
+    // in a late-starting mutationFn) would see selections changed while the
+    // write is pending.
+    mutationFn: async (submitted: ExportConfig) => {
       const { values } = await getStoredSettingValues();
       const directory = values.export_directory || (await downloadDir());
       const sanitizedTitle = (
         (sessionTitle ?? t`Untitled`).trim() || t`Untitled`
       ).replace(/[<>:"/\\|?*]/g, "_");
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const filename = `${sanitizedTitle}_${timestamp}.${format}`;
+      const filename = `${sanitizedTitle}_${timestamp}.${submitted.format}`;
       const defaultPath = await join(directory, filename);
       // App Store sandbox grants must be reacquired after relaunch.
       const path = isAppStoreBuild()
         ? await save({
             defaultPath,
-            filters: [{ name: format.toUpperCase(), extensions: [format] }],
+            filters: [
+              {
+                name: submitted.format.toUpperCase(),
+                extensions: [submitted.format],
+              },
+            ],
           })
         : defaultPath;
       if (!path) return null;
 
-      if (format === "pdf") {
-        const exportContent = buildPdfContent();
+      if (submitted.format === "pdf") {
+        const exportContent = buildPdfContent(submitted);
         const result = await exportCommands.export(path, exportContent);
         if (result.status === "error") {
           throw new Error(result.error);
         }
       } else {
         const textContent =
-          format === "md"
-            ? buildMdContent()
-            : format === "org"
-              ? buildOrgContent()
-              : buildTxtContent();
+          submitted.format === "md"
+            ? buildMdContent(submitted)
+            : submitted.format === "org"
+              ? buildOrgContent(submitted)
+              : buildTxtContent(submitted);
         const result = await fs2Commands.writeTextFile(path, textContent);
         if (result.status === "error") {
           throw new Error(result.error);
@@ -387,13 +458,19 @@ export function ExportModal({
 
       return path;
     },
-    onSuccess: (path) => {
+    onSuccess: (path, submitted) => {
       if (!path) return;
+      persistExportConfig({
+        export_format: submitted.format,
+        export_include_memo: submitted.includeMemo,
+        export_include_summary: submitted.includeSummary,
+        export_include_transcript: submitted.includeTranscript,
+      });
       void analyticsCommands.event({
         event: "session_exported",
-        format,
-        include_summary: includeSummary,
-        include_transcript: includeTranscript,
+        format: submitted.format,
+        include_summary: submitted.includeSummary,
+        include_transcript: submitted.includeTranscript,
       });
       void openerCommands.revealItemInDir(path);
       onOpenChange(false);
@@ -509,7 +586,9 @@ export function ExportModal({
             </p>
           )}
           <button
-            onClick={() => mutate(null)}
+            onClick={() =>
+              mutate({ format, includeMemo, includeSummary, includeTranscript })
+            }
             disabled={
               isPending || isTranscriptPending || !hasAnyContentSelected
             }

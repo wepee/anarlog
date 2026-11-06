@@ -116,7 +116,9 @@ export function SpokenLanguagesView({
         <Trans>Additional spoken languages</Trans>
       </h3>
       <p className="text-muted-foreground mb-3 text-xs">
-        <Trans>Transcribe meetings that use more than one language.</Trans>
+        <Trans>
+          Used for transcription and automatic summary language detection.
+        </Trans>
       </p>
       <div className="relative">
         <div
@@ -184,7 +186,7 @@ export function SpokenLanguagesView({
           <div
             id="language-options"
             role="listbox"
-            className="border-border bg-card absolute top-full right-0 left-0 mt-1 flex max-h-60 w-full flex-col overflow-hidden overflow-y-auto rounded-2xl border shadow-md"
+            className="border-border bg-card absolute top-full right-0 left-0 z-10 mt-1 flex max-h-60 w-full flex-col overflow-hidden overflow-y-auto rounded-2xl border shadow-md"
           >
             {filteredLanguages.length > 0 ? (
               filteredLanguages.map((langCode, index) => (

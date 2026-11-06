@@ -8,6 +8,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use anlg_cloudsync::ReservedConnection;
+
 use super::*;
 
 /// Catches a deadlocked pool or worker, not slow I/O: a replacement pool connection
@@ -397,7 +399,21 @@ async fn tracked_table_cleanup_interrupt_drains_before_local_write() {
 ))]
 #[tokio::test]
 async fn populated_table_init_interrupt_drains_before_local_write() {
-    let db = Arc::new(Db::connect_memory().await.unwrap());
+    // Interrupted initialization may retire a connection; app data must survive
+    // that replacement, which an in-memory database cannot model.
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory.path().join("init-interrupt.db");
+    let db = Arc::new(
+        Db::open(crate::DbOpenOptions {
+            storage: crate::DbStorage::Local(&db_path),
+            cloudsync_enabled: true,
+            journal_mode_wal: true,
+            foreign_keys: true,
+            max_connections: Some(1),
+        })
+        .await
+        .unwrap(),
+    );
     sqlx::query(
         "CREATE TABLE items (
             id TEXT PRIMARY KEY NOT NULL,
@@ -467,6 +483,108 @@ async fn populated_table_init_interrupt_drains_before_local_write() {
         "immediate local write remained blocked after native CloudSync table initialization interruption",
     )
     .unwrap();
+    let preserved: i64 = sqlx::query_scalar("SELECT count(*) FROM items")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(preserved, 100001, "interruption lost existing local rows");
+    assert!(tracking_schema(&db).await.is_empty());
+    db.cloudsync_init("items", None, None).await.unwrap();
+    let before: i64 = sqlx::query_scalar("SELECT count(*) FROM items_cloudsync")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO items (id, value) VALUES ('after-retry', 'local')")
+        .execute(db.pool())
+        .await
+        .expect("local write failed after retrying interrupted table initialization");
+    let after: i64 = sqlx::query_scalar("SELECT count(*) FROM items_cloudsync")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert!(
+        after > before,
+        "retried initialization did not track the new row"
+    );
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios"
+))]
+#[tokio::test]
+async fn aborted_table_init_releases_transaction_before_other_connection_writes() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("app.db");
+    let db = Arc::new(
+        Db::open(crate::DbOpenOptions {
+            storage: crate::DbStorage::Local(&path),
+            cloudsync_enabled: true,
+            journal_mode_wal: true,
+            foreign_keys: true,
+            max_connections: Some(3),
+        })
+        .await
+        .unwrap(),
+    );
+    sqlx::raw_sql(
+        "CREATE TABLE items (id TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL DEFAULT '');
+        WITH RECURSIVE rows(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM rows WHERE id < 100000)
+        INSERT INTO items SELECT printf('item-%d', id), 'value' FROM rows;",
+    )
+    .execute(db.pool())
+    .await
+    .unwrap();
+    sqlx::query("CREATE TABLE local_writes (id TEXT PRIMARY KEY)")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let mut other = db.pool().acquire().await.unwrap();
+    let request_db = Arc::clone(&db);
+    let request = tokio::spawn(async move { request_db.cloudsync_init("items", None, None).await });
+    tokio::time::timeout(LIVENESS_TIMEOUT, async {
+        while !db.cloudsync_interrupt_registered() {
+            assert!(!request.is_finished());
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    request.abort();
+    assert!(request.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(LIVENESS_TIMEOUT, db.cloudsync_version())
+        .await
+        .unwrap()
+        .unwrap();
+    tokio::time::timeout(
+        LIVENESS_TIMEOUT,
+        sqlx::query("INSERT INTO items VALUES ('after-abort', 'local')").execute(&mut *other),
+    )
+    .await
+    .expect("aborted initialization retained a write lock")
+    .unwrap();
+    {
+        let mut pinned = db.cloudsync_connection.lock().await;
+        sqlx::query("INSERT INTO local_writes VALUES ('committed')")
+            .execute(&mut **pinned.as_mut().unwrap())
+            .await
+            .unwrap();
+    }
+    let committed: i64 = sqlx::query_scalar("SELECT count(*) FROM local_writes")
+        .fetch_one(&mut *other)
+        .await
+        .unwrap();
+    assert_eq!(
+        committed, 1,
+        "pinned connection kept subsequent writes uncommitted"
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM items WHERE id = 'after-abort'")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
 }
 
 #[cfg(any(
@@ -556,6 +674,7 @@ fn reconciled_send_reports_the_exact_preflighted_batch() {
         complete: true,
         fits: true,
         remaining: false,
+        local_db_versions: 2,
     };
     let status = anlg_cloudsync::NetworkStatus {
         last_optimistic_version: 12,
@@ -580,9 +699,25 @@ fn reconciled_send_reports_the_exact_preflighted_batch() {
         &status,
         false,
     );
-    assert_eq!(partial.send.unwrap().status, "out-of-sync");
+    assert_eq!(partial.send.unwrap().status, "syncing");
     let late_write = reconciled_send_result(batch, &status, true);
-    assert_eq!(late_write.send.unwrap().status, "out-of-sync");
+    assert_eq!(late_write.send.unwrap().status, "syncing");
+    let confirmed_prefix = reconciled_send_result(
+        batch,
+        &anlg_cloudsync::NetworkStatus {
+            last_optimistic_version: 7,
+            last_confirmed_version: 7,
+            ..status
+        },
+        false,
+    )
+    .send
+    .unwrap();
+    assert_eq!(confirmed_prefix.status, "syncing");
+    assert_eq!(confirmed_prefix.local_version, 9);
+    assert_eq!(confirmed_prefix.server_version, 7);
+    assert_eq!(confirmed_prefix.chunks, 0);
+    assert_eq!(confirmed_prefix.bytes, 0);
 }
 
 #[test]
@@ -596,6 +731,7 @@ fn cancelled_send_never_starts_status_reconciliation() {
         complete: true,
         fits: true,
         remaining: false,
+        local_db_versions: 2,
     };
     let error = anlg_cloudsync::Error::Io(std::io::Error::new(
         std::io::ErrorKind::TimedOut,
@@ -666,17 +802,17 @@ async fn confirmed_large_version_recovery_needs_no_additional_network_request() 
     .await
     .unwrap();
     db.cloudsync_init("items", None, None).await.unwrap();
-    let mut connection = db.pool().acquire().await.unwrap();
+    let mut connection = ReservedConnection::new(db.pool().acquire().await.unwrap());
     sqlx::query("SELECT cloudsync_network_init_custom(?, 'reconciliation-test')")
         .bind(endpoint)
-        .execute(&mut *connection)
+        .execute(connection.connection().await.unwrap())
         .await
         .unwrap();
     sqlx::query(
         "WITH RECURSIVE ids(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM ids WHERE id < 6564)
          INSERT INTO items SELECT CAST(id AS TEXT), 'pending' FROM ids",
     )
-    .execute(&mut *connection)
+    .execute(connection.connection().await.unwrap())
     .await
     .unwrap();
     let result = guarded_interruptible_network_send_changes(
@@ -690,7 +826,7 @@ async fn confirmed_large_version_recovery_needs_no_additional_network_request() 
     server_result.unwrap();
     assert_eq!(result.unwrap().send.unwrap().status, "synced");
     assert!(
-        !cloudsync_has_local_unsent_changes_on(&mut *connection)
+        !cloudsync_has_local_unsent_changes_on(connection.connection().await.unwrap())
             .await
             .unwrap()
     );
@@ -706,16 +842,16 @@ async fn confirmed_send_recovery_preserves_later_local_edits() {
     .await
     .unwrap();
     db.cloudsync_init("items", None, None).await.unwrap();
-    let mut connection = db.pool().acquire().await.unwrap();
+    let mut connection = ReservedConnection::new(db.pool().acquire().await.unwrap());
     sqlx::query("INSERT INTO items VALUES ('first', 'preflighted')")
-        .execute(&mut *connection)
+        .execute(connection.connection().await.unwrap())
         .await
         .unwrap();
     let batch = ensure_pending_payload_fits(&mut connection, &db.cloudsync_interrupt)
         .await
         .unwrap();
     sqlx::query("INSERT INTO items VALUES ('later', 'after preflight')")
-        .execute(&mut *connection)
+        .execute(connection.connection().await.unwrap())
         .await
         .unwrap();
     let status = anlg_cloudsync::NetworkStatus {
@@ -725,20 +861,25 @@ async fn confirmed_send_recovery_preserves_later_local_edits() {
         failures: anlg_cloudsync::NetworkStatusFailures::default(),
     };
     assert!(
-        anlg_cloudsync::reconcile_confirmed_pending_payload(&mut connection, batch, &status)
-            .await
-            .unwrap()
-    );
-    let has_unsent_changes = cloudsync_has_local_unsent_changes_on(&mut *connection)
+        anlg_cloudsync::reconcile_confirmed_pending_payload(
+            connection.connection().await.unwrap(),
+            batch,
+            &status,
+        )
         .await
-        .unwrap();
+        .unwrap()
+    );
+    let has_unsent_changes =
+        cloudsync_has_local_unsent_changes_on(connection.connection().await.unwrap())
+            .await
+            .unwrap();
     assert!(has_unsent_changes);
     assert_eq!(
         reconciled_send_result(batch, &status, has_unsent_changes)
             .send
             .unwrap()
             .status,
-        "out-of-sync"
+        "syncing"
     );
 }
 

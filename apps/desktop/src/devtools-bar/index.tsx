@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@anlg/ui/components/ui/dropdown-menu";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 import { cn } from "@anlg/utils";
 
 import {
@@ -30,6 +31,8 @@ import {
   useDevtoolsMetrics,
 } from "./metrics";
 import { QuickSettingsMenu } from "./quick-settings";
+import { ReactScanControls } from "./react-scan-controls";
+import { useReactToolsState, setReactOutlinesEnabled } from "./react-tools";
 import {
   areRenderOutlinesEnabled,
   getTopRenderedComponents,
@@ -37,10 +40,9 @@ import {
   setRenderOutlinesEnabled,
 } from "./render-tracker";
 
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { commands } from "~/types/tauri.gen";
 
-export type BuildChannel = "dev" | "staging" | "nightly" | "stable";
+type BuildChannel = "dev" | "staging" | "nightly" | "stable";
 
 function resolveBuildChannel(identifier: string): BuildChannel {
   if (identifier.endsWith(".nightly")) return "nightly";
@@ -104,7 +106,6 @@ export function DevtoolsStatusBar(props: Record<never, never>) {
 
 function DevtoolsStatusBarContent(props: Record<never, never>) {
   ignoreRenderTracking(props);
-  useMountEffect(() => startDevtoolsMetrics());
 
   const build = useBuildInfo();
   const { dialogs, run } = useDevtoolsActions();
@@ -155,6 +156,7 @@ function DevtoolsStatusBarContent(props: Record<never, never>) {
       <footer
         aria-label="Developer status bar"
         data-testid="devtools-status-bar"
+        data-devbar=""
         className={cn([
           "flex h-6 shrink-0 items-stretch select-none",
           "border-t border-neutral-800 bg-neutral-900 text-neutral-300",
@@ -192,6 +194,7 @@ function DevtoolsStatusBarContent(props: Record<never, never>) {
           <LiveMetrics />
         </div>
 
+        <ReactScanControls />
         <Hint content="Copy a diagnostics snapshot (build, device, metrics, top commands and components, sync) as JSON">
           <button
             type="button"
@@ -220,15 +223,17 @@ function DevtoolsStatusBarContent(props: Record<never, never>) {
 
 function readCollapsed(): boolean {
   try {
-    return localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1";
+    return localStorage.getItem(COLLAPSED_STORAGE_KEY) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
 // Isolated so the once-per-second metrics tick only re-renders the metrics,
 // not the menu and dialogs above.
 function LiveMetrics() {
+  useMountEffect(() => startDevtoolsMetrics());
+
   const metrics = useDevtoolsMetrics();
   const [, refresh] = useReducer((tick: number) => tick + 1, 0);
 
@@ -239,7 +244,10 @@ function LiveMetrics() {
   const callbacks = last(metrics.callbacks) ?? 0;
   const renders = last(metrics.renders) ?? 0;
   const memoryBytes = last(metrics.memoryBytes);
-  const outlinesEnabled = areRenderOutlinesEnabled();
+  const reactTools = useReactToolsState();
+  const outlinesEnabled = reactTools.available
+    ? reactTools.outlinesEnabled
+    : areRenderOutlinesEnabled();
   const fpsTarget = Math.max(60, ...metrics.fps);
 
   return (
@@ -306,7 +314,8 @@ function LiveMetrics() {
           </span>
         }
         onClick={() => {
-          setRenderOutlinesEnabled(!outlinesEnabled);
+          if (reactTools.available) setReactOutlinesEnabled(!outlinesEnabled);
+          else setRenderOutlinesEnabled(!outlinesEnabled);
           refresh();
         }}
         tooltip={

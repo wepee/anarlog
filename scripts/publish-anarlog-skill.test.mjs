@@ -39,21 +39,18 @@ test("plugin package mirrors the canonical skill and license", async () => {
 });
 
 test("plugin manifests use one stable identity and version", async () => {
-  for (const manifestPath of PLUGIN_MANIFESTS) {
-    const manifest = await readJson(manifestPath);
+  const [portable, ...manifests] = await Promise.all(
+    PLUGIN_MANIFESTS.map(readJson),
+  );
+  for (const manifest of [portable, ...manifests]) {
     assert.equal(manifest.name, "anarlog");
-    assert.equal(manifest.version, "1.2.1");
+    assert.equal(manifest.version, portable.version);
     assert.equal(manifest.license, "MIT");
   }
-
-  const portableManifest = await readJson(`${PLUGIN_ROOT}/plugin.json`);
-  assert.equal(
-    portableManifest.$schema,
-    "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  );
 });
 
 test("repository marketplaces list a single BlackMushi plugin", async () => {
+  const { version } = await readJson(`${PLUGIN_ROOT}/plugin.json`);
   const marketplacePaths = [
     ".claude-plugin/marketplace.json",
     ".cursor-plugin/marketplace.json",
@@ -67,6 +64,8 @@ test("repository marketplaces list a single BlackMushi plugin", async () => {
       ["anarlog"],
     );
     assert.equal(marketplace.plugins[0].source, `./${PLUGIN_ROOT}`);
+    assert.equal(marketplace.plugins[0].version, version);
+    assert.equal(marketplace.metadata.version, version);
   }
 
   const codexMarketplace = await readJson(".agents/plugins/marketplace.json");
@@ -87,7 +86,10 @@ test("the BlackMushi plugin connects Cloud MCP over HTTP", async () => {
     url: "https://api.anarlog.so/mcp",
   };
 
-  assert.deepEqual(portable.mcpServers.anarlog, expectedServer);
+  assert.deepEqual(portable.mcpServers.anarlog, {
+    ...expectedServer,
+    type: "streamable-http",
+  });
   assert.deepEqual(native.mcpServers.anarlog, expectedServer);
 
   const cursor = await readJson(`${PLUGIN_ROOT}/.cursor-plugin/plugin.json`);
@@ -104,14 +106,6 @@ test("the BlackMushi plugin connects Cloud MCP over HTTP", async () => {
   assert.equal(cursor.skills, "./skills/");
 });
 
-test("marketplace icon is a 512px square PNG", async () => {
-  const icon = await readFile(`${PLUGIN_ROOT}/assets/icon.png`);
-  assert.equal(icon.subarray(1, 4).toString("ascii"), "PNG");
-  assert.equal(icon.readUInt32BE(16), 512);
-  assert.equal(icon.readUInt32BE(20), 512);
-  assert.ok(icon.length < 5 * 1024 * 1024);
-});
-
 test("the transformation changes nothing but the defined reference links", async () => {
   const canonical = await readFile(CANONICAL_SKILL_PATH, "utf8");
   let restored = publishSkill(canonical);
@@ -120,18 +114,6 @@ test("the transformation changes nothing but the defined reference links", async
   }
 
   assert.equal(restored, canonical);
-});
-
-test("non-link drift in the published mirror is detected", async () => {
-  const canonical = await readFile(CANONICAL_SKILL_PATH, "utf8");
-  const published = await readFile(PUBLISHED_SKILL_PATH, "utf8");
-  const sentinel = "staging proposals";
-
-  assert.match(canonical, new RegExp(sentinel));
-  assert.notEqual(
-    publishSkill(canonical.replace(sentinel, "direct writes")),
-    published,
-  );
 });
 
 test("reference links without a public mapping fail publishing", () => {

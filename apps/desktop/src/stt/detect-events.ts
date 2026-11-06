@@ -7,11 +7,14 @@ import {
   type InstalledApp,
 } from "@anlg/plugin-detect";
 import { commands as notificationCommands } from "@anlg/plugin-notification";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import {
+  AUTO_STOP_ACCESSIBILITY_TIMEOUT_MS,
   AUTO_STOP_CONFIRM_DELAY_MS,
   getAutoStopActiveCheckAppIds,
   getAutoStopCandidateAppIds,
+  getMeetingAppsStillOnCall,
   getNetworkInterruptionDeadlineMs,
   isRecentNetworkDrop,
   resolveNetworkHoldUntilMs,
@@ -39,7 +42,6 @@ import {
   type NearbyCalendarEvent,
 } from "~/calendar/queries";
 import { useConfigValue } from "~/shared/config";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { openNewNoteAndListen } from "~/shared/useNewNote";
 import type { ListenerStore } from "~/store/zustand/listener";
 
@@ -123,6 +125,37 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
   useMountEffect(() => {
     let unlistenDetect: (() => void) | undefined;
     let cancelled = false;
+    let accessibilityInspection: Promise<Awaited<
+      ReturnType<typeof detectCommands.inspectMeetingAccessibility>
+    > | null> | null = null;
+
+    async function inspectForAutoStop() {
+      // A timed-out native walk may still run and its result may be stale for a new stop event.
+      if (accessibilityInspection) {
+        return null;
+      }
+      accessibilityInspection = detectCommands
+        .inspectMeetingAccessibility()
+        .catch(() => null)
+        .finally(() => {
+          accessibilityInspection = null;
+        });
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          accessibilityInspection,
+          new Promise<null>((resolve) => {
+            timeout = setTimeout(
+              () => resolve(null),
+              AUTO_STOP_ACCESSIBILITY_TIMEOUT_MS,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
     isOnlineRef.current = navigator.onLine;
     const clearNotificationsIfActive = () => {
       const live = store.getState().live;
@@ -307,6 +340,39 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
         if (activeCheckAppIds.some((id) => activeAppIds.has(id))) {
           return;
         }
+
+        // Every app in the stop event went quiet, including meeting apps that
+        // never became triggers.
+        const quietApps = [
+          ...stoppedApps,
+          ...candidateAppIds
+            .filter((id) => !stoppedApps.some((app) => app.id === id))
+            .map((id) => ({ id, name: "" })),
+        ];
+        const meetingAppsStillOnCall = getMeetingAppsStillOnCall({
+          triggerAppIds: currentTrigger,
+          quietApps,
+          micApps: result.data,
+        });
+        if (meetingAppsStillOnCall.length > 0) {
+          const liveAfterCheck = store.getState().live;
+          if (
+            pendingAutoStopRef.current !== pending ||
+            liveAfterCheck.status !== "active" ||
+            liveAfterCheck.sessionId !== pending.sessionId
+          ) {
+            return;
+          }
+          if (
+            pending.sessionId &&
+            cancelAutoStopEndedNotification(pending.sessionId)
+          ) {
+            void notificationCommands.clearNotifications();
+          }
+          // Track them so the recording stops when the call itself ends.
+          captureTriggerApps(meetingAppsStillOnCall);
+          return;
+        }
       } else if (pending.requireMicSnapshot || hasUnreliableActiveCheckApp) {
         return;
       }
@@ -315,10 +381,9 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
         return;
       }
 
-      const accessibilityResult =
-        await detectCommands.inspectMeetingAccessibility();
+      const accessibilityResult = await inspectForAutoStop();
       if (
-        accessibilityResult.status === "ok" &&
+        accessibilityResult?.status === "ok" &&
         inspectionsShowActiveMeetingForApps(
           accessibilityResult.data,
           activeCheckAppIds,
@@ -381,10 +446,12 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
         return;
       }
 
-      const shouldPrompt = shouldPromptBeforeAutoStopping({
-        appIds: candidateAppIds,
-        sessionId: pending.sessionId,
-      });
+      const shouldPrompt =
+        accessibilityResult?.status !== "ok" ||
+        shouldPromptBeforeAutoStopping({
+          appIds: candidateAppIds,
+          sessionId: pending.sessionId,
+        });
       if (pendingAutoStopRef.current !== pending) {
         return;
       }
@@ -483,7 +550,10 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
                 displayIgnorableApps.length > 0
                   ? {
                       text: getIgnoreAppsFooterText(displayIgnorableApps),
-                      actionLabel: "Yes",
+                      actionLabel:
+                        displayIgnorableApps.length === 1
+                          ? "Ignore it"
+                          : "Ignore them",
                       icon: footerIcon,
                     }
                   : null;
@@ -510,6 +580,8 @@ export const useHandleDetectEvents = (store: ListenerStore) => {
                 participants: null,
                 event_details: null,
                 action_label: "Yes",
+                action: null,
+                action_menu: null,
                 action_variant: null,
                 options: null,
                 footer,

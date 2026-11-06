@@ -36,7 +36,17 @@ import {
   type ProviderEligibilityContext,
 } from "~/settings/ai/shared/eligibility";
 import { useAiProvider } from "~/settings/providers";
+import { useSettingsReady } from "~/settings/queries";
 import { useConfigValues } from "~/shared/config";
+
+// App attribution per https://openrouter.ai/docs/app-attribution. Mirrors
+// crates/llm-proxy/src/provider/openrouter.rs's APP_REFERER/APP_TITLE/
+// APP_CATEGORIES, which only cover the "anarlog" hosted-provider case (it
+// routes through apps/api's llm-proxy); this BYOK "openrouter" case talks to
+// openrouter.ai directly from the client and needs its own headers.
+const OPENROUTER_APP_URL = "https://anarlog.so";
+const OPENROUTER_APP_NAME = "BlackMushi";
+const OPENROUTER_APP_CATEGORIES = "writing-assistant,personal-agent";
 
 type LanguageModelV3 = Parameters<typeof wrapLanguageModel>[0]["model"];
 
@@ -49,6 +59,7 @@ type LLMConnectionInfo = {
 };
 
 export type LLMConnectionStatus =
+  | { status: "pending"; reason: "managed_disabled" | "settings_loading" }
   | { status: "pending"; reason: "missing_provider" }
   | { status: "pending"; reason: "missing_model"; providerId: ProviderId }
   | { status: "error"; reason: "provider_not_found"; providerId: string }
@@ -80,11 +91,15 @@ export const useLanguageModel = (task?: CharTask): LanguageModelV3 | null => {
 };
 
 export const useLLMConnection = (): LLMConnectionResult => {
+  const settingsReady = useSettingsReady();
+
   const {
+    intelligence_disabled,
     current_llm_provider,
     current_llm_model,
     current_llm_reasoning_effort,
   } = useConfigValues([
+    "intelligence_disabled",
     "current_llm_provider",
     "current_llm_model",
     "current_llm_reasoning_effort",
@@ -95,13 +110,27 @@ export const useLLMConnection = (): LLMConnectionResult => {
 
   return useMemo<LLMConnectionResult>(
     () =>
-      resolveLLMConnection({
-        providerId: current_llm_provider,
-        modelId: current_llm_model,
-        reasoningEffort: normalizeReasoningEffort(current_llm_reasoning_effort),
-        providerConfig,
-      }),
+      !settingsReady || intelligence_disabled
+        ? {
+            conn: null,
+            status: {
+              status: "pending",
+              reason: intelligence_disabled
+                ? "managed_disabled"
+                : "settings_loading",
+            },
+          }
+        : resolveLLMConnection({
+            providerId: current_llm_provider,
+            modelId: current_llm_model,
+            reasoningEffort: normalizeReasoningEffort(
+              current_llm_reasoning_effort,
+            ),
+            providerConfig,
+          }),
     [
+      settingsReady,
+      intelligence_disabled,
       current_llm_model,
       current_llm_provider,
       current_llm_reasoning_effort,
@@ -295,7 +324,14 @@ const createProviderModel = (
         oauth
           ? wrapLanguageModel({
               model,
-              middleware: streamOnlyGenerationMiddleware,
+              middleware: [
+                // The SDK must serialize history as stateless before fetch
+                // enforces the Codex request contract.
+                defaultSettingsMiddleware({
+                  settings: { providerOptions: { openai: { store: false } } },
+                }),
+                streamOnlyGenerationMiddleware,
+              ],
             })
           : model,
       );
@@ -325,6 +361,9 @@ const createProviderModel = (
       const provider = createOpenRouter({
         fetch: providerFetch,
         apiKey: conn.apiKey,
+        appName: OPENROUTER_APP_NAME,
+        appUrl: OPENROUTER_APP_URL,
+        headers: { "X-OpenRouter-Categories": OPENROUTER_APP_CATEGORIES },
       });
       return wrapWithThinkingMiddleware(provider.chat(conn.modelId));
     }

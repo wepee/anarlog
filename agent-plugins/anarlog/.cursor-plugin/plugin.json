@@ -1,7 +1,7 @@
 {
   "name": "anarlog",
-  "version": "1.2.1",
-  "description": "Query and export BlackMushi meetings through Cloud MCP or the local CLI.",
+  "version": "1.3.5",
+  "description": "Search local BlackMushi meetings or connect to Cloud with OAuth.",
   "author": {
     "name": "Fastrepl",
     "email": "team@fastrepl.com"

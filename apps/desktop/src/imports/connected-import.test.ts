@@ -50,6 +50,8 @@ vi.mock("./queries", () => ({
 
 vi.mock("~/shared/integration", () => ({
   openIntegrationUrl: mocks.openIntegrationUrl,
+  integrationSetupError: () =>
+    new Error("Could not start the integration setup. Try again."),
 }));
 
 vi.mock("@anlg/api-client", () => ({
@@ -71,7 +73,6 @@ vi.mock("~/env", () => ({
 }));
 
 import {
-  cancelConnectedImport,
   connectConnectedImport,
   connectedImportSyncQueryOptions,
 } from "./connected-import";
@@ -118,16 +119,6 @@ describe("connected meeting imports", () => {
       "circleback-mcp",
       JSON.stringify(credentials),
     );
-  });
-
-  it("cancels an abandoned provider authorization", async () => {
-    mocks.cancelConnectedImport.mockResolvedValue({
-      status: "ok",
-      data: true,
-    });
-
-    await expect(cancelConnectedImport("circleback")).resolves.toBe(true);
-    expect(mocks.cancelConnectedImport).toHaveBeenCalledWith("circleback");
   });
 
   it("does not save credentials when provider authorization is cancelled", async () => {

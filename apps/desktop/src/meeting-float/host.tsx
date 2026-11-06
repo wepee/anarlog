@@ -4,9 +4,11 @@ import {
   commands as windowsCommands,
   events as windowsEvents,
 } from "@anlg/plugin-windows";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import {
   createMeetingFloatLabelContext,
+  createMeetingFloatRenderRequest,
   loadMeetingFloatData,
   type MeetingFloatData,
   subscribeMeetingFloatData,
@@ -26,6 +28,10 @@ import {
   getSettingsValuesFromNativeChange,
   type FloatingOverlaySettings,
 } from "./settings";
+import {
+  createFloatingSpeakerLabeler,
+  type FloatingSpeakerLabels,
+} from "./speaker-labels";
 import { isFloatingBarSupported } from "./support";
 import {
   createFloatingMeetingWindowSynchronizer,
@@ -40,18 +46,16 @@ import {
   getStoredSettingValues,
   setSettingValue,
   useSetSettingValues,
+  useStoredSettingValue,
 } from "~/settings/queries";
 import { useConfigValue, useConfigValues } from "~/shared/config";
 import { useLatestRef } from "~/shared/hooks/useLatestRef";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { listenerStore } from "~/store/zustand/listener/instance";
 import type { RenderLabelContext } from "~/stt/live-segment";
 
 export {
-  getCurrentFloatingBarColorScheme,
   getFloatingRouteState,
   getFloatingTranscriptBubbles,
-  shouldShowFloatingLiveCaptionToggle,
 } from "./route-state";
 
 export function FloatingMeetingWindowHost() {
@@ -59,6 +63,7 @@ export function FloatingMeetingWindowHost() {
   const storedSettings = useConfigValues(FLOATING_OVERLAY_SETTING_KEYS);
   const overlaySettings = getFloatingOverlaySettings(storedSettings);
   const floatingOverlaySupported = isFloatingBarSupported();
+  const sttProvider = useStoredSettingValue("current_stt_provider").value;
 
   return (
     <>
@@ -72,6 +77,7 @@ export function FloatingMeetingWindowHost() {
         <FloatingMeetingWindowSync
           settings={overlaySettings}
           enabled={floatingBarEnabled}
+          sttProvider={sttProvider ?? null}
         />
       ) : (
         <FloatingMeetingWindowDisabled />
@@ -169,11 +175,14 @@ function LiveCaptionWindowDisabled() {
 function FloatingMeetingWindowSync({
   settings,
   enabled,
+  sttProvider,
 }: {
   settings: FloatingOverlaySettings;
   enabled: boolean;
+  sttProvider: string | null;
 }) {
   const settingsRef = useLatestRef(settings);
+  const sttProviderRef = useLatestRef(sttProvider);
   const enabledRef = useLatestRef(enabled);
   const refreshSettingsRef = useRef<() => void>(() => {});
 
@@ -191,6 +200,9 @@ function FloatingMeetingWindowSync({
     );
     let unsubscribeMeetingData: (() => Promise<void>) | null = null;
     const unlisteners: Array<() => void> = [];
+    const speakerLabeler = createFloatingSpeakerLabeler(() => {
+      if (!cancelled) refreshCurrentRouteState(true);
+    });
 
     const updateRouteState = (nextRouteState: FloatingRouteState | null) => {
       if (
@@ -222,8 +234,24 @@ function FloatingMeetingWindowSync({
                 getFloatingLiveCaptionToggleVisible(state),
                 meetingData,
                 transcriptBubbles,
+                speakerLabeler.labels,
+                sttProviderRef.current,
               )
             : null,
+      );
+    };
+    const resolveSpeakerLabels = () => {
+      const state = listenerStore.getState();
+      const sessionId =
+        enabledRef.current && state.live.status === "active"
+          ? state.live.sessionId
+          : null;
+      speakerLabeler.update(
+        sessionId,
+        state.liveSegments,
+        sessionId
+          ? createMeetingFloatRenderRequest(meetingData, sessionId)
+          : null,
       );
     };
     refreshSettingsRef.current = refreshCurrentRouteState;
@@ -274,6 +302,7 @@ function FloatingMeetingWindowSync({
         if (cancelled) unlisten();
         else unlisteners.push(unlisten);
       });
+    resolveSpeakerLabels();
     refreshCurrentRouteState();
     const unsubscribeDictation = useDictationStatus.subscribe(() =>
       refreshCurrentRouteState(),
@@ -284,15 +313,19 @@ function FloatingMeetingWindowSync({
         return;
       }
 
-      refreshCurrentRouteState(
+      const transcriptChanged =
         state.liveSegments !== previousState.liveSegments ||
-          state.live.sessionId !== previousState.live.sessionId,
-      );
+        state.live.sessionId !== previousState.live.sessionId;
+      if (transcriptChanged) {
+        resolveSpeakerLabels();
+      }
+      refreshCurrentRouteState(transcriptChanged);
     });
 
     void subscribeMeetingFloatData(
       (nextData) => {
         meetingData = nextData;
+        resolveSpeakerLabels();
         refreshCurrentRouteState(true);
       },
       (error) => {
@@ -313,13 +346,19 @@ function FloatingMeetingWindowSync({
     const unsubscribeAppliedTheme = subscribeToAppliedTheme(() => {
       refreshCurrentRouteState();
     });
+    const handleConnectivityChange = () => refreshCurrentRouteState();
+    window.addEventListener("online", handleConnectivityChange);
+    window.addEventListener("offline", handleConnectivityChange);
 
     return () => {
       cancelled = true;
       refreshSettingsRef.current = () => {};
+      speakerLabeler.dispose();
       unsubscribe();
       unsubscribeDictation();
       unsubscribeAppliedTheme();
+      window.removeEventListener("online", handleConnectivityChange);
+      window.removeEventListener("offline", handleConnectivityChange);
       void unsubscribeMeetingData?.();
       unlisteners.forEach((unlisten) => unlisten());
       void windowSynchronizer.dispose();
@@ -328,7 +367,7 @@ function FloatingMeetingWindowSync({
 
   return (
     <FloatingMeetingWindowSettingsSync
-      key={JSON.stringify([settings, enabled])}
+      key={JSON.stringify([settings, enabled, sttProvider])}
       onSettingsChange={() => refreshSettingsRef.current()}
     />
   );
@@ -350,14 +389,18 @@ function getCurrentFloatingRouteState(
   liveCaptionToggleVisible = false,
   meetingData?: MeetingFloatData,
   transcriptBubbles?: FloatingRouteState["transcriptBubbles"],
+  speakerLabels?: FloatingSpeakerLabels,
+  sttProvider?: string | null,
 ): FloatingRouteState | null {
   return getFloatingRouteState(state, {
+    sttProvider,
     sessionId,
     colorScheme: getCurrentFloatingBarColorScheme(),
     settings,
     liveCaptionToggleVisible,
     sessionTitle: getFloatingSessionTitle(state, meetingData),
     speakerLabelContext: getFloatingSpeakerLabelContext(state, meetingData),
+    speakerLabels,
     transcriptBubbles,
   });
 }
@@ -367,6 +410,8 @@ export function haveFloatingRouteInputsChanged(
   previousState: ListenerState,
 ) {
   return (
+    state.live.captureHealth !== previousState.live.captureHealth ||
+    state.live.lastError !== previousState.live.lastError ||
     state.live.status !== previousState.live.status ||
     state.live.sessionId !== previousState.live.sessionId ||
     state.live.loadingPhase !== previousState.live.loadingPhase ||
@@ -374,10 +419,14 @@ export function haveFloatingRouteInputsChanged(
       previousState.live.lastErrorIsAudioRelated ||
     state.live.amplitude.mic !== previousState.live.amplitude.mic ||
     state.live.amplitude.speaker !== previousState.live.amplitude.speaker ||
-    Boolean(state.live.degraded) !== Boolean(previousState.live.degraded) ||
+    state.live.degraded !== previousState.live.degraded ||
     Boolean(state.live.lastError) !== Boolean(previousState.live.lastError) ||
     state.live.liveTranscriptionActive !==
       previousState.live.liveTranscriptionActive ||
+    state.live.requestedLiveTranscription !==
+      previousState.live.requestedLiveTranscription ||
+    state.live.transcriptionStalled !==
+      previousState.live.transcriptionStalled ||
     state.liveSegments !== previousState.liveSegments
   );
 }

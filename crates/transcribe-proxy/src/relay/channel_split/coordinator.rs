@@ -261,32 +261,6 @@ mod tests {
     }
 
     #[test]
-    fn replaces_pending_finalize_by_flushing_older_one_non_terminal() {
-        let first = rewritten(
-            r#"{"type":"Results","channel_index":[0,1],"duration":0.0,"start":0.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"first","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}"#,
-        );
-        let second = rewritten(
-            r#"{"type":"Results","channel_index":[0,1],"duration":0.0,"start":1.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"second","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}"#,
-        );
-
-        let mut coordinator = SplitCoordinator::default();
-        let first_actions = coordinator.handle_text(0, Some(first), None, None);
-        assert!(first_actions.is_empty());
-
-        let second_actions = coordinator.handle_text(0, Some(second), None, None);
-        assert_eq!(second_actions.len(), 1);
-
-        let CoordinatorAction::ForwardRewritten(rewritten) =
-            second_actions.into_iter().next().unwrap()
-        else {
-            panic!("expected rewritten flush");
-        };
-        let parsed: serde_json::Value =
-            serde_json::from_str(&rewritten.into_text().unwrap()).unwrap();
-        assert_eq!(parsed["from_finalize"], serde_json::json!(false));
-    }
-
-    #[test]
     fn keeps_replacing_pending_finalize_until_emitting_channel_closes() {
         let pending = rewritten(
             r#"{"type":"Results","channel_index":[0,1],"duration":0.0,"start":0.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"first","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}"#,
@@ -331,28 +305,6 @@ mod tests {
     }
 
     #[test]
-    fn does_not_release_pending_finalize_until_emitting_channel_closes() {
-        let pending = rewritten(
-            r#"{"type":"Results","channel_index":[0,1],"duration":0.0,"start":0.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"first","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}"#,
-        );
-
-        let mut coordinator = SplitCoordinator::default();
-        assert!(
-            coordinator
-                .handle_text(0, Some(pending), None, None)
-                .is_empty()
-        );
-
-        let close_actions = coordinator.handle_upstream_closed(1, 1000, "done".to_string());
-        assert!(
-            !close_actions
-                .iter()
-                .any(|action| matches!(action, CoordinatorAction::ForwardRewritten(_))),
-            "pending finalize should stay buffered until its own channel closes"
-        );
-    }
-
-    #[test]
     fn mixed_finalize_batch_forwards_non_final_updates_immediately() {
         let mixed = rewritten(
             r#"[{"type":"Results","channel_index":[0,1],"duration":0.0,"start":0.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"done","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}},{"type":"Results","channel_index":[0,1],"duration":0.0,"start":1.0,"is_final":false,"speech_final":false,"from_finalize":false,"channel":{"alternatives":[{"transcript":"live","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}]"#,
@@ -390,6 +342,49 @@ mod tests {
             serde_json::from_str(&rewritten.into_text().unwrap()).unwrap();
         assert_eq!(parsed["from_finalize"], serde_json::json!(true));
         assert_eq!(parsed["channel"]["alternatives"][0]["transcript"], "done");
+    }
+
+    #[test]
+    fn task_completion_closes_release_terminal_finalize_without_socket_close() {
+        let mic = rewritten(
+            r#"{"type":"Results","channel_index":[0,1],"duration":0.0,"start":0.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}"#,
+        );
+        let spk = rewritten_for_channel(
+            r#"{"type":"Results","channel_index":[0,1],"duration":0.0,"start":0.0,"is_final":true,"speech_final":true,"from_finalize":true,"channel":{"alternatives":[{"transcript":"","confidence":1.0,"words":[]}]},"metadata":{"request_id":"","model_info":{"name":"","version":"","arch":""},"model_uuid":""}}"#,
+            1,
+        );
+
+        let mut coordinator = SplitCoordinator::default();
+        coordinator.handle_finalize_requested();
+
+        assert!(coordinator.handle_text(0, Some(mic), None, None).is_empty());
+        let actions = coordinator.handle_upstream_closed(0, 1000, "upstream_task_finished".into());
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a, CoordinatorAction::ForwardRewritten(_))),
+            "mic finalize stays buffered until the speaker task finishes"
+        );
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a, CoordinatorAction::CloseDownstream { .. }))
+        );
+
+        let actions = coordinator.handle_text(1, Some(spk), None, None);
+        assert_eq!(actions.len(), 1);
+        assert_non_terminal_finalize(actions.into_iter().next().unwrap(), "");
+
+        let actions = coordinator.handle_upstream_closed(1, 1000, "upstream_task_finished".into());
+        let mut iter = actions.into_iter();
+        let CoordinatorAction::ForwardRewritten(rewritten) = iter.next().unwrap() else {
+            panic!("expected terminal finalize once both tasks finished");
+        };
+        let parsed: serde_json::Value =
+            serde_json::from_str(&rewritten.into_text().unwrap()).unwrap();
+        assert_eq!(parsed["from_finalize"], serde_json::json!(true));
+        assert_close_downstream(iter.next().unwrap(), 1000, "upstream_task_finished");
+        assert_shutdown_close(iter.next().unwrap(), 1000, "upstream_task_finished");
     }
 
     #[test]

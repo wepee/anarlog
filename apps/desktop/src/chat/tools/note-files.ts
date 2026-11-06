@@ -1,6 +1,11 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import {
+  resolveCurrentSessionId,
+  resolveFolderPaths,
+  type ToolCallOptions,
+} from "./current-session";
 import type { ToolDependencies } from "./types";
 
 import {
@@ -441,18 +446,29 @@ export const buildSearchMeetingContentTool = (deps: ToolDependencies) =>
         .optional()
         .describe("Maximum matching notes to return"),
     }),
-    execute: async (params: {
-      query: string;
-      meeting_ids?: string[];
-      limit?: number;
-    }) => {
-      const folderFilter = deps.getFolderFilter?.() ?? null;
+    execute: async (
+      params: {
+        query: string;
+        meeting_ids?: string[];
+        limit?: number;
+      },
+      options?: ToolCallOptions,
+    ) => {
+      const folderPaths = resolveFolderPaths(deps, options);
       const folderSessionIds =
-        folderFilter === null
+        folderPaths.length === 0
           ? undefined
-          : (await loadSessionSummariesByFolder(folderFilter)).map(
-              (session) => session.id,
-            );
+          : [
+              ...new Set(
+                (
+                  await Promise.all(
+                    folderPaths.map((folderPath) =>
+                      loadSessionSummariesByFolder(folderPath),
+                    ),
+                  )
+                ).flatMap((sessions) => sessions.map((session) => session.id)),
+              ),
+            ];
       const sessionIds =
         folderSessionIds === undefined
           ? params.meeting_ids
@@ -483,7 +499,7 @@ export const buildFindRelatedMeetingsTool = (deps: ToolDependencies) =>
         .string()
         .optional()
         .describe(
-          "Meeting id to find related meetings for. Defaults to the currently open meeting.",
+          "Meeting id to find related meetings for. Defaults to the current note (the one marked as current in context).",
         ),
       limit: z
         .number()
@@ -493,8 +509,12 @@ export const buildFindRelatedMeetingsTool = (deps: ToolDependencies) =>
         .optional()
         .describe("Maximum related meetings to return"),
     }),
-    execute: async (params: { meeting_id?: string; limit?: number }) => {
-      const sessionId = params.meeting_id ?? deps.getSessionId();
+    execute: async (
+      params: { meeting_id?: string; limit?: number },
+      options,
+    ) => {
+      const sessionId =
+        params.meeting_id ?? resolveCurrentSessionId(deps, options);
       if (!sessionId) {
         return {
           status: "error" as const,

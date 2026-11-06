@@ -11,7 +11,7 @@ pub use ext::{Windows, WindowsPluginExt};
 pub use tab::*;
 pub use window::*;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -32,12 +32,45 @@ pub struct SavedFrame {
     pub h: f64,
 }
 
+#[derive(Clone, Copy)]
+pub struct SavedWindowFrame {
+    pub frame: SavedFrame,
+    pub maximized: bool,
+}
+
 #[derive(Default)]
-pub struct SavedFrames(pub Mutex<HashMap<String, SavedFrame>>);
+pub struct SavedFrames(pub Mutex<HashMap<String, SavedWindowFrame>>);
 
 impl SavedFrames {
-    fn take(&self, label: &str) -> Option<SavedFrame> {
+    fn take(&self, label: &str) -> Option<SavedWindowFrame> {
         self.0.lock().unwrap().remove(label)
+    }
+
+    fn remove(&self, label: &str) {
+        self.0.lock().unwrap().remove(label);
+    }
+
+    fn contains(&self, label: &str) -> bool {
+        self.0.lock().unwrap().contains_key(label)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+pub struct PendingPositions(pub Mutex<HashMap<String, SavedFrame>>);
+
+#[cfg(not(target_os = "macos"))]
+impl PendingPositions {
+    fn insert(&self, label: String, frame: SavedFrame) {
+        self.0.lock().unwrap().insert(label, frame);
+    }
+
+    fn take_if_sized(&self, label: &str, size: tauri::LogicalSize<f64>) -> Option<SavedFrame> {
+        let mut pending = self.0.lock().unwrap();
+        let matches = pending.get(label).is_some_and(|frame| {
+            (frame.w - size.width).abs() < 1.0 && (frame.h - size.height).abs() < 1.0
+        });
+        if matches { pending.remove(label) } else { None }
     }
 
     fn remove(&self, label: &str) {
@@ -46,10 +79,10 @@ impl SavedFrames {
 }
 
 #[derive(Default)]
-pub struct WindowExpansions(pub Mutex<HashMap<String, Vec<(f64, f64, bool)>>>);
+pub struct WindowExpansions(pub Mutex<HashMap<String, Vec<(f64, f64, f64)>>>);
 
 impl WindowExpansions {
-    fn pop(&self, label: &str) -> Option<(f64, f64, bool)> {
+    fn pop(&self, label: &str) -> Option<(f64, f64, f64)> {
         let mut expansions = self.0.lock().unwrap();
         let entry = expansions.get_mut(label).and_then(Vec::pop);
 
@@ -62,6 +95,11 @@ impl WindowExpansions {
 
     fn remove(&self, label: &str) {
         self.0.lock().unwrap().remove(label);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn take(&self, label: &str) -> Vec<(f64, f64, f64)> {
+        self.0.lock().unwrap().remove(label).unwrap_or_default()
     }
 }
 
@@ -100,16 +138,40 @@ pub struct WindowReadyState {
 struct WebviewHealthState {
     next_registration_id: AtomicU64,
     pending: Mutex<HashMap<String, (u64, String, oneshot::Sender<()>)>>,
-    recovering: Mutex<HashSet<String>>,
+    recovering: Mutex<HashMap<String, u8>>,
+    rebuilt: Mutex<std::collections::HashSet<String>>,
+}
+
+static MAIN_WINDOW_REBUILDING: AtomicBool = AtomicBool::new(false);
+
+/// True while the main window is destroyed and rebuilt in-process, so the
+/// transient "no windows left" exit request must not quit the app.
+pub fn main_window_rebuilding() -> bool {
+    MAIN_WINDOW_REBUILDING.load(Ordering::SeqCst)
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn set_main_window_rebuilding(value: bool) {
+    MAIN_WINDOW_REBUILDING.store(value, Ordering::SeqCst);
+}
+
+static MAIN_WINDOW_SHOW_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Records that the main window was asked to show while it was being rebuilt,
+/// so a rebuild that started hidden still ends visible.
+fn note_main_window_show_requested() {
+    if main_window_rebuilding() {
+        MAIN_WINDOW_SHOW_REQUESTED.store(true, Ordering::SeqCst);
+    }
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn take_main_window_show_requested() -> bool {
+    MAIN_WINDOW_SHOW_REQUESTED.swap(false, Ordering::SeqCst)
 }
 
 impl WebviewHealthState {
     fn register(&self, label: String) -> Option<(u64, String, oneshot::Receiver<()>)> {
-        let recovering = self.recovering.lock().unwrap();
-        if recovering.contains(&label) {
-            return None;
-        }
-
         let mut pending = self.pending.lock().unwrap();
         if pending.contains_key(&label) {
             return None;
@@ -119,7 +181,6 @@ impl WebviewHealthState {
         let registration_id = self.next_registration_id.fetch_add(1, Ordering::Relaxed);
         let request_id = uuid::Uuid::new_v4().to_string();
         pending.insert(label, (registration_id, request_id.clone(), tx));
-        drop(recovering);
 
         Some((registration_id, request_id, rx))
     }
@@ -152,17 +213,35 @@ impl WebviewHealthState {
         is_match
     }
 
-    fn begin_recovery(&self, label: &str) -> bool {
+    fn retry_recovery(&self, label: &str) -> u8 {
         let mut recovering = self.recovering.lock().unwrap();
-        if !recovering.insert(label.to_string()) {
-            return false;
-        }
+        let attempt = recovering.entry(label.to_string()).or_insert(0);
+        *attempt = attempt.saturating_add(1);
+        let attempt = *attempt;
         self.pending.lock().unwrap().remove(label);
-        true
+        attempt
+    }
+
+    fn resume_recovery(&self, label: &str) -> u8 {
+        let attempt = *self
+            .recovering
+            .lock()
+            .unwrap()
+            .entry(label.to_string())
+            .or_insert(0);
+        self.pending.lock().unwrap().remove(label);
+        attempt
+    }
+
+    // One rebuild per failure episode; a webview that reports ready resets it.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    fn begin_rebuild(&self, label: &str) -> bool {
+        self.rebuilt.lock().unwrap().insert(label.to_string())
     }
 
     fn ready(&self, label: &str) {
         self.recovering.lock().unwrap().remove(label);
+        self.rebuilt.lock().unwrap().remove(label);
     }
 
     fn remove(&self, label: &str) {
@@ -211,6 +290,10 @@ pub(crate) fn clear_window_state(app: &tauri::AppHandle<tauri::Wry>, label: &str
         state.remove(label);
     }
     if let Some(state) = app.try_state::<SavedFrames>() {
+        state.remove(label);
+    }
+    #[cfg(not(target_os = "macos"))]
+    if let Some(state) = app.try_state::<PendingPositions>() {
         state.remove(label);
     }
     if let Some(state) = app.try_state::<WindowExpansions>() {
@@ -295,6 +378,9 @@ pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
                 app.manage(saved_frames);
             }
 
+            #[cfg(not(target_os = "macos"))]
+            app.manage(PendingPositions::default());
+
             {
                 let window_expansions = WindowExpansions::default();
                 app.manage(window_expansions);
@@ -317,9 +403,6 @@ pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 }
 
 pub fn extend_builder(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    #[cfg(target_os = "macos")]
-    let builder = builder.on_web_content_process_terminate(AppWindow::recover_terminated_webview);
-
     #[cfg(all(target_os = "macos", feature = "macos-private-api"))]
     {
         builder.plugin(tauri_nspanel::init())
@@ -377,73 +460,38 @@ mod test {
     }
 
     #[test]
-    fn webview_health_recovery_starts_once_and_blocks_probes() {
+    fn webview_recovery_attempts_count_until_ready() {
         let state = WebviewHealthState::default();
-        assert!(state.begin_recovery("main"));
-
-        assert!(state.register("main".into()).is_none());
-        assert!(!state.begin_recovery("main"));
-        state.ready("main");
         assert!(state.register("main".into()).is_some());
+        assert_eq!(state.retry_recovery("main"), 1);
+        assert!(state.pending.lock().unwrap().is_empty());
+
+        assert!(state.register("main".into()).is_some());
+        assert_eq!(state.retry_recovery("main"), 2);
+        assert_eq!(state.resume_recovery("main"), 2);
+        assert_eq!(state.resume_recovery("main"), 2);
+        assert!(state.pending.lock().unwrap().is_empty());
+        state.ready("main");
+        assert_eq!(state.resume_recovery("main"), 0);
+        assert_eq!(state.retry_recovery("main"), 1);
+    }
+
+    #[test]
+    fn webview_rebuild_runs_once_until_ready_and_survives_window_removal() {
+        let state = WebviewHealthState::default();
+        assert!(state.begin_rebuild("main"));
+        state.remove("main");
+        assert!(!state.begin_rebuild("main"));
+        state.ready("main");
+        assert!(state.begin_rebuild("main"));
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn terminated_webview_restarts_only_for_visible_main_window() {
-        assert!(crate::ext::should_restart_terminated_webview("main", true));
-        assert!(!crate::ext::should_restart_terminated_webview(
-            "main", false
-        ));
-        assert!(!crate::ext::should_restart_terminated_webview(
-            "composer", true
-        ));
-        assert!(!crate::ext::should_restart_terminated_webview(
-            "note-1", true
-        ));
-    }
-
-    #[test]
-    fn expansion_pop_removes_empty_window_entry() {
-        let expansions = WindowExpansions::default();
-        expansions
-            .0
-            .lock()
-            .unwrap()
-            .insert("note-1".into(), vec![(100.0, 120.0, false)]);
-
-        assert_eq!(expansions.pop("note-1"), Some((100.0, 120.0, false)));
-        assert!(expansions.0.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn persisted_window_state_includes_size_and_position() {
-        use tauri_plugin_window_state::StateFlags;
-
-        let flags = persisted_window_state_flags();
-        assert!(flags.contains(StateFlags::SIZE));
-        assert!(flags.contains(StateFlags::POSITION));
-        assert!(flags.contains(StateFlags::MAXIMIZED));
-        assert!(!flags.contains(StateFlags::VISIBLE));
-        assert!(!flags.contains(StateFlags::DECORATIONS));
-        assert!(!flags.contains(StateFlags::FULLSCREEN));
-    }
-
-    #[test]
-    fn saved_frame_take_consumes_window_entry() {
-        let frames = SavedFrames::default();
-        frames.0.lock().unwrap().insert(
-            "note-1".into(),
-            SavedFrame {
-                x: 1.0,
-                y: 2.0,
-                w: 3.0,
-                h: 4.0,
-            },
-        );
-
-        let frame = frames.take("note-1").unwrap();
-        assert_eq!((frame.x, frame.y, frame.w, frame.h), (1.0, 2.0, 3.0, 4.0));
-        assert!(frames.0.lock().unwrap().is_empty());
+    fn terminated_webview_reloads_only_for_main_window() {
+        assert!(crate::ext::should_reload_terminated_webview("main"));
+        assert!(!crate::ext::should_reload_terminated_webview("composer"));
+        assert!(!crate::ext::should_reload_terminated_webview("note-1"));
     }
 
     #[test]
@@ -462,15 +510,12 @@ mod test {
         let content = std::fs::read_to_string(OUTPUT_FILE).unwrap();
         std::fs::write(OUTPUT_FILE, format!("// @ts-nocheck\n{content}")).unwrap();
     }
+}
 
-    #[test]
-    fn test_version() {
-        let version = tauri_plugin_os::version()
-            .to_string()
-            .split('.')
-            .next()
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(0);
-        println!("version: {}", version);
-    }
+pub fn hide_floating_bar() -> Result<(), Error> {
+    window::floating_bar::hide()
+}
+
+pub fn floating_bar_session_id() -> Option<String> {
+    window::floating_bar::session_id()
 }

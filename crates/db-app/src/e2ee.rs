@@ -1,3 +1,10 @@
+mod authority;
+pub use authority::{
+    E2eeCloudBatch, E2eeCloudEvent, acknowledge_e2ee_cloud_batch, configure_e2ee_cloud_authority,
+    e2ee_cloud_accepted_head, e2ee_cloud_authority_enabled, pending_e2ee_cloud_batch,
+    preserve_e2ee_cloud_conflicts, rebase_e2ee_cloud_documents, reject_e2ee_cloud_batch,
+    set_e2ee_cloud_pull_in_progress,
+};
 #[cfg(test)]
 use std::collections::HashMap;
 
@@ -9,8 +16,6 @@ use sqlx::SqlitePool;
 
 mod witness;
 
-#[cfg(test)]
-use witness::PENDING_E2EE_WITNESS_UPLOADS_SQL;
 pub use witness::{
     E2eeWitnessEvent, E2eeWitnessRepairOutcome, E2eeWitnessUpload,
     acknowledge_e2ee_witness_uploads, acknowledge_e2ee_witness_uploads_cancellable,
@@ -122,9 +127,13 @@ pub struct E2eeReplicaStats {
     pub incomplete_chunk_columns: u64,
     pub rejected_rollbacks: u64,
     pub rejected_unwitnessed: u64,
+    pub deferred_unwitnessed_rows: u64,
+    pub deferred_incomplete_snapshot_rows: u64,
     pub parked_records: u64,
     pub recorded_conflicts: u64,
     pub merged_fields: u64,
+    pub repaired_witness_records: u64,
+    pub remaining_witness_repairs: bool,
     pub remaining_replica_changes: bool,
 }
 
@@ -213,15 +222,13 @@ pub use conflicts::{
     restore_e2ee_field_conflict, unresolved_e2ee_field_conflict_count,
 };
 use cooperative::yield_once;
+#[cfg(test)]
+use replica_apply::apply_e2ee_replica_changes_inner;
 pub use replica_apply::{
-    apply_e2ee_replica_changes, apply_e2ee_replica_changes_with_witness,
+    E2eeReceivedApplyOptions, apply_e2ee_replica_changes, apply_e2ee_replica_changes_with_witness,
+    apply_received_e2ee_replica_changes_with_options_cancellable,
     apply_received_e2ee_replica_changes_with_witness,
     apply_received_e2ee_replica_changes_with_witness_cancellable,
-};
-#[cfg(test)]
-use replica_apply::{
-    apply_e2ee_replica_changes_inner, apply_received_e2ee_replica_changes_with_witness_bounded,
-    load_changed_e2ee_record_metadata,
 };
 use replica_encrypt::check_e2ee_cancellation;
 pub use replica_encrypt::{
@@ -235,8 +242,8 @@ pub use replica_encrypt::{
 };
 #[cfg(test)]
 use replica_encrypt::{
-    load_dirty_rows, load_dirty_rows_page, persist_prepared_dirty_row,
-    persist_prepared_dirty_row_cancellable, persist_prepared_dirty_row_inner, prepare_dirty_row,
+    load_dirty_rows, persist_prepared_dirty_row, persist_prepared_dirty_row_cancellable,
+    persist_prepared_dirty_row_inner, prepare_dirty_row,
 };
 #[cfg(test)]
 use replica_storage::load_or_create_writer_id;

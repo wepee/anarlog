@@ -1,26 +1,31 @@
 import type {
   ChangelogState,
-  ContactsSelection,
   ContactsState,
   EditorView,
-  SessionsState,
+  SessionsState as WindowsSessionsState,
   TabInput as WindowsTabInput,
   TemplatesState,
 } from "@anlg/plugin-windows";
 
-export type {
-  ChangelogState,
-  ContactsSelection,
-  ContactsState,
-  EditorView,
-  SessionsState,
-  TemplatesState,
+export type { EditorView };
+
+export type SessionsState = WindowsSessionsState & {
+  scheduledAutoStart?: boolean | null;
 };
 
-export type SupportedWindowTabInput = Exclude<
+type WindowsSupportedWindowTabInput = Exclude<
   WindowsTabInput,
   { type: "extension" } | { type: "extensions" } | { type: "folders" }
 >;
+
+export type SupportedWindowTabInput =
+  | Exclude<WindowsSupportedWindowTabInput, { type: "sessions" }>
+  | (Omit<
+      Extract<WindowsSupportedWindowTabInput, { type: "sessions" }>,
+      "state"
+    > & {
+      state?: SessionsState | null;
+    });
 
 export type TabInput =
   | SupportedWindowTabInput
@@ -46,6 +51,7 @@ export type SettingsTab =
   | "appearance"
   | "notifications"
   | "imports"
+  | "crm"
   | "developers"
   | "privacy"
   | "permissions"
@@ -63,6 +69,7 @@ const normalizeSettingsTab = (tab: string | null | undefined): SettingsTab => {
     case "appearance":
     case "notifications":
     case "imports":
+    case "crm":
     case "developers":
     case "privacy":
     case "permissions":
@@ -82,11 +89,11 @@ const normalizeSettingsTab = (tab: string | null | undefined): SettingsTab => {
   }
 };
 
-export type SettingsState = {
+type SettingsState = {
   tab: SettingsTab | null;
 };
 
-export type DailySummaryState = {
+type DailySummaryState = {
   activeTab: "timeline" | "raw" | null;
 };
 
@@ -152,7 +159,16 @@ export const getDefaultState = (tab: TabInput): Tab => {
         ...base,
         type: "sessions",
         id: tab.id,
-        state: tab.state ?? { view: null, autoStart: null },
+        state: tab.state
+          ? {
+              ...tab.state,
+              scheduledAutoStart: tab.state.scheduledAutoStart ?? null,
+            }
+          : {
+              view: null,
+              autoStart: null,
+              scheduledAutoStart: null,
+            },
       };
     case "contacts":
       return {

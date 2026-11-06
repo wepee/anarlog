@@ -4,6 +4,25 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type AcceptRequest = {
+    baseSequence: number;
+    events: Array<E2EeWitnessEvent>;
+    initialize: boolean;
+    mutationId: string;
+};
+
+export type AcceptResponse = {
+    cloudAuthorityAfter: number;
+    headSequence: number;
+    initializedAt: string;
+    mutationId: string;
+    receipts: Array<Receipt>;
+};
+
+export type AcceptedPage = E2EeWitnessPage & {
+    cloudAuthorityAfter?: number | null;
+};
+
 export type AccessRole = 'freeBusyReader' | 'reader' | 'writer' | 'owner' | 'unknown';
 
 export type ActionItem = {
@@ -182,7 +201,9 @@ export type CanStartTrialReason = 'eligible' | 'not_eligible' | 'error';
 
 export type CanStartTrialResponse = {
     canStartTrial: boolean;
+    offer?: null | TrialOffer;
     reason?: null | CanStartTrialReason;
+    trialDays?: number | null;
 };
 
 export type CanceledAttachmentBackupDeletion = {
@@ -196,6 +217,7 @@ export type CasSessionShareSnapshotRequest = {
     attachmentIds: Array<string>;
     baseRevision: number;
     body: unknown;
+    eventKey?: string | null;
     meetingAt?: string | null;
     mutationId: string;
     participants?: Array<string> | null;
@@ -343,6 +365,29 @@ export type CreatedApiKey = ApiKeyInfo & {
     key: string;
 };
 
+export type CrmContact = {
+    companyName?: string | null;
+    email?: string | null;
+    id?: string | null;
+    jobTitle?: string | null;
+    linkedinUrl?: string | null;
+    name?: string | null;
+    phone?: string | null;
+    url?: string | null;
+};
+
+export type CrmSearchContactsRequest = {
+    connection_id: string;
+    email?: string | null;
+    limit?: number | null;
+    name?: string | null;
+    provider: string;
+};
+
+export type CrmSearchContactsResponse = {
+    contacts: Array<CrmContact>;
+};
+
 export type CurrentAttachmentBackup = {
     ciphertextSha256: string;
     ciphertextSizeBytes: number;
@@ -474,6 +519,45 @@ export type Document = {
     template_id: string;
     title: string;
     updated_at: string;
+};
+
+export type DriveConnectionRequest = {
+    connection_id: string;
+};
+
+export type DriveExportFile = {
+    file_id: string;
+    url: string;
+};
+
+export type DriveExportFormat = 'markdown' | 'google_docs';
+
+export type DriveExportRequest = {
+    connection_id: string;
+    file_id: string;
+    filename: string;
+    folder_id: string;
+    format?: DriveExportFormat;
+    markdown: string;
+    meeting_id: string;
+};
+
+export type DriveFolder = {
+    drive_id?: string | null;
+    id: string;
+    name: string;
+};
+
+export type DriveFolderRequest = {
+    connection_id: string;
+    folder_id: string;
+};
+
+export type DrivePrepareExportRequest = {
+    connection_id: string;
+    folder_id: string;
+    format?: DriveExportFormat;
+    meeting_id: string;
 };
 
 export type E2EeDeviceEnrollmentPackage = {
@@ -1074,6 +1158,15 @@ export type ListenCallbackResponse = {
     request_id: string;
 };
 
+export type LiveCapability = 'editor' | 'viewer';
+
+export type LiveTicketResponse = {
+    capability: LiveCapability;
+    contentRevision: number;
+    expiresInSeconds: number;
+    ticket: string;
+};
+
 export type Location = {
     address?: null | PhysicalAddress;
     coordinates?: null | OutlookGeoCoordinates;
@@ -1098,6 +1191,10 @@ export type Meeting = {
     action_items: Array<ActionItem>;
     created_at: string;
     ended_at: string;
+    /**
+     * Folder path such as `Projects/Launch`; null when the meeting is not in a folder.
+     */
+    folder_path?: string | null;
     id: string;
     kind: string;
     language: string;
@@ -1112,13 +1209,44 @@ export type Meeting = {
     updated_at: string;
 };
 
+export type MeetingDevice = {
+    deviceFingerprint: string;
+    deviceName?: string | null;
+    primary: boolean;
+};
+
+export type MeetingDeviceHeartbeatRequest = {
+    intent: MeetingDeviceIntent;
+};
+
+export type MeetingDeviceIntent = 'present' | 'claim' | 'release';
+
+export type MeetingDevicesResponse = {
+    devices: Array<MeetingDevice>;
+};
+
 export type MeetingExport = Meeting & {
+    /**
+     * Recorded microphone/call context intervals (`sessions.metadata_json`
+     * `speaker_context`) used to label speakers the same way the desktop
+     * transcript view does.
+     */
+    speaker_context?: unknown;
+    /**
+     * People referenced by transcript speaker assignments (including the
+     * recording user) who may not appear among the meeting participants.
+     */
+    speakers?: Array<Speaker>;
     transcripts: Array<Transcript>;
 };
 
 export type MeetingListItem = {
     created_at: string;
     ended_at: string;
+    /**
+     * Folder path such as `Projects/Launch`; null when the meeting is not in a folder.
+     */
+    folder_path?: string | null;
     id: string;
     kind: string;
     series_id: string;
@@ -1314,6 +1442,17 @@ export type PhysicalAddress = {
     street?: string | null;
 };
 
+export type PickerComplete = {
+    code: string;
+    folder_id: string;
+    state: string;
+};
+
+export type PickerStart = {
+    authorization_url: string;
+    state: string;
+};
+
 export type PipelineStatus = 'processing' | 'done' | 'error';
 
 export type Profile = {
@@ -1367,6 +1506,12 @@ export type PullRequestDetail = {
     merged_by?: null | PersonRef;
     source_branch?: string | null;
     target_branch?: string | null;
+};
+
+export type Receipt = {
+    payloadHash: string;
+    recordId: string;
+    sequence: number;
 };
 
 export type Recipient = {
@@ -1626,6 +1771,12 @@ export type SnapshotReceipt = {
     session_id: string;
 };
 
+export type Speaker = {
+    human_id: string;
+    is_self?: boolean;
+    name: string;
+};
+
 export type StableSharedNoteSnapshot = {
     accessScope: string;
     snapshot: SharedNoteSnapshot;
@@ -1634,8 +1785,10 @@ export type StableSharedNoteSnapshot = {
 export type StartTrialReason = 'started' | 'not_eligible';
 
 export type StartTrialResponse = {
+    offer?: null | TrialOffer;
     reason?: null | StartTrialReason;
     started: boolean;
+    trialDays?: number | null;
 };
 
 export type StreamAlternatives = {
@@ -1853,6 +2006,8 @@ export type TranscriptionSegment = {
 };
 
 export type Transparency = 'opaque' | 'transparent' | 'unknown';
+
+export type TrialOffer = 'referral' | 'work_email' | 'personal_email';
 
 export type UpdateSettingsBody = {
     enabled: boolean;
@@ -2290,6 +2445,41 @@ export type OutlookListEventsResponses = {
 };
 
 export type OutlookListEventsResponse2 = OutlookListEventsResponses[keyof OutlookListEventsResponses];
+
+export type CrmSearchContactsData = {
+    body: CrmSearchContactsRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/search-contacts';
+};
+
+export type CrmSearchContactsErrors = {
+    /**
+     * Unknown provider or missing query
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * No Nango connection for the provider
+     */
+    404: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type CrmSearchContactsResponses = {
+    /**
+     * Matching CRM contacts
+     */
+    200: CrmSearchContactsResponse;
+};
+
+export type CrmSearchContactsResponse2 = CrmSearchContactsResponses[keyof CrmSearchContactsResponses];
 
 export type FathomImportMeetingsData = {
     body: ImportMeetingsRequest;
@@ -2742,6 +2932,71 @@ export type ListConnectionsResponses = {
 };
 
 export type ListConnectionsResponse2 = ListConnectionsResponses[keyof ListConnectionsResponses];
+
+export type GoogleDriveExportMarkdownData = {
+    body: DriveExportRequest;
+    path?: never;
+    query?: never;
+    url: '/nango/google-drive/export';
+};
+
+export type GoogleDriveExportMarkdownResponses = {
+    200: DriveExportFile;
+};
+
+export type GoogleDriveExportMarkdownResponse = GoogleDriveExportMarkdownResponses[keyof GoogleDriveExportMarkdownResponses];
+
+export type GoogleDriveValidateFolderData = {
+    body: DriveFolderRequest;
+    path?: never;
+    query?: never;
+    url: '/nango/google-drive/folder';
+};
+
+export type GoogleDriveValidateFolderResponses = {
+    200: DriveFolder;
+};
+
+export type GoogleDriveValidateFolderResponse = GoogleDriveValidateFolderResponses[keyof GoogleDriveValidateFolderResponses];
+
+export type GoogleDrivePickerCompleteData = {
+    body: PickerComplete;
+    path?: never;
+    query?: never;
+    url: '/nango/google-drive/picker-complete';
+};
+
+export type GoogleDrivePickerCompleteResponses = {
+    200: DriveFolder;
+};
+
+export type GoogleDrivePickerCompleteResponse = GoogleDrivePickerCompleteResponses[keyof GoogleDrivePickerCompleteResponses];
+
+export type GoogleDrivePickerStartData = {
+    body: DriveConnectionRequest;
+    path?: never;
+    query?: never;
+    url: '/nango/google-drive/picker-start';
+};
+
+export type GoogleDrivePickerStartResponses = {
+    200: PickerStart;
+};
+
+export type GoogleDrivePickerStartResponse = GoogleDrivePickerStartResponses[keyof GoogleDrivePickerStartResponses];
+
+export type GoogleDrivePrepareExportData = {
+    body: DrivePrepareExportRequest;
+    path?: never;
+    query?: never;
+    url: '/nango/google-drive/prepare-export';
+};
+
+export type GoogleDrivePrepareExportResponses = {
+    200: DriveExportFile;
+};
+
+export type GoogleDrivePrepareExportResponse = GoogleDrivePrepareExportResponses[keyof GoogleDrivePrepareExportResponses];
 
 export type CreateSessionData = {
     body: CreateSessionRequest;
@@ -4656,6 +4911,10 @@ export type PublishE2EeWitnessErrors = {
      * Witness service unavailable
      */
     502: unknown;
+    /**
+     * Publication busy; retry after the Retry-After delay
+     */
+    503: unknown;
 };
 
 export type PublishE2EeWitnessResponses = {
@@ -4666,6 +4925,56 @@ export type PublishE2EeWitnessResponses = {
 };
 
 export type PublishE2EeWitnessResponse2 = PublishE2EeWitnessResponses[keyof PublishE2EeWitnessResponses];
+
+export type ReadAcceptedE2EeReplicaData = {
+    body?: never;
+    path: {
+        workspace_id: string;
+    };
+    query?: {
+        afterSequence?: number;
+        throughSequence?: number;
+    };
+    url: '/sync/e2ee/witness/{workspace_id}/accepted';
+};
+
+export type ReadAcceptedE2EeReplicaResponses = {
+    /**
+     * Accepted cloud state and legacy cutover boundary
+     */
+    200: AcceptedPage;
+};
+
+export type ReadAcceptedE2EeReplicaResponse = ReadAcceptedE2EeReplicaResponses[keyof ReadAcceptedE2EeReplicaResponses];
+
+export type AcceptE2EeReplicaBatchData = {
+    body: AcceptRequest;
+    path: {
+        workspace_id: string;
+    };
+    query?: never;
+    url: '/sync/e2ee/witness/{workspace_id}/accepted';
+};
+
+export type AcceptE2EeReplicaBatchErrors = {
+    /**
+     * Cloud base changed; pull and rebase
+     */
+    409: unknown;
+    /**
+     * Acceptance busy; retry after the Retry-After delay
+     */
+    503: unknown;
+};
+
+export type AcceptE2EeReplicaBatchResponses = {
+    /**
+     * Atomic acceptance receipt
+     */
+    200: AcceptResponse;
+};
+
+export type AcceptE2EeReplicaBatchResponse = AcceptE2EeReplicaBatchResponses[keyof AcceptE2EeReplicaBatchResponses];
 
 export type WaitE2EeWitnessData = {
     body?: never;
@@ -4791,6 +5100,56 @@ export type GetWorkspaceE2EeKeyRecipientsResponses = {
 };
 
 export type GetWorkspaceE2EeKeyRecipientsResponse = GetWorkspaceE2EeKeyRecipientsResponses[keyof GetWorkspaceE2EeKeyRecipientsResponses];
+
+export type HeartbeatMeetingDeviceData = {
+    body: MeetingDeviceHeartbeatRequest;
+    headers: {
+        /**
+         * Fingerprint of the calling device
+         */
+        'x-device-fingerprint': string;
+    };
+    path: {
+        /**
+         * Opaque key derived from the calendar event
+         */
+        meeting_key: string;
+    };
+    query?: never;
+    url: '/sync/meetings/{meeting_key}/devices';
+};
+
+export type HeartbeatMeetingDeviceErrors = {
+    /**
+     * Invalid meeting key or device fingerprint
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * BlackMushi Pro subscription required
+     */
+    403: unknown;
+    /**
+     * The calling device is not a registered sync device
+     */
+    404: unknown;
+    /**
+     * Device service unavailable
+     */
+    502: unknown;
+};
+
+export type HeartbeatMeetingDeviceResponses = {
+    /**
+     * Devices present for the meeting
+     */
+    200: MeetingDevicesResponse;
+};
+
+export type HeartbeatMeetingDeviceResponse = HeartbeatMeetingDeviceResponses[keyof HeartbeatMeetingDeviceResponses];
 
 export type CreateReplicaCredentialsData = {
     body?: never;
@@ -4988,6 +5347,35 @@ export type GrantSharedAttachmentUploadResponses = {
 };
 
 export type GrantSharedAttachmentUploadResponse = GrantSharedAttachmentUploadResponses[keyof GrantSharedAttachmentUploadResponses];
+
+export type CreateLiveTicketData = {
+    body?: never;
+    path: {
+        /**
+         * Shared note ID
+         */
+        share_id: string;
+    };
+    query?: never;
+    url: '/sync/shares/{share_id}/live/ticket';
+};
+
+export type CreateLiveTicketErrors = {
+    /**
+     * No access to the shared note
+     */
+    403: unknown;
+    /**
+     * Shared note not found
+     */
+    404: unknown;
+};
+
+export type CreateLiveTicketResponses = {
+    200: LiveTicketResponse;
+};
+
+export type CreateLiveTicketResponse = CreateLiveTicketResponses[keyof CreateLiveTicketResponses];
 
 export type PublishSessionShareSnapshotData = {
     body: PublishSessionShareSnapshotRequest;

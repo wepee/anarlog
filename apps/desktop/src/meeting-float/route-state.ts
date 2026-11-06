@@ -5,10 +5,16 @@ import {
   type FloatingOverlaySettings,
   type LiveCaptionPosition,
 } from "./settings";
+import type { FloatingSpeakerLabels } from "./speaker-labels";
 
 import type { ListenerStore } from "~/store/zustand/listener";
+import {
+  getCaptureWarning,
+  isLiveTranscriptInterrupted,
+} from "~/store/zustand/listener/general-shared";
 import { LIVE_TRANSCRIPT_PREVIEW_SEGMENT_LIMIT } from "~/store/zustand/listener/transcript";
 import { SegmentKeyUtils, type RenderLabelContext } from "~/stt/live-segment";
+import { getLiveTranscriptPausedMessage } from "~/stt/live-transcript-interrupted";
 
 export type ListenerState = ReturnType<ListenerStore["getState"]>;
 type FloatingBarStatus = "recording" | "reconnecting" | "error";
@@ -41,6 +47,7 @@ export type FloatingRouteState = {
   liveCaptionMinimized: boolean;
   liveCaptionToggleVisible: boolean;
   transcriptBubbles: FloatingTranscriptBubble[];
+  transcriptNotice?: string | null;
 };
 const FLOATING_TRANSCRIPT_OVERLAP_THRESHOLD_MS = 300;
 
@@ -53,14 +60,18 @@ export function getFloatingRouteState(
     liveCaptionToggleVisible = false,
     sessionTitle,
     speakerLabelContext,
+    speakerLabels,
     transcriptBubbles,
+    sttProvider,
   }: {
+    sttProvider?: string | null;
     sessionId?: string;
     colorScheme?: FloatingBarColorScheme;
     settings?: FloatingOverlaySettings;
     liveCaptionToggleVisible?: boolean;
     sessionTitle?: string | null;
     speakerLabelContext?: RenderLabelContext;
+    speakerLabels?: FloatingSpeakerLabels;
     transcriptBubbles?: FloatingTranscriptBubble[];
   } = {},
 ): FloatingRouteState | null {
@@ -83,13 +94,7 @@ export function getFloatingRouteState(
       Math.hypot(state.live.amplitude.mic, state.live.amplitude.speaker),
       1,
     ),
-    status:
-      state.live.loadingPhase === "connecting" &&
-      !state.live.lastErrorIsAudioRelated
-        ? "reconnecting"
-        : state.live.degraded || state.live.lastError
-          ? "error"
-          : "recording",
+    status: getCaptureWarning(state.live) ? "error" : "recording",
     colorScheme,
     opacity: settings.floatingBarOpacity,
     liveCaptionOpacity: settings.liveCaptionOpacity,
@@ -100,7 +105,19 @@ export function getFloatingRouteState(
     liveCaptionToggleVisible,
     transcriptBubbles:
       transcriptBubbles ??
-      getFloatingTranscriptBubbles(state.liveSegments, speakerLabelContext),
+      getFloatingTranscriptBubbles(
+        state.liveSegments,
+        speakerLabelContext,
+        speakerLabels,
+      ),
+    transcriptNotice:
+      getCaptureWarning(state.live) ??
+      (isLiveTranscriptInterrupted(state.live)
+        ? getLiveTranscriptPausedMessage({
+            degraded: state.live.degraded,
+            sttProvider,
+          })
+        : null),
   };
 }
 
@@ -112,6 +129,7 @@ function getFloatingTitle(title: string | null | undefined) {
 export function getFloatingTranscriptBubbles(
   segments: ListenerState["liveSegments"],
   speakerLabelContext?: RenderLabelContext,
+  speakerLabels?: FloatingSpeakerLabels,
 ): FloatingTranscriptBubble[] {
   const bubbles = segments
     .slice()
@@ -128,11 +146,21 @@ export function getFloatingTranscriptBubbles(
         return null;
       }
 
+      // A resolved identity decides who is speaking; the channel only does so
+      // until the native labeler has answered.
+      const resolved = speakerLabels?.get(segment.id);
+      const isSelf = resolved?.humanId
+        ? resolved.humanId === speakerLabelContext?.getSelfHumanId()
+        : isFloatingSelfSpeaker(segment.key);
       return {
         id: segment.id,
-        speakerLabel: getFloatingSpeakerLabel(segment.key, speakerLabelContext),
+        speakerLabel: resolved
+          ? isSelf
+            ? "You"
+            : resolved.label
+          : getFloatingSpeakerLabel(segment.key, speakerLabelContext),
         text,
-        isSelf: isFloatingSelfSpeaker(segment.key),
+        isSelf,
         isFinal: segment.words.every((word) => word.is_final),
         startMs: segment.start_ms,
         endMs: segment.end_ms,
@@ -274,7 +302,7 @@ function updateRankedBoundaries(
   boundaries.splice(2);
 }
 
-export function shouldShowFloatingLiveCaptionToggle({
+function shouldShowFloatingLiveCaptionToggle({
   liveTranscriptionActive,
 }: {
   provider?: string | null;
@@ -286,7 +314,9 @@ export function shouldShowFloatingLiveCaptionToggle({
 
 export function getFloatingLiveCaptionToggleVisible(state: ListenerState) {
   return shouldShowFloatingLiveCaptionToggle({
-    liveTranscriptionActive: state.live.liveTranscriptionActive === true,
+    liveTranscriptionActive:
+      state.live.liveTranscriptionActive === true ||
+      isLiveTranscriptInterrupted(state.live),
   });
 }
 
@@ -315,6 +345,7 @@ export function isSameFloatingRouteState(
     left?.liveCaptionMinimized === right?.liveCaptionMinimized &&
     left?.liveCaptionToggleVisible === right?.liveCaptionToggleVisible &&
     left?.title === right?.title &&
+    (left?.transcriptNotice ?? null) === (right?.transcriptNotice ?? null) &&
     left?.dictation?.sessionId === right?.dictation?.sessionId &&
     left?.dictation?.phase === right?.dictation?.phase &&
     left?.dictation?.microphone === right?.dictation?.microphone &&

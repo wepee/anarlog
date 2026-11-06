@@ -9,6 +9,7 @@ debug = false
 
 [workspace]
 resolver = "2"
+exclude = ["crates/tiptap/vendor/mdast_util_to_markdown"]
 members = [
   "apps/cli",
   "apps/desktop/src-tauri",
@@ -27,6 +28,7 @@ anlg-api-auth = { path = "crates/api-auth", package = "api-auth" }
 anlg-api-calendar = { path = "crates/api-calendar", package = "api-calendar" }
 anlg-api-client = { path = "crates/api-client", package = "api-client" }
 anlg-api-cloud = { path = "crates/api-cloud", package = "api-cloud" }
+anlg-api-crm = { path = "crates/api-crm", package = "api-crm" }
 anlg-api-env = { path = "crates/api-env", package = "api-env" }
 anlg-api-error = { path = "crates/api-error", package = "api-error" }
 anlg-api-mail = { path = "crates/api-mail", package = "api-mail" }
@@ -124,11 +126,11 @@ anlg-pyannote-cloud = { path = "crates/pyannote-cloud", package = "pyannote-clou
 anlg-pyannote-local = { path = "crates/pyannote-local", package = "pyannote-local" }
 anlg-resampler = { path = "crates/resampler", package = "resampler" }
 anlg-s3 = { path = "crates/s3", package = "s3" }
-anlg-screen-core = { path = "crates/screen-core", package = "screen-core" }
 anlg-session-ingest = { path = "crates/session-ingest", package = "session-ingest" }
 anlg-shortcut-macos = { path = "crates/shortcut-macos", package = "shortcut-macos" }
 anlg-slack-web = { path = "crates/slack-web", package = "slack-web" }
 anlg-storage = { path = "crates/storage", package = "storage" }
+anlg-summary = { path = "crates/summary", package = "summary" }
 anlg-supabase-auth = { path = "crates/supabase-auth", package = "supabase-auth" }
 anlg-supabase-storage = { path = "crates/supabase-storage", package = "supabase-storage" }
 anlg-tcc = { path = "crates/tcc", package = "tcc" }
@@ -199,7 +201,6 @@ tauri-plugin-dock = { path = "plugins/dock" }
 tauri-plugin-export = { path = "plugins/export" }
 tauri-plugin-fs-sync = { path = "plugins/fs-sync" }
 tauri-plugin-fs2 = { path = "plugins/fs2" }
-tauri-plugin-git = { path = "plugins/git" }
 tauri-plugin-hooks = { path = "plugins/hooks" }
 tauri-plugin-icon = { path = "plugins/icon" }
 tauri-plugin-importer = { path = "plugins/importer" }
@@ -218,7 +219,7 @@ tauri-plugin-overlay = { path = "plugins/overlay" }
 tauri-plugin-path2 = { path = "plugins/path2" }
 tauri-plugin-permissions = { path = "plugins/permissions" }
 tauri-plugin-relay = { path = "plugins/relay" }
-tauri-plugin-screen = { path = "plugins/screen" }
+tauri-plugin-session = { path = "plugins/session" }
 tauri-plugin-settings = { path = "plugins/settings" }
 tauri-plugin-sfx = { path = "plugins/sfx" }
 tauri-plugin-shortcut = { path = "plugins/shortcut" }
@@ -249,6 +250,7 @@ tokio = "1"
 tokio-stream = "0.1.17"
 tokio-tungstenite = "0.29"
 tokio-util = "0.7.15"
+yrs = "0.26"
 
 camino = "1"
 
@@ -265,6 +267,7 @@ envy = "0.4"
 governor = "0.10.4"
 http = "1"
 image = { version = "0.25.10", default-features = false, features = ["webp"] }
+indexmap = "2"
 indoc = "2"
 isolang = "2.4"
 itertools = "0.14.0"
@@ -288,6 +291,7 @@ strum = "0.28"
 tempfile = "3"
 thiserror = "2"
 toml = "0.8"
+unicode-normalization = "0.1.25"
 unicode-width = "0.2"
 url = "2"
 urlencoding = "2.1"
@@ -322,17 +326,18 @@ vergen-gix = "9"
 askama = "0.15"
 askama_parser = "0.15"
 markdown = "1"
-mdast_util_to_markdown = "0.0.2"
+# Vendored 0.0.2 with byte-indexed Unicode escaping fixed; upstream still uses chars().nth(byte_offset).
+mdast_util_to_markdown = { path = "crates/tiptap/vendor/mdast_util_to_markdown" }
 minijinja = "2.7.0"
 minijinja-contrib = "2.7.0"
 
 env_logger = "0.11.8"
 log = "0.4"
-opentelemetry = "0.30"
-opentelemetry-otlp = { version = "0.30", features = ["grpc-tonic", "trace"] }
-opentelemetry_sdk = "0.30"
+opentelemetry = "0.32"
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "trace"] }
+opentelemetry_sdk = "0.32"
 tracing = "0.1"
-tracing-opentelemetry = "0.31"
+tracing-opentelemetry = "0.33"
 tracing-subscriber = "0.3"
 
 apalis = "1.0.0-rc.7"
@@ -376,8 +381,10 @@ objc2-user-notifications = "0.3.2"
 security-framework = "3.7"
 
 hmac = "0.13"
+same-file = "1.0.6"
 sha2 = "0.11"
 
+whatlang = "0.18.0"
 whichlang = "0.1"
 
 swift-rs = { git = "https://github.com/Brendonovich/swift-rs", rev = "fd82965" }

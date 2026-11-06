@@ -1,3 +1,5 @@
 {
-  "proTrialDays": 21
+  "proTrialDays": 7,
+  "workEmailProTrialDays": 30,
+  "referralProTrialDays": 30
 }

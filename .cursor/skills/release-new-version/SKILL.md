@@ -12,5 +12,6 @@ canonical, universal instructions live at:
 
 `../../../.agents/skills/release-new-version/SKILL.md`
 
-Read that file completely and follow it. Do not maintain a second release
-checklist here; changes belong in `.agents/skills/release-new-version/`.
+Read that coordinator completely, then its required focused skills and the
+applicable desktop/mobile procedure references. Do not maintain a second release
+checklist here; changes belong in `.agents/skills/`.

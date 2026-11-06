@@ -75,6 +75,10 @@ vi.mock("~/session/components/live-assist", () => ({
   ),
 }));
 
+vi.mock("./use-summary-quick-actions", () => ({
+  useHasEditableSummary: () => false,
+}));
+
 vi.mock("~/sidebar/note-filter", () => ({
   folderIdForNewNote: (folderFilter: string | null) =>
     folderFilter ?? undefined,
@@ -197,7 +201,7 @@ describe("Chat panel", () => {
     mocks.hasAvailableTranscript = true;
     mocks.sessionMode = "active";
 
-    const { container } = render(<TestChatPanel layout="right-panel" />);
+    render(<TestChatPanel layout="right-panel" />);
 
     expect(mocks.chatSession).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -209,47 +213,6 @@ describe("Chat panel", () => {
     );
     expect(screen.queryByTestId("chat-toolbar")).toBeNull();
     expect(mocks.toolbarControls).not.toHaveBeenCalled();
-    expect(container.firstElementChild?.className).not.toContain("pb-3");
-  });
-
-  it("uses the sidebar card shell in the right panel layout", () => {
-    const { container } = render(<TestChatPanel layout="right-panel" />);
-    const root = container.firstElementChild;
-
-    expect(root?.className).toContain("bg-card");
-    expect(root?.className).toContain("text-card-foreground");
-    expect(root?.className).toContain("h-full");
-    expect(root?.className).not.toContain("bg-primary");
-    expect(root?.firstElementChild?.className).toContain("h-9");
-    expect(root?.firstElementChild?.className).not.toContain("border-b");
-    expect(
-      root?.firstElementChild?.hasAttribute("data-tauri-drag-region"),
-    ).toBe(true);
-    expect(screen.getByTestId("chat-toolbar").dataset.surface).toBe("light");
-    expect(mocks.toolbarControls).toHaveBeenCalledWith(
-      expect.objectContaining({
-        layout: "right-panel",
-        onClose: expect.any(Function),
-        surface: "light",
-      }),
-    );
-  });
-
-  it("uses the neutral shell in the floating layout", () => {
-    const { container } = render(<TestChatPanel layout="floating" />);
-    const root = container.firstElementChild;
-
-    expect(root?.className).toContain("bg-[#f4f4f5]");
-    expect(root?.className).toContain("text-card-foreground");
-    expect(root?.className).toContain("max-h-full");
-    expect(root?.className).not.toContain("bg-card");
-    expect(root?.className.split(" ")).not.toContain("h-full");
-    expect(root?.firstElementChild?.className).toContain("h-11");
-    expect(root?.firstElementChild?.className).not.toContain("border-b");
-    expect(
-      root?.firstElementChild?.hasAttribute("data-tauri-drag-region"),
-    ).toBe(false);
-    expect(screen.getByTestId("chat-toolbar").dataset.surface).toBe("light");
   });
 
   it("shows the Chat/Live Assist switcher only in the right panel with a session", () => {

@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -41,6 +47,7 @@ vi.mock("~/settings/queries", () => ({
 
 vi.mock("./account", () => ({ SettingsAccount: () => null }));
 vi.mock("./app-settings", () => ({ AppSettingsView: () => null }));
+vi.mock("./audio-archive", () => ({ AudioArchiveRow: () => null }));
 vi.mock("./audio-settings", () => ({
   AudioSettingsView: () => <span>Audio settings</span>,
 }));
@@ -59,9 +66,6 @@ vi.mock("./notification", () => ({ NotificationSettingsView: () => null }));
 vi.mock("./permissions", () => ({ Permissions: () => null }));
 vi.mock("./spoken-languages", () => ({ SpokenLanguagesView: () => null }));
 vi.mock("./storage", () => ({ StorageSettingsView: () => null }));
-vi.mock("./summary-length", () => ({
-  SummaryLengthSelector: () => <span>Summary length selector</span>,
-}));
 vi.mock("./timezone", () => ({ TimezoneSelector: () => null }));
 vi.mock("./week-start", () => ({ WeekStartSelector: () => null }));
 
@@ -175,9 +179,33 @@ describe("SettingsApp", () => {
 
     expect(screen.getByText("Meetings")).toBeTruthy();
     expect(screen.getByText("Meeting settings")).toBeTruthy();
-    expect(screen.getByText("Summaries")).toBeTruthy();
-    expect(screen.getByText("Summary length selector")).toBeTruthy();
     expect(screen.getByText("Audio")).toBeTruthy();
     expect(screen.getByText("Audio settings")).toBeTruthy();
+  });
+
+  it("persists the main-language summary option without removing Korean transcription", async () => {
+    mocks.useStoredSettingValuesQuery.mockReturnValue({
+      data: {
+        values: { ai_language: "en", spoken_languages: '["ko"]' },
+        hasValues: new Set(["ai_language", "spoken_languages"]),
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    render(<SettingsApp />);
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Use main language for summaries" }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.setSettingValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          summary_use_main_language: true,
+          ai_language: "en",
+          spoken_languages: '["ko"]',
+        }),
+      );
+    });
   });
 });

@@ -33,7 +33,7 @@ vi.mock("~/services/meeting-import-sync", () => ({
   MeetingImportSync: () => <div data-testid="meeting-import-sync" />,
 }));
 
-vi.mock("~/shared/hooks/useMountEffect", () => ({
+vi.mock("@anlg/ui/hooks/use-mount-effect", () => ({
   useMountEffect: vi.fn(),
 }));
 

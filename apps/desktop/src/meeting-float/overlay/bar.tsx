@@ -8,7 +8,6 @@ import {
   ArrowsInSimple,
   ArrowsOutSimple,
   CaretDown,
-  CircleNotch,
   Square,
   WarningCircle,
 } from "@anlg/ui/components/icons";
@@ -45,6 +44,7 @@ export function FloatingBarOverlay({
   const [hovered, setHovered] = useState(false);
   const isExpanded =
     state.liveCaptionToggleVisible && !state.liveCaptionMinimized;
+  const showsHoverHandle = hovered && !isExpanded;
   const colors = barColors(state);
   const controlsWidth = compactControlsWidth(state.liveCaptionToggleVisible);
   const expandsUpward = state.layout?.expandsUpward ?? false;
@@ -55,6 +55,16 @@ export function FloatingBarOverlay({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {isExpanded && (
+        <div
+          data-tauri-drag-region
+          className="absolute inset-x-0 top-0"
+          style={{
+            height:
+              FLOATING_BAR_INSET + FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT,
+          }}
+        />
+      )}
       <div
         className="absolute overflow-hidden"
         style={{
@@ -63,7 +73,7 @@ export function FloatingBarOverlay({
           bottom: FLOATING_BAR_INSET,
           top:
             FLOATING_BAR_INSET +
-            (hovered ? 0 : FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT),
+            (showsHoverHandle ? 0 : FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT),
           borderRadius: isExpanded
             ? FLOATING_BAR_EXPANDED_RADIUS
             : FLOATING_BAR_COMPACT_RADIUS,
@@ -72,11 +82,13 @@ export function FloatingBarOverlay({
           boxShadow: `inset 0 0 0 0.5px ${colors.outerStroke}`,
         }}
       >
-        {hovered && <HoverHandle color={colors.handle} />}
+        {showsHoverHandle && <HoverHandle color={colors.handle} />}
         <div
           className="absolute inset-x-0 bottom-0"
           style={{
-            top: hovered ? FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT : 0,
+            top: showsHoverHandle
+              ? FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT
+              : 0,
           }}
         >
           {isExpanded && (
@@ -87,26 +99,12 @@ export function FloatingBarOverlay({
                 bottom: expandsUpward ? FLOATING_BAR_COMPACT_HEIGHT : 0,
               }}
             >
-              <div
-                className="flex items-center px-4"
-                style={{ height: FLOATING_BAR_COMPACT_HEIGHT }}
-              >
-                <p
-                  className="min-w-0 truncate text-[13px] font-semibold"
-                  style={{ color: colors.content }}
-                >
-                  {state.dictation?.phase === "transcribing"
-                    ? "Finishing…"
-                    : state.dictation?.phase === "starting"
-                      ? "Starting…"
-                      : state.title}
-                </p>
-              </div>
               <TranscriptList
                 key={state.dictation?.sessionId ?? "meeting"}
                 dictation={state.dictation}
                 bubbles={state.transcriptBubbles ?? []}
                 colorScheme={state.colorScheme}
+                notice={state.transcriptNotice ?? null}
               />
             </div>
           )}
@@ -203,11 +201,14 @@ function StopControl({
       aria-label={
         state.dictation
           ? "Finish dictation"
-          : state.status === "reconnecting"
-            ? "Reconnecting live transcription; stop listening"
-            : state.status === "error"
-              ? "Transcription unavailable; stop listening"
-              : "Stop listening"
+          : state.status === "error"
+            ? `${state.transcriptNotice ?? "Recording needs attention"}; stop listening`
+            : "Stop listening"
+      }
+      title={
+        state.status === "error"
+          ? `${state.transcriptNotice ?? "Recording needs attention"}. Open BlackMushi to retry or change devices.`
+          : undefined
       }
       disabled={state.dictation?.phase === "transcribing"}
       onClick={onStop}
@@ -231,8 +232,6 @@ function StopControl({
           <Square size={9} />
           {state.dictation ? "Done" : "Stop"}
         </span>
-      ) : state.status === "reconnecting" ? (
-        <CircleNotch size={20} className="animate-spin" aria-hidden="true" />
       ) : state.status === "error" ? (
         <WarningCircle size={20} aria-hidden="true" />
       ) : (
@@ -253,10 +252,12 @@ function TranscriptList({
   bubbles,
   colorScheme,
   dictation,
+  notice,
 }: {
   dictation: FloatingBarState["dictation"];
   bubbles: FloatingTranscriptBubble[];
   colorScheme: FloatingBarState["colorScheme"];
+  notice: string | null;
 }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [pinned, setPinned] = useState(true);
@@ -265,10 +266,10 @@ function TranscriptList({
     if (pinned) {
       bottomRef.current?.scrollIntoView?.({ block: "end" });
     }
-  }, [bubbles, pinned, dictation?.text, dictation?.partial]);
+  }, [bubbles, pinned, notice, dictation?.text, dictation?.partial]);
 
   return (
-    <div className="relative h-[calc(100%-38px)] px-3 pb-3">
+    <div className="relative h-full p-3">
       <div
         className="h-full overflow-y-auto"
         onScroll={(event) => {
@@ -303,6 +304,20 @@ function TranscriptList({
               />
             ))
           )}
+          {!dictation && notice ? (
+            <p
+              role="status"
+              className="px-3 py-1.5 text-center text-[12px] leading-4"
+              style={{
+                color:
+                  colorScheme === "dark"
+                    ? "rgba(255, 255, 255, 0.5)"
+                    : "rgba(0, 0, 0, 0.45)",
+              }}
+            >
+              {notice}
+            </p>
+          ) : null}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -350,14 +365,9 @@ function TranscriptBubble({
     <div
       className={cn(["flex", bubble.isSelf ? "justify-end" : "justify-start"])}
     >
-      <div
-        className={cn([
-          "max-w-[calc(100%-40px)]",
-          bubble.isSelf ? "items-end" : "items-start",
-        ])}
-      >
+      <div className="max-w-[calc(100%-40px)] text-left">
         {(showsSpeakerLabel || overlapping) && (
-          <p className="mb-1 px-1 text-[10px] font-semibold text-white">
+          <p className="mb-1 text-[10px] font-semibold text-white">
             {showsSpeakerLabel ? bubble.speakerLabel : ""}
           </p>
         )}
@@ -429,6 +439,6 @@ function barColors(state: FloatingBarState): BarColors {
     handle: dark ? "rgba(255, 255, 255, 0.48)" : "rgba(31, 28, 26, 0.36)",
     outerStroke: dark ? "rgba(255, 255, 255, 0.14)" : "rgba(31, 28, 26, 0.12)",
     controlFill: dark ? "rgba(255, 255, 255, 0.08)" : "rgba(31, 28, 26, 0.07)",
-    accent: state.status === "error" ? "rgb(255, 64, 61)" : "rgb(255, 51, 77)",
+    accent: "rgb(255, 51, 77)",
   };
 }

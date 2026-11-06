@@ -17,6 +17,7 @@ export const BROWSER_AUTO_STOP_APP_IDS = new Set([
   "com.brave.Browser",
   "com.brave.Browser.beta",
   "com.brave.Browser.nightly",
+  "com.brave.Browser.origin",
   "com.duckduckgo.macos.browser",
   "chrome",
   "comet",
@@ -86,6 +87,7 @@ const NOTIFICATION_ICON_RESOURCES = {
   webex: "notification-icons/webex.svg",
   whatsapp: "notification-icons/whatsapp.png",
   whereby: "notification-icons/whereby.png",
+  xCalls: "notification-icons/x-calls.svg",
   zoom: "notification-icons/zoom.svg",
 } as const;
 
@@ -173,6 +175,10 @@ const MEETING_PLATFORMS = {
   messenger: {
     displayName: "Messenger",
     iconResource: "messenger",
+  },
+  xCalls: {
+    displayName: "X Calls",
+    iconResource: "xCalls",
   },
 } satisfies Record<string, MeetingPlatform>;
 
@@ -404,11 +410,26 @@ export async function getFaviconIconForUrl(
   return { type: "path", path: result.data };
 }
 
+export function isMeetingCapableMicApp(app: MicApp) {
+  return isBrowserApp(app) || getMicAppNotificationOverride(app) !== undefined;
+}
+
 function detectMeetingPlatformFromUrl(value: string): MeetingPlatform | null {
   try {
     const parsed = new URL(value);
     const hostname = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname.toLowerCase();
+
+    if (hostname === "call.x.com") {
+      return MEETING_PLATFORMS.xCalls;
+    }
+
+    if (
+      (hostname === "x.com" || hostname === "www.x.com") &&
+      (pathname.startsWith("/i/call/") || pathname.startsWith("/call/"))
+    ) {
+      return MEETING_PLATFORMS.xCalls;
+    }
 
     if (hostname === "zoom.us" || hostname.endsWith(".zoom.us")) {
       return MEETING_PLATFORMS.zoom;
@@ -577,6 +598,12 @@ function detectMeetingPlatformFromText(value: string): MeetingPlatform | null {
   }
   if (/\bline meeting\b/.test(normalized) || normalized === "line") {
     return MEETING_PLATFORMS.line;
+  }
+  if (
+    /(^|[^a-z0-9])call\.x\.com\//.test(normalized) ||
+    /\bx calls\b/.test(normalized)
+  ) {
+    return MEETING_PLATFORMS.xCalls;
   }
   if (/\bmessenger (call|meeting|room)\b/.test(normalized)) {
     return MEETING_PLATFORMS.messenger;

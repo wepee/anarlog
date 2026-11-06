@@ -2,12 +2,7 @@ import { platform } from "@tauri-apps/plugin-os";
 
 import type { SectionStatus } from "./shared";
 
-export type OnboardingStep =
-  | "permissions"
-  | "calendar"
-  | "imports"
-  | "folder-location"
-  | "final";
+export type OnboardingStep = "permissions" | "calendar" | "imports" | "final";
 
 const STEPS_MACOS: OnboardingStep[] = [
   "permissions",

@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use anlg_ws_client::client::Message;
+use anlg_ws_client::client::{IntoClientRequest, Message};
 use bytes::Bytes;
 
-use super::{ListenClientDualInput, TransformedInput, forward_dual_to_single};
+use super::{ListenClientDualInput, TransformedInput, forward_dual_to_single, mic_stream_params};
 use crate::test_utils::{run_dual_test, run_single_test};
 use crate::{AssemblyAIAdapter, DeepgramAdapter, ListenClient, RealtimeSttAdapter, SonioxAdapter};
 
@@ -107,6 +107,59 @@ async fn valid_proxy_and_direct_endpoints_still_build() {
 }
 
 #[tokio::test]
+async fn split_dual_builds_mic_request_from_mic_speaker_params() {
+    let client = ListenClient::builder()
+        .adapter::<AssemblyAIAdapter>()
+        .api_base("wss://api.assemblyai.com/v2/realtime/ws")
+        .api_key("test-key")
+        .params(owhisper_interface::ListenParams {
+            mic_num_speakers: Some(1),
+            ..Default::default()
+        })
+        .build_dual()
+        .await
+        .unwrap();
+
+    // URL-configured providers read the speaker cap from the connection URI, so
+    // the mic side of a split session needs a request built from the mic params.
+    let mic_uri = client
+        .mic_request
+        .as_ref()
+        .expect("split sessions should build a dedicated mic request")
+        .clone()
+        .into_client_request()
+        .unwrap()
+        .uri()
+        .to_string();
+    assert!(mic_uri.contains("max_speakers=1"), "mic URI: {mic_uri}");
+    let spk_uri = client
+        .request
+        .clone()
+        .into_client_request()
+        .unwrap()
+        .uri()
+        .to_string();
+    assert!(!spk_uri.contains("max_speakers"), "spk URI: {spk_uri}");
+}
+
+#[tokio::test]
+async fn native_multichannel_dual_does_not_build_mic_request() {
+    let client = ListenClient::builder()
+        .adapter::<DeepgramAdapter>()
+        .api_base("https://api.deepgram.com/v1")
+        .api_key("test-key")
+        .params(owhisper_interface::ListenParams {
+            mic_num_speakers: Some(1),
+            ..Default::default()
+        })
+        .build_dual()
+        .await
+        .unwrap();
+
+    assert!(client.mic_request.is_none());
+}
+
+#[tokio::test]
 async fn forward_dual_to_single_forwards_all_audio_without_dropping() {
     let stream = futures_util::stream::iter(vec![
         ListenClientDualInput::Audio((Bytes::from_static(b"mic-1"), Bytes::from_static(b"spk-1"))),
@@ -150,6 +203,48 @@ async fn forward_dual_to_single_forwards_all_audio_without_dropping() {
     assert_eq!(second_spk.as_ref(), b"spk-2");
 
     let _: () = task.await.expect("forward task panicked");
+}
+
+#[test]
+fn mic_stream_params_overrides_speaker_counts_for_the_mic_stream() {
+    let params = owhisper_interface::ListenParams {
+        mic_num_speakers: Some(1),
+        ..Default::default()
+    };
+
+    let mic_params = mic_stream_params(&params);
+
+    assert_eq!(mic_params.num_speakers, Some(1));
+    assert_eq!(mic_params.max_speakers, Some(1));
+    assert_eq!(params.num_speakers, None, "shared params stay untouched");
+}
+
+#[test]
+fn mic_stream_params_clamps_min_speakers_below_the_mic_count() {
+    let params = owhisper_interface::ListenParams {
+        mic_num_speakers: Some(1),
+        min_speakers: Some(3),
+        ..Default::default()
+    };
+
+    let mic_params = mic_stream_params(&params);
+
+    assert_eq!(mic_params.num_speakers, Some(1));
+    assert_eq!(mic_params.max_speakers, Some(1));
+    assert_eq!(mic_params.min_speakers, Some(1));
+}
+
+#[test]
+fn mic_stream_params_without_mic_count_keeps_shared_expectation() {
+    let params = owhisper_interface::ListenParams {
+        num_speakers: Some(4),
+        ..Default::default()
+    };
+
+    let mic_params = mic_stream_params(&params);
+
+    assert_eq!(mic_params.num_speakers, Some(4));
+    assert_eq!(mic_params.mic_num_speakers, None);
 }
 
 #[tokio::test]
@@ -306,4 +401,75 @@ async fn nari_rejects_audio_at_an_unsupported_sample_rate() {
     assert!(
         matches!(error, crate::Error::ProviderConfiguration {provider,..} if provider == "nari")
     );
+}
+
+#[tokio::test]
+async fn nvidia_dual_capture_authenticates_each_stream_with_its_own_token() {
+    use std::collections::BTreeSet;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let minted = Arc::new(AtomicUsize::new(0));
+    let tokens = Arc::new(Mutex::new(BTreeSet::new()));
+    let seen = tokens.clone();
+    let server = tokio::spawn(async move {
+        let mut tasks = Vec::new();
+        for _ in 0..4 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let minted = minted.clone();
+            let seen = seen.clone();
+            tasks.push(tokio::spawn(async move {
+                let mut peek = [0; 4096];
+                let n = socket.peek(&mut peek).await.unwrap();
+                if peek[..n].starts_with(b"POST ") {
+                    let mut request = Vec::new();
+                    loop {
+                        let byte = socket.read_u8().await.unwrap();
+                        request.push(byte);
+                        if request.ends_with(b"\r\n\r\n") { break; }
+                    }
+                    assert!(String::from_utf8_lossy(&request).starts_with("POST /v1/realtime/transcription_sessions "));
+                    let number = minted.fetch_add(1, Ordering::SeqCst) + 1;
+                    let body = format!(r#"{{"client_secret":{{"value":"token-{number}"}}}}"#);
+                    socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).as_bytes()).await.unwrap();
+                } else {
+                    let mut ws = tokio_tungstenite::accept_hdr_async(socket, |request: &Request, mut response: Response| {
+                        let protocols = request.headers().get("sec-websocket-protocol").unwrap().to_str().unwrap();
+                        let token = protocols.split(", ").find_map(|p| p.strip_prefix("realtime-token.")).unwrap();
+                        assert!(matches!(token, "token-1" | "token-2"));
+                        assert!(seen.lock().unwrap().insert(token.to_owned()), "each handshake needs a distinct token");
+                        response.headers_mut().insert("sec-websocket-protocol", "realtime".parse().unwrap());
+                        Ok(response)
+                    }).await.unwrap();
+                    use futures_util::StreamExt;
+                    assert!(ws.next().await.unwrap().is_ok());
+                }
+            }));
+        }
+        for task in tasks {
+            task.await.unwrap();
+        }
+    });
+    let client = ListenClient::builder()
+        .adapter::<crate::NvidiaAdapter>()
+        .api_base(base)
+        .api_key("mint-key")
+        .build_dual()
+        .await
+        .unwrap();
+    let (_output, _handle) = client
+        .from_realtime_audio(futures_util::stream::pending())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(tokens.lock().unwrap().len(), 2);
 }

@@ -44,16 +44,23 @@ concurrency:
 jobs:
   js_ci:
     if: ${{ !startsWith(github.head_ref || '', 'blog/') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
       - uses: ./.github/actions/pnpm_install
       - run: pnpm -F ui build
-      - run: pnpm -F desktop typecheck
-      - run: pnpm -F desktop test
+      - if: matrix.shard == 1
+        run: pnpm -F desktop typecheck
+      - env:
+          SHARD: ${{ matrix.shard }}
+          SHARD_TOTAL: ${{ strategy.job-total }}
+        run: pnpm -F desktop test --shard="$SHARD/$SHARD_TOTAL"
 
   macos_ci:
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
@@ -104,6 +111,7 @@ jobs:
       - run: cargo check -p desktop --features direct-distribution
       - run: cargo check -p desktop --features app-store
       - run: cargo test -p desktop
+      - run: cargo test --locked -p tauri-plugin-template --lib
       - run: cargo test --locked -p cloudsync
       - run: "cargo test --locked -p db-core 'cloudsync::' -- --test-threads=1"
       - run: |
@@ -169,7 +177,6 @@ jobs:
             --exclude tauri-plugin-path2 \
             --exclude tauri-plugin-pdf \
             --exclude tauri-plugin-permissions \
-            --exclude tauri-plugin-screen \
             --exclude tauri-plugin-settings \
             --exclude tauri-plugin-sfx \
             --exclude tauri-plugin-sidecar2 \
@@ -629,7 +636,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
       - uses: ./.github/actions/pnpm_install
       - run: pnpm -F desktop i18n:check
 

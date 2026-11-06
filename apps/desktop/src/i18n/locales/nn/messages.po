@@ -244,6 +244,10 @@ msgstr ""
 msgid "Add context for this folder"
 msgstr ""
 
+#: src/contacts/details.tsx
+msgid "Add email"
+msgstr ""
+
 #: src/templates/auto-format-examples-dialog.tsx
 msgid "Add example"
 msgstr ""
@@ -288,6 +292,10 @@ msgstr "Legg til talespråk"
 msgid "Add step"
 msgstr ""
 
+#: src/calendar/components/event-chip.tsx
+msgid "Add to folder"
+msgstr ""
+
 #: src/settings/developers/webhooks.tsx
 msgid "Add webhook"
 msgstr ""
@@ -297,8 +305,24 @@ msgid "Additional spoken languages"
 msgstr "Flere talespråk"
 
 #: src/settings/ai/shared/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Advanced"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 day"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 month"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 1 week"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "After 3 days"
 msgstr ""
 
 #: src/settings/ai/stt/local-file-model.tsx
@@ -342,6 +366,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/session/components/outer-header/overflow/always-on-top.tsx
+msgid "Always on Top"
+msgstr ""
+
 #: src/shared/control.tsx
 msgid "An unexpected error occurred."
 msgstr ""
@@ -366,7 +394,7 @@ msgstr ""
 msgid "API key saved"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "App"
 msgstr "App"
 
@@ -375,7 +403,7 @@ msgid "App icon"
 msgstr ""
 
 #: src/settings/appearance/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Appearance"
 msgstr ""
 
@@ -401,6 +429,14 @@ msgstr ""
 
 #: src/edit/tab-content.tsx
 msgid "Apply to summary"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Archive delay"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Archive recordings"
 msgstr ""
 
 #: src/chat/components/input/index.tsx
@@ -461,12 +497,24 @@ msgstr ""
 msgid "Auto summary format"
 msgstr ""
 
+#: src/calendar/components/event-chip.tsx
+msgid "Auto-add"
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "Auto-add future meetings?"
+msgstr ""
+
 #: src/settings/automations/index.tsx
 msgid "Automate what happens before, during, or after meetings based on the conditions you choose."
 msgstr ""
 
 #: src/settings/general/app-settings.tsx
 msgid "Automatically install updates"
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "Automatically put all future instances of this recurring meeting into a folder."
 msgstr ""
 
 #: src/settings/automations/index.tsx
@@ -494,7 +542,7 @@ msgid "Automation removed"
 msgstr ""
 
 #: src/settings/automations/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Automations"
 msgstr ""
 
@@ -503,14 +551,11 @@ msgid "Average across the capture days counted above."
 msgstr ""
 
 #: src/calendar/components/apple/permission.tsx
+#: src/calendar/components/event-chip.tsx
 #: src/instruction/index.tsx
 #: src/settings/general/e2ee-setup.tsx
 #: src/sidebar/custom-sidebar-header.tsx
 msgid "Back"
-msgstr ""
-
-#: src/settings/general/summary-length.tsx
-msgid "Balanced"
 msgstr ""
 
 #: src/settings/ai/shared/index.tsx
@@ -519,6 +564,10 @@ msgstr ""
 
 #: src/settings/stats/insights.tsx
 msgid "Based on captured conversations, including imported transcripts. Each conversation is counted once, on its first capture day in the selected period, using your calendar timezone. Deleted conversations are excluded."
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "Based on the conversation so far, suggest a few questions I could ask next."
 msgstr ""
 
 #: src/settings/ai/stt/select.tsx
@@ -628,7 +677,7 @@ msgid "Busy"
 msgstr ""
 
 #: src/settings/general/permissions.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Calendar"
 msgstr ""
 
@@ -692,6 +741,10 @@ msgstr ""
 msgid "Capture meeting chat in Memos"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Capture shared screens in Memos"
+msgstr ""
+
 #: src/settings/stats/badge-collection.tsx
 msgid "Capture your first conversation. Every collection starts somewhere."
 msgstr ""
@@ -700,9 +753,8 @@ msgstr ""
 msgid "Catch Up"
 msgstr ""
 
-#: src/onboarding/folder-location.tsx
-#: src/settings/general/storage/index.tsx
-msgid "Change"
+#: src/calendar/components/event-chip.tsx
+msgid "Change auto-add folder"
 msgstr ""
 
 #: src/contacts/details.tsx
@@ -809,6 +861,7 @@ msgid "Choose files exported from this app."
 msgstr ""
 
 #: src/settings/automations/starter-config.tsx
+#: src/settings/general/audio-archive.tsx
 #: src/settings/general/storage/export-location.tsx
 msgid "Choose folder"
 msgstr ""
@@ -837,15 +890,6 @@ msgstr ""
 msgid "Choose how long recordings stay on this device."
 msgstr ""
 
-#: src/settings/general/summary-length.tsx
-msgid "Choose how much detail generated meeting summaries include."
-msgstr ""
-
-#: src/onboarding/folder-location.tsx
-#: src/settings/general/storage/index.tsx
-msgid "Choose storage location"
-msgstr ""
-
 #: src/templates/template-icon-picker.tsx
 msgid "Choose template icon"
 msgstr ""
@@ -853,6 +897,10 @@ msgstr ""
 #: src/settings/dictation.tsx
 #: src/settings/general/audio-settings.tsx
 msgid "Choose the microphone that captures your voice."
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Choose where to archive recordings"
 msgstr ""
 
 #: src/settings/general/week-start.tsx
@@ -902,12 +950,17 @@ msgstr ""
 msgid "Click here, then use your dictation shortcut."
 msgstr ""
 
+#: src/settings/dictation-shortcut.tsx
+msgid "Click the shortcut to record a new key combination. Press Escape to cancel."
+msgstr ""
+
 #: src/shared/ui/resource-list/preview-header.tsx
 msgid "Clone"
 msgstr ""
 
 #: src/changelog/index.tsx
 #: src/main/windows-title-bar.tsx
+#: src/main/windows-window-controls.tsx
 #: src/session/components/note-input/search/bar.tsx
 #: src/shared/open-note-dialog.tsx
 msgid "Close"
@@ -995,7 +1048,6 @@ msgstr ""
 msgid "Configure Providers"
 msgstr ""
 
-#: src/onboarding/folder-location.tsx
 #: src/session/components/note-input/transcript/renderer/speaker-assign.tsx
 msgid "Confirm"
 msgstr ""
@@ -1049,7 +1101,7 @@ msgstr ""
 msgid "Contact options"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Contacts"
 msgstr ""
 
@@ -1186,6 +1238,10 @@ msgstr ""
 msgid "Could not transcribe voice input"
 msgstr ""
 
+#: src/settings/general/audio-archive.tsx
+msgid "Could not update the archive settings"
+msgstr ""
+
 #: src/settings/automations/index.tsx
 #: src/settings/automations/workflow-builder.tsx
 msgid "Could not update the automation"
@@ -1269,10 +1325,6 @@ msgstr ""
 msgid "Creating brief..."
 msgstr ""
 
-#: src/settings/general/summary-length.tsx
-msgid "Crisp"
-msgstr ""
-
 #: src/settings/general/audio-settings.tsx
 #: src/templates/auto-form.tsx
 msgid "Current default"
@@ -1294,7 +1346,7 @@ msgstr ""
 msgid "Dark"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Data"
 msgstr ""
 
@@ -1317,6 +1369,10 @@ msgstr ""
 #: src/settings/ai/llm/select.tsx
 #: src/settings/appearance/app-icon.tsx
 msgid "Default"
+msgstr ""
+
+#: src/settings/general/main-language.tsx
+msgid "Default language for transcription and AI responses."
 msgstr ""
 
 #: src/contacts/contact-page-header.tsx
@@ -1380,10 +1436,6 @@ msgstr ""
 msgid "Describe the template purpose..."
 msgstr ""
 
-#: src/settings/general/summary-length.tsx
-msgid "Detailed"
-msgstr ""
-
 #: src/settings/general/notification.tsx
 msgid "Detect meetings from microphone activity."
 msgstr ""
@@ -1393,7 +1445,7 @@ msgid "Detection delay"
 msgstr ""
 
 #: src/settings/developers/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Developers"
 msgstr ""
 
@@ -1402,11 +1454,11 @@ msgid "Device authentication is not available on this computer."
 msgstr ""
 
 #: src/settings/dictation.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Dictation"
 msgstr ""
 
-#: src/settings/dictation.tsx
+#: src/settings/dictation-shortcut.tsx
 msgid "Dictation shortcut"
 msgstr ""
 
@@ -1416,7 +1468,7 @@ msgstr ""
 
 #: src/settings/dictation.tsx
 #: src/settings/dictionary/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Dictionary"
 msgstr ""
 
@@ -1481,6 +1533,10 @@ msgstr ""
 #: src/settings/automations/workflow-builder.tsx
 #: src/sidebar/automations.tsx
 msgid "Draft"
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "Draft a follow-up email for my most recent meeting."
 msgstr ""
 
 #: src/chat/components/body/empty.tsx
@@ -1677,10 +1733,6 @@ msgstr ""
 msgid "File format"
 msgstr ""
 
-#: src/shared/open-note-dialog.tsx
-msgid "Find a note..."
-msgstr ""
-
 #: src/chat/components/body/empty.tsx
 msgid "Find key decisions."
 msgstr ""
@@ -1705,7 +1757,7 @@ msgstr ""
 msgid "Float chat"
 msgstr ""
 
-#: src/settings/dictation.tsx
+#: src/settings/dictation-shortcut.tsx
 msgid "Fn / Globe"
 msgstr ""
 
@@ -1731,7 +1783,7 @@ msgstr ""
 msgid "Folder: {currentPath}"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Folders"
 msgstr ""
 
@@ -1759,9 +1811,17 @@ msgstr ""
 msgid "Full Screen"
 msgstr ""
 
+#: src/calendar/components/event-chip.tsx
+msgid "Future meetings"
+msgstr ""
+
 #: src/settings/general/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "General"
+msgstr ""
+
+#: src/session/components/note-input/enhanced/index.tsx
+msgid "Generate summary"
 msgstr ""
 
 #: src/session/components/note-input/enhanced/streaming.tsx
@@ -1786,15 +1846,20 @@ msgid "Get started"
 msgstr ""
 
 #: src/settings/general/notification.tsx
-msgid "Get your attention when BlackMushi finishes work in the background."
+msgid "Get your attention when a summary is ready in the background."
 msgstr ""
 
 #: src/sidebar/timeline/index.tsx
 msgid "Go back to now"
 msgstr ""
 
+#: src/main/windows-title-bar.tsx
 #: src/sidebar/custom-sidebar-header.tsx
 msgid "Go home"
+msgstr ""
+
+#: src/shared/open-note-dialog.tsx
+msgid "Go to"
 msgstr ""
 
 #: src/shared/control.tsx
@@ -1923,6 +1988,10 @@ msgstr ""
 msgid "How much the model thinks before answering. Default leaves it to the provider."
 msgstr ""
 
+#: src/settings/general/audio-archive.tsx
+msgid "How old a recording must be before it moves."
+msgstr ""
+
 #: src/settings/ai/llm/subscriptions/connect.tsx
 msgid "How to get a Kimi Code key"
 msgstr ""
@@ -1952,7 +2021,7 @@ msgid "Importing audio..."
 msgstr ""
 
 #: src/settings/imports/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Imports"
 msgstr ""
 
@@ -2008,7 +2077,7 @@ msgstr ""
 msgid "Insert into notes"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Insights"
 msgstr ""
 
@@ -2025,7 +2094,7 @@ msgid "Installed"
 msgstr ""
 
 #: src/settings/ai/llm/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Intelligence"
 msgstr ""
 
@@ -2033,6 +2102,7 @@ msgstr ""
 msgid "Job Title"
 msgstr ""
 
+#: src/services/event-notification/index.ts
 #: src/session/components/outer-header/index.tsx
 msgid "Join & record"
 msgstr ""
@@ -2121,6 +2191,10 @@ msgstr ""
 
 #: src/contacts/details.tsx
 msgid "LinkedIn"
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "List action items so far."
 msgstr ""
 
 #: src/chat/components/body/empty.tsx
@@ -2216,6 +2290,22 @@ msgstr ""
 msgid "Main language"
 msgstr "Hovedspråk"
 
+#: src/chat/components/body/empty.tsx
+msgid "Make the current summary more detailed than it is now. Add supporting context, rationale, and examples from the transcript without inventing anything."
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "Make the current summary noticeably shorter than it is now. Keep every decision, owner, deadline, and open question; cut repetition and secondary detail."
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "Make the summary longer."
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "Make the summary shorter."
+msgstr ""
+
 #: src/settings/automations/workflow-builder.tsx
 msgid "Markdown export"
 msgstr ""
@@ -2237,7 +2327,7 @@ msgstr ""
 msgid "Materials"
 msgstr ""
 
-#: src/main/windows-title-bar.tsx
+#: src/main/windows-window-controls.tsx
 msgid "Maximize"
 msgstr ""
 
@@ -2287,7 +2377,7 @@ msgid "Meeting info"
 msgstr ""
 
 #: src/settings/general/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Meetings"
 msgstr "Møter"
 
@@ -2355,7 +2445,7 @@ msgstr ""
 msgid "Migration status unavailable"
 msgstr ""
 
-#: src/main/windows-title-bar.tsx
+#: src/main/windows-window-controls.tsx
 msgid "Minimize"
 msgstr ""
 
@@ -2366,6 +2456,10 @@ msgstr ""
 
 #: src/settings/ai/stt/context.tsx
 msgid "Model download couldn’t start"
+msgstr ""
+
+#: src/contexts/notifications.tsx
+msgid "Model downloaded"
 msgstr ""
 
 #: src/session/components/note-input/enhanced/streaming.tsx
@@ -2386,6 +2480,14 @@ msgstr ""
 
 #: src/templates/sections-editor.tsx
 msgid "Move down"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Move older recordings to this folder, for example in iCloud Drive, to free up space. They stay playable from the note and download again when you play them. Audio file retention still applies."
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "Move this note"
 msgstr ""
 
 #: src/templates/sections-editor.tsx
@@ -2442,6 +2544,10 @@ msgstr ""
 
 #: src/sidebar/timeline/utils/index.ts
 msgid "next week"
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "No"
 msgstr ""
 
 #: src/imports/screen.tsx
@@ -2550,10 +2656,6 @@ msgstr ""
 msgid "No models ready to use."
 msgstr ""
 
-#: src/shared/open-note-dialog.tsx
-msgid "No notes found."
-msgstr ""
-
 #: src/session/components/note-input/transcript/renderer/speaker-assign.tsx
 msgid "No people"
 msgstr ""
@@ -2563,7 +2665,9 @@ msgid "No people in this organization"
 msgstr ""
 
 #: src/settings/ai/llm/configure.tsx
+#: src/settings/ai/llm/select.tsx
 #: src/settings/ai/stt/configure.tsx
+#: src/settings/ai/stt/select.tsx
 msgid "No providers found."
 msgstr ""
 
@@ -2578,6 +2682,7 @@ msgstr ""
 #: src/contacts/related-notes.tsx
 #: src/settings/ai/shared/model-combobox.tsx
 #: src/settings/general/searchable-select.tsx
+#: src/shared/open-note-dialog.tsx
 #: src/sidebar/settings.tsx
 msgid "No results found."
 msgstr ""
@@ -2600,6 +2705,10 @@ msgstr ""
 
 #: src/settings/stats/insights.tsx
 msgid "Not available"
+msgstr ""
+
+#: src/settings/ai/shared/index.tsx
+msgid "Not connected"
 msgstr ""
 
 #: src/settings/developers/cli.tsx
@@ -2647,7 +2756,7 @@ msgid "Nothing new was imported. {0} meetings need review and {1} could not be i
 msgstr ""
 
 #: src/settings/general/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Notifications"
 msgstr "Varsler"
 
@@ -2662,6 +2771,10 @@ msgstr ""
 
 #: src/templates/template-icon-picker.tsx
 msgid "Objects"
+msgstr ""
+
+#: src/settings/general/audio-archive.tsx
+msgid "Off: recordings stay on this device"
 msgstr ""
 
 #: src/settings/general/storage/legacy-cleanup.tsx
@@ -2702,8 +2815,6 @@ msgstr ""
 #: src/composer/index.tsx
 #: src/onboarding/final.tsx
 #: src/services/enhancer/summary-notification.ts
-#: src/services/event-notification/index.ts
-#: src/store/zustand/listener/general-batch.ts
 msgid "Open BlackMushi"
 msgstr ""
 
@@ -2731,6 +2842,10 @@ msgstr ""
 
 #: src/chat/components/toolbar-controls.tsx
 msgid "Open in right panel"
+msgstr ""
+
+#: src/services/event-notification/index.ts
+msgid "Open meeting"
 msgstr ""
 
 #: src/task/resource-view.tsx
@@ -2848,7 +2963,7 @@ msgstr ""
 
 #: src/settings/dictation.tsx
 #: src/settings/general/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Permissions"
 msgstr ""
 
@@ -2884,12 +2999,16 @@ msgstr ""
 msgid "Preparing transcript..."
 msgstr ""
 
-#: src/settings/dictation.tsx
-msgid "Press a key combination here, or type one such as Control+Alt+D."
+#: src/settings/dictation-shortcut.tsx
+msgid "Preparing…"
 msgstr ""
 
 #: src/settings/dictation.tsx
 msgid "Press Escape to cancel. Dictation stops after five minutes and pauses while BlackMushi records a meeting."
+msgstr ""
+
+#: src/settings/dictation-shortcut.tsx
+msgid "Press shortcut…"
 msgstr ""
 
 #: src/settings/dictation.tsx
@@ -2961,6 +3080,14 @@ msgstr ""
 msgid "Reasoning models think through the transcript before writing."
 msgstr ""
 
+#: src/chat/components/body/empty.tsx
+msgid "Recap the last 5 minutes."
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "Recap what was discussed in the last 5 minutes of this meeting. Use the transcript timestamps, where the latest one is now."
+msgstr ""
+
 #: src/session/components/note-input/meeting-chat-highlights.tsx
 msgid "received"
 msgstr ""
@@ -2986,6 +3113,7 @@ msgid "Record your voice in meetings and calls."
 msgstr ""
 
 #: src/session/components/note-input/transcript/actions.ts
+#: src/session/components/outer-header/overflow/index.tsx
 msgid "Recording not found. It may have been deleted."
 msgstr ""
 
@@ -3037,6 +3165,10 @@ msgstr ""
 
 #: src/settings/automations/index.tsx
 msgid "Remove automation"
+msgstr ""
+
+#: src/contacts/details.tsx
+msgid "Remove email"
 msgstr ""
 
 #. placeholder {0}: index + 1
@@ -3106,6 +3238,10 @@ msgstr ""
 msgid "Require Windows Hello face, PIN, or password when opening BlackMushi."
 msgstr ""
 
+#: src/shared/open-note-dialog.tsx
+msgid "Requires BlackMushi Pro"
+msgstr ""
+
 #: src/calendar/components/apple/permission.tsx
 #: src/settings/ai/shared/index.tsx
 msgid "Reset"
@@ -3131,7 +3267,7 @@ msgstr ""
 msgid "Restart App"
 msgstr ""
 
-#: src/main/windows-title-bar.tsx
+#: src/main/windows-window-controls.tsx
 #: src/session/components/version-history-dialog.tsx
 msgid "Restore"
 msgstr ""
@@ -3159,7 +3295,7 @@ msgstr ""
 msgid "Revoke"
 msgstr ""
 
-#: src/settings/dictation.tsx
+#: src/settings/dictation-shortcut.tsx
 msgid "Right Command"
 msgstr ""
 
@@ -3168,7 +3304,6 @@ msgstr ""
 msgid "Runs after the recording finishes, not during the meeting."
 msgstr ""
 
-#: src/settings/dictation.tsx
 #: src/settings/dictionary/index.tsx
 #: src/templates/auto-form.tsx
 msgid "Save"
@@ -3194,12 +3329,20 @@ msgstr ""
 msgid "Save PDF, text, Markdown, and Org exports to this folder."
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Save slides and screens others share in meetings. Requires Screen Recording."
+msgstr ""
+
 #: src/settings/general/e2ee-setup.tsx
 msgid "Save this key in a password manager. New devices can usually be approved from another device; this key is your fallback and will not be shown again."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Save visible chat from supported meetings using Accessibility."
+msgstr ""
+
+#: src/settings/ai/shared/index.tsx
+msgid "Saved"
 msgstr ""
 
 #: src/session/components/note-input/transcript/renderer/index.tsx
@@ -3237,6 +3380,10 @@ msgstr ""
 #: src/settings/general/main-language.tsx
 msgid "Search language..."
 msgstr "Søkespråk..."
+
+#: src/shared/open-note-dialog.tsx
+msgid "Search notes and pages..."
+msgstr ""
 
 #: src/contacts/details.tsx
 msgid "Search or add company"
@@ -3327,10 +3474,6 @@ msgstr "Velg språk"
 msgid "Select or type to add speaker"
 msgstr ""
 
-#: src/settings/general/summary-length.tsx
-msgid "Select summary length"
-msgstr ""
-
 #: src/settings/general/timezone.tsx
 msgid "Select timezone"
 msgstr ""
@@ -3382,6 +3525,7 @@ msgstr ""
 
 #: src/main/empty.tsx
 #: src/main/windows-title-bar.tsx
+#: src/shared/open-note-dialog.tsx
 #: src/sidebar/toast/registry.tsx
 msgid "Settings"
 msgstr ""
@@ -3389,6 +3533,18 @@ msgstr ""
 #: src/settings/general/app-settings.tsx
 msgid "Share usage data"
 msgstr "Del bruksdata"
+
+#: src/session/components/note-input/meeting-screen-gallery.tsx
+msgid "Shared screen at {time}"
+msgstr ""
+
+#: src/session/components/note-input/meeting-screen-gallery.tsx
+msgid "Shared screens"
+msgstr ""
+
+#: src/session/components/note-input/header-shared-note.tsx
+msgid "Shared summary"
+msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Show AI suggestions (catch-up, action items, follow-up questions) in a side panel while a meeting is being transcribed live. Sends transcript excerpts to your configured AI provider every minute."
@@ -3404,6 +3560,18 @@ msgstr ""
 
 #: src/settings/general/permissions.tsx
 msgid "Show Apple Calendar events in BlackMushi."
+msgstr ""
+
+#: src/session/components/outer-header/overflow/index.tsx
+msgid "Show Audio in Explorer"
+msgstr ""
+
+#: src/session/components/outer-header/overflow/index.tsx
+msgid "Show Audio in Finder"
+msgstr ""
+
+#: src/session/components/outer-header/overflow/index.tsx
+msgid "Show Audio in Folder"
 msgstr ""
 
 #: src/settings/general/app-settings.tsx
@@ -3437,6 +3605,10 @@ msgstr ""
 msgid "Show meeting times as 14:00 instead of 2:00 PM."
 msgstr ""
 
+#: src/settings/general/app-settings.tsx
+msgid "Show release notes"
+msgstr ""
+
 #: src/main/windows-title-bar.tsx
 msgid "Show sidebar"
 msgstr ""
@@ -3467,10 +3639,6 @@ msgstr ""
 
 #: src/settings/general/notification.tsx
 msgid "Show when a summary is ready."
-msgstr ""
-
-#: src/settings/general/notification.tsx
-msgid "Show when a transcript is ready."
 msgstr ""
 
 #: src/settings/general/notification.tsx
@@ -3559,6 +3727,26 @@ msgstr ""
 msgid "Sound"
 msgstr ""
 
+#: src/session/components/note-input/enhanced/enhance-error.tsx
+msgid "Source: {provider} (AI model provider)"
+msgstr ""
+
+#: src/session/components/note-input/enhanced/enhance-error.tsx
+msgid "Source: AI model provider"
+msgstr ""
+
+#: src/session/components/note-input/enhanced/enhance-error.tsx
+msgid "Source: BlackMushi"
+msgstr ""
+
+#: src/session/components/note-input/enhanced/enhance-error.tsx
+msgid "Source: OpenRouter (AI routing service)"
+msgstr ""
+
+#: src/session/components/note-input/enhanced/enhance-error.tsx
+msgid "Source: OpenRouter or the AI model provider"
+msgstr ""
+
 #: src/settings/general/notification.tsx
 msgid "Sparkle"
 msgstr ""
@@ -3585,6 +3773,10 @@ msgstr "Start BlackMushi ved pålogging"
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Start listening when a scheduled meeting begins."
+msgstr ""
+
+#: src/services/event-notification/index.ts
+msgid "Start recording"
 msgstr ""
 
 #: src/main/empty.tsx
@@ -3616,6 +3808,7 @@ msgid "Start writing..."
 msgstr ""
 
 #: src/settings/ai/stt/select.tsx
+#: src/sidebar/toast/registry.tsx
 msgid "Starting"
 msgstr ""
 
@@ -3660,6 +3853,14 @@ msgstr ""
 msgid "Stop"
 msgstr ""
 
+#: src/settings/general/audio-archive.tsx
+msgid "Stop archiving"
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "Stop auto-add"
+msgstr ""
+
 #: src/session/components/outer-header/index.tsx
 #: src/sidebar/timeline/item.tsx
 msgid "Stop listening"
@@ -3685,17 +3886,8 @@ msgstr ""
 msgid "Stop when meeting ends"
 msgstr "Stopp når møtet avsluttes"
 
-#: src/onboarding/index.tsx
 #: src/settings/general/storage/index.tsx
 msgid "Storage"
-msgstr ""
-
-#: src/onboarding/index.tsx
-msgid "Storage configured"
-msgstr ""
-
-#: src/onboarding/folder-location.tsx
-msgid "Storage Updated"
 msgstr ""
 
 #: src/settings/stats/badge-collection.tsx
@@ -3710,12 +3902,12 @@ msgstr ""
 msgid "Suggest a Feature"
 msgstr ""
 
-#: src/session/components/note-input/raw.tsx
-msgid "Suggested templates"
+#: src/chat/components/body/empty.tsx
+msgid "Suggest what to ask next."
 msgstr ""
 
-#: src/settings/general/index.tsx
-msgid "Summaries"
+#: src/session/components/note-input/raw.tsx
+msgid "Suggested templates"
 msgstr ""
 
 #: src/contacts/details.tsx
@@ -3739,10 +3931,6 @@ msgstr ""
 #: src/contacts/details.tsx
 #: src/session/components/note-input/enhanced/enhance-error.tsx
 msgid "Summary generation failed"
-msgstr ""
-
-#: src/settings/general/summary-length.tsx
-msgid "Summary length"
 msgstr ""
 
 #: src/services/enhancer/summary-notification.ts
@@ -3804,7 +3992,7 @@ msgstr ""
 msgid "Template content with Jinja2: {{ variable }}, {% if condition %}"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Templates"
 msgstr ""
 
@@ -3825,10 +4013,6 @@ msgstr ""
 
 #: src/settings/automations/index.tsx
 msgid "Test runs are not available yet."
-msgstr ""
-
-#: src/onboarding/folder-location.tsx
-msgid "The app will restart after onboarding to apply your storage changes"
 msgstr ""
 
 #: src/shared/control.tsx
@@ -3861,6 +4045,10 @@ msgstr ""
 
 #: src/session/components/outer-header/index.tsx
 msgid "This is a prerecorded demo, so your camera stays off. Click Join & record to see BlackMushi in action."
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "This note"
 msgstr ""
 
 #: src/session/components/note-conflict-banner.tsx
@@ -3897,10 +4085,6 @@ msgstr ""
 msgid "Tomorrow"
 msgstr ""
 
-#: src/settings/general/spoken-languages.tsx
-msgid "Transcribe meetings that use more than one language."
-msgstr ""
-
 #: src/chat/components/input/index.tsx
 msgid "Transcribing voice input"
 msgstr ""
@@ -3916,13 +4100,8 @@ msgid "Transcript"
 msgstr ""
 
 #: src/settings/ai/stt/index.tsx
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Transcription"
-msgstr ""
-
-#: src/settings/general/notification.tsx
-#: src/store/zustand/listener/general-batch.ts
-msgid "Transcription complete"
 msgstr ""
 
 #: src/session/components/note-input/transcript/screens/empty.tsx
@@ -3984,6 +4163,10 @@ msgstr ""
 #: src/main/windows-title-bar.tsx
 #: src/sidebar/toast/undo-delete-toast.tsx
 msgid "Undo"
+msgstr ""
+
+#: src/calendar/components/event-chip.tsx
+msgid "Unfiled"
 msgstr ""
 
 #: src/session/components/note-input/transcript/renderer/speaker-assign.tsx
@@ -4092,16 +4275,16 @@ msgstr ""
 msgid "Use files"
 msgstr ""
 
+#: src/settings/general/index.tsx
+msgid "Use main language for summaries"
+msgstr ""
+
 #: src/onboarding/permissions.tsx
 msgid "Use system audio to capture other speakers"
 msgstr ""
 
 #: src/session/components/note-conflict-banner.tsx
 msgid "Use the other version"
-msgstr ""
-
-#: src/settings/general/main-language.tsx
-msgid "Use this language for summaries and AI responses."
 msgstr ""
 
 #: src/lock/screen.tsx
@@ -4114,6 +4297,10 @@ msgstr ""
 
 #: src/onboarding/permissions.tsx
 msgid "Use your microphone to capture your voice"
+msgstr ""
+
+#: src/settings/general/spoken-languages.tsx
+msgid "Used for transcription and automatic summary language detection."
 msgstr ""
 
 #: src/settings/general/storage/legacy-cleanup.tsx
@@ -4179,7 +4366,19 @@ msgid "Welcome to BlackMushi"
 msgstr ""
 
 #: src/chat/components/body/empty.tsx
+msgid "What action items have come up so far in this meeting?"
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
 msgid "What are my action items from this meeting?"
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "What are my outstanding action items across my meetings?"
+msgstr ""
+
+#: src/chat/components/body/empty.tsx
+msgid "What key decisions were made in my recent meetings?"
 msgstr ""
 
 #: src/folders/folder-editor.tsx
@@ -4194,13 +4393,12 @@ msgstr ""
 msgid "What's new in {version}?"
 msgstr ""
 
-#: src/settings/automations/workflow-builder.tsx
-msgid "When this happens"
+#: src/settings/general/index.tsx
+msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
-#: src/onboarding/index.tsx
-#: src/settings/general/storage/index.tsx
-msgid "Where your notes and recordings are stored"
+#: src/settings/automations/workflow-builder.tsx
+msgid "When this happens"
 msgstr ""
 
 #: src/settings/ai/stt/local-file-model.tsx
@@ -4215,7 +4413,7 @@ msgstr ""
 msgid "Workflow"
 msgstr ""
 
-#: src/sidebar/settings.tsx
+#: src/sidebar/settings-nav-groups.ts
 msgid "Workspace"
 msgstr ""
 
@@ -4247,10 +4445,6 @@ msgstr ""
 msgid "Your busiest weekdays are tied at {peakCount} conversations each in the selected period."
 msgstr ""
 
-#: src/settings/stats/index.tsx
-msgid "Your conversation history."
-msgstr ""
-
 #: src/settings/stats/insights.tsx
 msgid "Your conversation patterns"
 msgstr ""
@@ -4269,10 +4463,6 @@ msgstr ""
 
 #: src/services/enhancer/summary-notification.ts
 msgid "Your summary is ready."
-msgstr ""
-
-#: src/store/zustand/listener/general-batch.ts
-msgid "Your transcript is ready."
 msgstr ""
 
 #: src/settings/stats/insights.tsx

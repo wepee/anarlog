@@ -1,10 +1,9 @@
-use futures_util::StreamExt;
 use ractor::{ActorProcessingErr, ActorRef};
 use std::sync::atomic::Ordering;
 use tokio_util::sync::CancellationToken;
 
-use crate::{SessionDataEvent, SessionProgressEvent, actors::ChannelMode};
-use anlg_audio::{AudioProvider, CaptureConfig, CaptureFrame, CaptureStream};
+use crate::actors::ChannelMode;
+use anlg_audio::{AudioProvider, CaptureConfig, CaptureEvent, CaptureStream};
 use anlg_audio_utils::chunk_size_for_stt;
 
 use super::{SourceFrame, SourceMsg, SourceState};
@@ -29,29 +28,16 @@ pub(super) async fn start_source_loop(
     st.active_mic_device = active_mic_device(st.mic_device.clone(), st.audio.as_ref());
     let mic_swapped = st.mic_device.is_none() && st.active_mic_device.is_some();
     let capture = capture_settings(mic_swapped);
+    st.capture_mic_isolated = capture.mic_isolated;
     let result = start_streams(myself, st, capture).await;
-
-    if result.is_ok() {
-        st.runtime.emit_progress(SessionProgressEvent::AudioReady {
-            session_id: st.session_id.clone(),
-            device: st.active_mic_device.clone(),
-        });
-        if new_mode == ChannelMode::MicAndSpeaker {
-            st.runtime.emit_data(SessionDataEvent::MicIsolated {
-                session_id: st.session_id.clone(),
-                value: capture.mic_isolated,
-            });
-        }
-    }
 
     result.map(|()| capture)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct CaptureSettings {
-    enable_aec: bool,
-    /// Every playing output is a headphone. Re-evaluated per stream because the source restarts
-    /// on default output changes; the routing watcher starts from this verdict.
+    pub(super) enable_aec: bool,
+    /// Every playing output is a headphone; the routing watcher starts from this verdict.
     pub(super) headphone_output: bool,
     /// Headphones keep speaker output out of the mic, so whatever the mic hears is the local
     /// user. Not claimed when the mic was swapped away from the user's Bluetooth headset: the
@@ -61,7 +47,7 @@ pub(super) struct CaptureSettings {
 
 // Headphones make AEC pure cost: it burns CPU and can degrade near-end speech. The check covers
 // every output that is playing, not just the default, because meeting apps pick their own speaker.
-fn capture_settings(mic_swapped: bool) -> CaptureSettings {
+pub(super) fn capture_settings(mic_swapped: bool) -> CaptureSettings {
     let headphone_output = anlg_audio_device::headphone_only_output();
     if let Some(device) = &headphone_output {
         tracing::info!(
@@ -99,7 +85,10 @@ const SWAPS_BLUETOOTH_DEFAULT_MIC: bool = cfg!(any(target_os = "macos", target_o
 // between words and the wearer's audio drops to 16 kHz. On macOS a HAL open does not, so capture
 // later sets the headset as the default input to complete A2DP→HFP/SCO. Only the system default
 // is swapped to wired; an explicit selection is respected.
-fn active_mic_device(explicit: Option<String>, audio: &dyn AudioProvider) -> Option<String> {
+pub(super) fn active_mic_device(
+    explicit: Option<String>,
+    audio: &dyn AudioProvider,
+) -> Option<String> {
     if explicit.is_some() || !SWAPS_BLUETOOTH_DEFAULT_MIC {
         return explicit;
     }
@@ -137,6 +126,10 @@ async fn start_streams(
     let stream_cancel_token = CancellationToken::new();
     st.stream_cancel_token = Some(stream_cancel_token.clone());
 
+    let (retry_tx, retry_rx) = tokio::sync::mpsc::unbounded_channel();
+    st.capture_retry = Some(retry_tx);
+    let (output_tx, output_rx) = tokio::sync::mpsc::unbounded_channel();
+    st.capture_output = Some(output_tx);
     let handle = tokio::spawn(async move {
         let ctx = StreamContext {
             actor: myself2,
@@ -147,6 +140,8 @@ async fn start_streams(
             audio,
             frame_tx,
             wake_pending,
+            retry_rx,
+            output_rx,
         };
 
         run_stream_loop(ctx, mode).await;
@@ -165,6 +160,8 @@ struct StreamContext {
     audio: std::sync::Arc<dyn AudioProvider>,
     frame_tx: tokio::sync::mpsc::Sender<SourceFrame>,
     wake_pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    retry_rx: tokio::sync::mpsc::UnboundedReceiver<(Option<String>, bool)>,
+    output_rx: tokio::sync::mpsc::UnboundedReceiver<bool>,
 }
 
 impl StreamContext {
@@ -182,7 +179,7 @@ enum StreamResult {
     Stop,
 }
 
-async fn run_stream_loop(ctx: StreamContext, mode: ChannelMode) {
+async fn run_stream_loop(mut ctx: StreamContext, mode: ChannelMode) {
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     if mode == ChannelMode::MicOnly {
         return;
@@ -216,12 +213,40 @@ async fn run_stream_loop(ctx: StreamContext, mode: ChannelMode) {
         }
     };
 
+    let watchdog = tokio::time::sleep(std::time::Duration::from_secs(5));
+    tokio::pin!(watchdog);
+    let mut unavailable = false;
+    let mut ready = false;
     loop {
         let result = tokio::select! {
             _ = ctx.cancel_token.cancelled() => StreamResult::Stop,
-            item = capture_stream.next() => handle_capture_item(&ctx, item).await
+            request = ctx.retry_rx.recv() => {
+                let Some((device, force_mic)) = request else { return; };
+                capture_stream.retry(device, force_mic);
+                StreamResult::Continue
+            }
+            output = ctx.output_rx.recv() => {
+                let Some(enable_aec) = output else { return; };
+                capture_stream.update_output(enable_aec);
+                StreamResult::Continue
+            }
+            _ = &mut watchdog, if !unavailable => {
+                unavailable = true;
+                let _ = ctx.actor.cast(SourceMsg::CaptureUnavailable);
+                StreamResult::Continue
+            }
+            item = capture_stream.next_event() => {
+                if matches!(&item, Some(Ok(CaptureEvent::Frame(_)))) {
+                    watchdog.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(5));
+                    if !ready || unavailable {
+                        let _ = ctx.actor.cast(SourceMsg::CaptureReady);
+                        ready = true;
+                        unavailable = false;
+                    }
+                }
+                handle_capture_item(&ctx, item).await
+            }
         };
-
         if matches!(result, StreamResult::Stop) {
             return;
         }
@@ -230,12 +255,27 @@ async fn run_stream_loop(ctx: StreamContext, mode: ChannelMode) {
 
 async fn handle_capture_item(
     ctx: &StreamContext,
-    item: Option<Result<CaptureFrame, anlg_audio::Error>>,
+    item: Option<Result<CaptureEvent, anlg_audio::Error>>,
 ) -> StreamResult {
     match item {
-        Some(Ok(frame)) => {
+        Some(Ok(CaptureEvent::ChannelReady { channel, device })) => {
+            let _ = ctx.actor.cast(SourceMsg::ChannelReady(channel, device));
+            StreamResult::Continue
+        }
+        Some(Ok(CaptureEvent::ChannelFailed { channel, error })) => {
+            let _ = ctx
+                .actor
+                .cast(SourceMsg::ChannelFailed(channel, error.to_string()));
+            StreamResult::Continue
+        }
+        Some(Ok(event @ (CaptureEvent::Frame(_) | CaptureEvent::Gap(_)))) => {
+            let captured = matches!(event, CaptureEvent::Frame(_));
+            let (CaptureEvent::Frame(frame) | CaptureEvent::Gap(frame)) = event else {
+                unreachable!()
+            };
             let frame = SourceFrame {
                 capture: frame,
+                captured,
                 mic_muted: ctx.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
             };
 
@@ -277,50 +317,50 @@ mod tests {
     use super::{CaptureSettings, resolve_capture_settings};
 
     #[test]
-    fn headphones_disable_aec_and_isolate_the_mic() {
-        assert_eq!(
-            resolve_capture_settings(false, true, false),
-            CaptureSettings {
-                enable_aec: false,
-                headphone_output: true,
-                mic_isolated: true,
-            }
-        );
-    }
-
-    #[test]
-    fn speakers_keep_aec_and_leave_the_mic_shared() {
-        assert_eq!(
-            resolve_capture_settings(false, false, false),
-            CaptureSettings {
-                enable_aec: true,
-                headphone_output: false,
-                mic_isolated: false,
-            }
-        );
-    }
-
-    #[test]
-    fn no_aec_override_does_not_imply_isolation() {
-        assert_eq!(
-            resolve_capture_settings(true, false, false),
-            CaptureSettings {
-                enable_aec: false,
-                headphone_output: false,
-                mic_isolated: false,
-            }
-        );
-    }
-
-    #[test]
-    fn swapped_mic_is_not_isolated_but_headphones_still_skip_aec() {
-        assert_eq!(
-            resolve_capture_settings(false, true, true),
-            CaptureSettings {
-                enable_aec: false,
-                headphone_output: true,
-                mic_isolated: false,
-            }
-        );
+    fn resolve_capture_settings_by_output_route() {
+        for (args, expected, label) in [
+            (
+                (false, true, false),
+                CaptureSettings {
+                    enable_aec: false,
+                    headphone_output: true,
+                    mic_isolated: true,
+                },
+                "headphones disable aec and isolate the mic",
+            ),
+            (
+                (false, false, false),
+                CaptureSettings {
+                    enable_aec: true,
+                    headphone_output: false,
+                    mic_isolated: false,
+                },
+                "speakers keep aec and leave the mic shared",
+            ),
+            (
+                (true, false, false),
+                CaptureSettings {
+                    enable_aec: false,
+                    headphone_output: false,
+                    mic_isolated: false,
+                },
+                "no aec override does not imply isolation",
+            ),
+            (
+                (false, true, true),
+                CaptureSettings {
+                    enable_aec: false,
+                    headphone_output: true,
+                    mic_isolated: false,
+                },
+                "swapped mic is not isolated but headphones still skip aec",
+            ),
+        ] {
+            assert_eq!(
+                resolve_capture_settings(args.0, args.1, args.2),
+                expected,
+                "case: {label}"
+            );
+        }
     }
 }

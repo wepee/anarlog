@@ -25,6 +25,9 @@ on:
       - crates/db-change/**
       - crates/db-core/**
       - crates/db-migrate/**
+      - crates/db-reactive/**
+      - crates/db-sync/**
+      - crates/e2ee/**
       - crates/tiptap/**
       - docs/**
       - scripts/publish-anarlog-skill.mjs
@@ -56,6 +59,9 @@ on:
       - crates/db-change/**
       - crates/db-core/**
       - crates/db-migrate/**
+      - crates/db-reactive/**
+      - crates/db-sync/**
+      - crates/e2ee/**
       - crates/tiptap/**
       - docs/**
       - scripts/publish-anarlog-skill.mjs
@@ -87,12 +93,14 @@ jobs:
           df -h /
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.23.4"
       - uses: ./.github/actions/rust_install
       - run: |
           cargo test --locked -p agent-access
           cargo test --locked -p anarlog-cli
           cargo test --locked -p db-app --lib
+          cargo test --locked -p db-reactive --test e2ee
+          cargo test --locked -p db-sync
           cargo test --locked -p db-core --lib
           cargo test --locked -p db-migrate --lib
           cargo test --locked -p tiptap

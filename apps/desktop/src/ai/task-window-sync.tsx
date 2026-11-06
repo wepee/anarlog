@@ -1,11 +1,16 @@
 import { emit, emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { getCurrentWebviewWindowLabel } from "@anlg/plugin-windows";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
-import { type EnhancerService, getEnhancerService } from "~/services/enhancer";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
+import {
+  type AutoEnhanceMode,
+  type EnhancerService,
+  getEnhancerService,
+} from "~/services/enhancer";
 import { id } from "~/shared/utils";
 import type { AITaskStore } from "~/store/zustand/ai-task";
+import { getAIErrorSource } from "~/store/zustand/ai-task/shared/error-source";
 import {
   MAX_AI_TASK_STREAM_CHARACTERS,
   type RemoteTaskState,
@@ -36,7 +41,7 @@ type TaskCancelPayload = {
 
 type TaskEnhancePayload = {
   sessionId: string;
-  auto?: "regenerate" | "if_empty";
+  auto?: AutoEnhanceMode;
   opts?: {
     isAuto?: boolean;
     templateId?: string | null;
@@ -371,7 +376,11 @@ export function serializeEnhanceTasks(tasks: Record<string, TaskState>) {
             MAX_AI_TASK_STREAM_CHARACTERS,
           ),
           error: task.error
-            ? { name: task.error.name, message: task.error.message }
+            ? {
+                name: task.error.name,
+                message: task.error.message,
+                source: getAIErrorSource(task.error),
+              }
             : undefined,
           currentStep: task.currentStep,
         } satisfies RemoteTaskState,
@@ -436,7 +445,9 @@ function isTaskAutoEnhanceRequestPayload(
     candidate.sourceLabel.length > 0 &&
     typeof candidate.sessionId === "string" &&
     candidate.sessionId.length > 0 &&
-    (candidate.mode === "regenerate" || candidate.mode === "if_empty")
+    (candidate.mode === "regenerate" ||
+      candidate.mode === "if_empty" ||
+      candidate.mode === "refresh")
   );
 }
 

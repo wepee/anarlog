@@ -3,7 +3,7 @@ title: "Cloud API and connectors"
 description: "Opt in to hosted REST and remote MCP access for your BlackMushi meetings."
 ---
 
-The Cloud API lets remote agents read your BlackMushi meetings while the desktop app is closed. It requires Pro access, either from your personal plan or membership in an active paid Team, and stays off until you enable it.
+The Cloud API lets remote agents read your BlackMushi meetings while the desktop app is closed. It requires Pro access, either from your personal plan or membership in an active paid Pro workspace, and stays off until you enable it.
 
 <Warning>
   Enabling Cloud API & Connectors uploads a separate server-readable copy of
@@ -51,7 +51,7 @@ Errors use this envelope:
 
 Codes: `unauthorized`, `not_found`, `invalid_request`, `internal_error`. The hosted API can also return:
 
-- `403 subscription_required` when the account does not have Pro access through a personal plan or an active paid Team membership.
+- `403 subscription_required` when the account does not have Pro access through a personal plan or an active paid Pro workspace membership.
 - `403 cloud_api_not_enabled` when the account has opted out.
 - `429` with a plain-text `rate limit exceeded` body and `retry-after` header when you exceed the hosted request limit.
 
@@ -90,7 +90,7 @@ https://api.anarlog.so/.well-known/oauth-protected-resource/mcp
 The metadata points the host to BlackMushi's existing Supabase authorization server. That server uses dynamic client registration and PKCE with SHA-256. The host sends the MCP `resource` value during authorization and token exchange; BlackMushi binds issued OAuth tokens to `https://api.anarlog.so/mcp` and rejects tokens minted for another resource.
 
 <Note>
-  OAuth does not bypass BlackMushi's product controls. The account must have Pro access through a personal plan or an active paid Team membership, and **Cloud API & Connectors** must remain enabled. Disabling the feature deletes the uploaded snapshots and makes existing connector tokens unusable for meeting access.
+  OAuth does not bypass BlackMushi's product controls. The account must have Pro access through a personal plan or an active paid Pro workspace membership, and **Cloud API & Connectors** must remain enabled. Disabling the feature deletes the uploaded snapshots and makes existing connector tokens unusable for meeting access.
 </Note>
 
 ### Claude Code
@@ -141,6 +141,20 @@ codex plugin marketplace add fastrepl/anarlog \
 
 Public listing in a host's plugin directory is a separate review step. Installing from the Fastrepl source does not submit or publish the connector.
 
+### Grok Bot
+
+Grok Bot has no settings form for custom MCP servers. Add BlackMushi from a Bot conversation:
+
+```text
+Add this custom MCP server: https://api.anarlog.so/mcp
+```
+
+Confirm the server details when the bot asks, then finish the BlackMushi sign-in and consent flow in your browser. The BlackMushi tools are available from your next message. Grok Bot runs in the cloud, so it can only reach the hosted endpoint, not local MCP.
+
+### Instinct
+
+Add `https://api.anarlog.so/mcp` as an MCP connection in your Instinct account and name it **BlackMushi**. Complete the BlackMushi sign-in and consent flow with the account that has Cloud API & Connectors enabled. If Instinct asks for a token instead of opening a sign-in page, create a personal cloud API key and paste it as the bearer token.
+
 ### Other OAuth MCP clients
 
 Choose Streamable HTTP and use `https://api.anarlog.so/mcp` as the server URL. Do not paste an API key. The client must follow MCP OAuth 2.1 protected-resource discovery.
@@ -178,6 +192,23 @@ const response = await client.responses.create({
 });
 ```
 
+### Muse
+
+Meta Muse does not accept MCP servers. Instead, ask Muse to build a **Custom Connector** against the BlackMushi REST API. Create a personal cloud API key named `muse` so you can revoke it separately, then send Muse:
+
+```text
+Create a custom connector for BlackMushi, my meeting notes. The base URL is
+https://api.anarlog.so and the OpenAPI document is
+https://api.anarlog.so/openapi.json. Only use the /v1/meetings operations.
+Authenticate every request with the header "Authorization: Bearer <my key>".
+It is read-only: list meetings, read a meeting, read its transcript, and
+export it.
+```
+
+The OpenAPI paths already include the `/v1` prefix, so the base URL is the bare host. Check that the first request Muse makes targets `/v1/meetings`, not `/v1/v1/meetings`.
+
+Muse stores the key in its Secure Credentials Store; BlackMushi never sees your Muse account. The connector appears under **Settings → Connectors** in Muse. Meta does not review custom connectors, so keep the key to yourself.
+
 ### Poke
 
 Poke does not complete MCP OAuth. Create a personal cloud API key in BlackMushi and paste it only into your own Poke recipe or connection.
@@ -198,4 +229,4 @@ Authorization: Bearer anl_...
 
 Turn off **Cloud API & Connectors** under **Settings → Developers**. BlackMushi immediately deletes all server-readable meeting snapshots. Your local meetings and end-to-end encrypted cloud sync data are unchanged.
 
-Revoked keys cannot read snapshots. If you lose Pro access from both your personal plan and any paid Team memberships, existing cloud keys return `subscription_required`.
+Revoked keys cannot read snapshots. If you lose Pro access from both your personal plan and any paid Pro workspace memberships, existing cloud keys return `subscription_required`.

@@ -9,7 +9,8 @@ import {
 import { commands as permissions } from "@anlg/plugin-permissions";
 import { commands as shortcuts, events } from "@anlg/plugin-shortcut";
 import { commands as transcription } from "@anlg/plugin-transcription";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import { DictationController } from "./controller";
 import { waitForDictationPanel } from "./panel";
@@ -17,7 +18,6 @@ import { useDictationStatus } from "./state";
 
 import { useSettingsReady } from "~/settings/queries";
 import { useConfigValue } from "~/shared/config";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { useListener } from "~/stt/contexts";
 import { useRunBatch } from "~/stt/useRunBatch";
 import { useSTTConnection } from "~/stt/useSTTConnection";
@@ -34,6 +34,9 @@ export function DictationLifecycle() {
   const enabled = useConfigValue("dictation_enabled");
   const shortcut = useConfigValue("dictation_shortcut");
   const handsFree = useConfigValue("dictation_hands_free");
+  const capturingShortcut = useDictationStatus(
+    (state) => state.capturingShortcut,
+  );
   const retry = useDictationStatus((state) => state.retry);
   const meetingActive = useListener(
     (state) => state.live.status !== "inactive" || state.live.loading,
@@ -42,7 +45,7 @@ export function DictationLifecycle() {
   if (!settingsReady || !enabled) return null;
   return (
     <TranscriptRetention>
-      {!meetingActive && (
+      {!meetingActive && !capturingShortcut && (
         <ActiveDictation
           key={`${shortcut}:${handsFree}:${retry}`}
           shortcut={shortcut}
@@ -105,6 +108,7 @@ function ActiveDictation({
     let disposed = false;
     let armed = false;
     let target = "";
+    let finalTranscript: string | null = null;
     let unlisten: (() => void) | undefined;
     let abort = new AbortController();
     let presentation: Promise<void> = Promise.resolve();
@@ -112,12 +116,13 @@ function ActiveDictation({
       if (disposed) return;
       const message = error instanceof Error ? error.message : String(error);
       useDictationStatus.setState({ error: message });
-      sonnerToast.error(message);
+      toast.error(message);
     };
     const controller = new DictationController({
       handsFree,
       start: async () => {
         abort = new AbortController();
+        finalTranscript = null;
         const recordingAbort = abort;
         const owner = `${id}:${crypto.randomUUID()}`;
         const {
@@ -157,7 +162,7 @@ function ActiveDictation({
         target = unwrap(await dictation.captureTarget());
         const apiKey = conn?.apiKey;
         const preview =
-          livePreview && conn && (!isCloudModel || apiKey)
+          conn && (!isCloudModel || apiKey)
             ? {
                 provider: conn.provider,
                 baseUrl: conn.baseUrl,
@@ -201,6 +206,7 @@ function ActiveDictation({
                 return;
               if (update.type === "amplitude")
                 useDictationStatus.setState({ amplitude: update.amplitude });
+              else if (!livePreview) return;
               else if (update.type === "transcript")
                 useDictationStatus.setState({
                   text: update.text,
@@ -215,11 +221,16 @@ function ActiveDictation({
           ),
         );
       },
-      stop: async () => unwrap(await dictation.stopRecording(id)).filePath,
+      stop: async () => {
+        const recorded = unwrap(await dictation.stopRecording(id));
+        finalTranscript = recorded.transcript ?? null;
+        return recorded.filePath;
+      },
       cancel: async () => {
         unwrap(await dictation.cancelRecording(id));
       },
       transcribe: async (path) => {
+        if (finalTranscript !== null) return finalTranscript;
         let text = "";
         await current.current.runBatch(path, {
           signal: abort.signal,
@@ -287,7 +298,12 @@ function ActiveDictation({
       .then(async () => {
         if (disposed) return;
         unlisten = await events.shortcutEvent.listen(({ payload }) => {
-          if (disposed || !armed) return;
+          if (
+            disposed ||
+            !armed ||
+            useDictationStatus.getState().capturingShortcut
+          )
+            return;
           if (payload.type === "pressed") controller.press();
           else if (payload.type === "released") controller.release();
           else cancel();

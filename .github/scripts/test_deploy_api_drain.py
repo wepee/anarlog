@@ -100,6 +100,10 @@ def test_image_ref_uses_the_fly_registry_tag():
     args = build.call_args.args
     assert args[args.index("--image-label") + 1] == image.rsplit(":", 1)[1]
     assert args[args.index("--label") + 1] == "GH_SHA=test-source"
+    assert any(
+        args[index : index + 2] == ("--build-arg", "GH_SHA=test-source")
+        for index in range(len(args) - 1)
+    )
 
 
 def test_stop_config_reads_graceful_shutdown_settings():
@@ -644,7 +648,7 @@ def test_desired_runtime_replaces_stale_machine_settings():
         "PORT": "3001",
         "PRIMARY_REGION": "sjc",
     }
-    assert result["guest"] == {"memory_mb": 1024, "cpu_kind": "shared", "cpus": 1}
+    assert result["guest"] == {"memory_mb": 2048, "cpu_kind": "performance", "cpus": 1}
     assert result["checks"] == {}
     (service,) = result["services"]
     assert service["internal_port"] == 3001
@@ -658,15 +662,21 @@ def test_desired_runtime_replaces_stale_machine_settings():
     assert desired["env"]["PORT"] == "3001"
 
 
-def test_bootstrap_marks_healthy_machines_for_future_drains():
+def test_bootstrap_preserves_source_revision_and_marks_healthy_machines():
     with (
-        patch.object(deploy_api_drain, "fly"),
+        patch.dict(deploy_api_drain.os.environ, {"GITHUB_SHA": "test-source"}),
+        patch.object(deploy_api_drain, "fly") as fly,
         patch.object(deploy_api_drain, "list_machines", return_value=[{"id": "new"}]),
         patch.object(deploy_api_drain, "wait_until_healthy") as healthy,
         patch.object(deploy_api_drain, "api_request") as api,
     ):
         deploy_api_drain.bootstrap_deploy(
             "anarlog-inference", "config", "Dockerfile", "test"
+        )
+        args = fly.call_args.args
+        assert any(
+            args[index : index + 2] == ("--build-arg", "GH_SHA=test-source")
+            for index in range(len(args) - 1)
         )
         healthy.assert_called_once_with("anarlog-inference", "new")
         api.assert_called_once_with(
@@ -1111,7 +1121,7 @@ def test_rollback_health_preserves_capacity_and_worker_ownership():
     text = deploy_api_drain.rollback_health_config("apps/api/fly.gateway.toml", machine)
     profile = tomllib.loads(text)
     assert profile["http_service"]["checks"][0]["path"] == "/health"
-    assert profile["http_service"]["min_machines_running"] == 2
+    assert profile["http_service"]["min_machines_running"] == 3
     assert profile["env"]["ANARLOG_ATTACHMENT_BACKUP_GC_ENABLED"] == "false"
     assert profile["env"]["ANARLOG_AI_ORIGIN"] == "https://anarlog-inference.fly.dev"
     try:
@@ -1131,7 +1141,7 @@ if __name__ == "__main__":
     test_override_support_is_verified_before_cleanup()
     test_unknown_override_does_not_inherit_drain_support()
     test_idle_legacy_stripe_retirement_requires_cordon_and_healthy_capacity()
-    test_bootstrap_marks_healthy_machines_for_future_drains()
+    test_bootstrap_preserves_source_revision_and_marks_healthy_machines()
     test_drain_adoption_only_marks_the_verified_image()
     test_billing_replacement_migrates_process_group_and_keeps_capacity()
     test_rollback_requires_an_immutable_api_image_before_mutating_machines()

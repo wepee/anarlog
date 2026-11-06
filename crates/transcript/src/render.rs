@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     FinalizedWord, IdentityAssignment, SegmentKey, SegmentWord, SpeakerLabelContext,
-    SpeakerLabeler, WordState, build_segments, channel_assignments_for_participants,
-    render_speaker_label, segment_options_for_participants,
+    SpeakerLabeler, WordState, build_segments, render_speaker_label,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, specta::Type)]
@@ -15,6 +14,14 @@ pub struct RenderTranscriptWordInput {
     pub channel: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker_index: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synthetic_timing: Option<SyntheticTiming>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct SyntheticTiming {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_start_ms: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type)]
@@ -58,9 +65,15 @@ pub struct RenderedTranscriptSegment {
 pub fn render_transcript_segments(
     request: RenderTranscriptRequest,
 ) -> Vec<RenderedTranscriptSegment> {
+    crate::synthetic_render::render_segments(request)
+}
+
+pub(crate) fn render_transcript_segments_ungrouped(
+    request: RenderTranscriptRequest,
+) -> Vec<RenderedTranscriptSegment> {
     let RenderTranscriptRequest {
         transcripts,
-        participant_human_ids,
+        participant_human_ids: _,
         self_human_id,
         humans,
         speaker_context,
@@ -71,11 +84,22 @@ pub fn render_transcript_segments(
     if let Some(mut segments) = preview {
         for segment in &mut segments {
             if let Some(id) = &segment.key.speaker_human_id {
+                // Unnamed humans are not in `humans` (name <> '' filter) — a
+                // raw UUID is never a good label, so fall back the way
+                // `resolve_speaker` does for the local user.
                 segment.speaker_label = humans
                     .iter()
                     .find(|human| &human.human_id == id)
-                    .map(|human| human.name.clone())
-                    .unwrap_or_else(|| id.clone());
+                    .map(|human| human.name.trim())
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| {
+                        if self_human_id.as_deref() == Some(id.as_str()) {
+                            "You".to_string()
+                        } else {
+                            id.clone()
+                        }
+                    });
             }
         }
         return match speaker_context {
@@ -94,16 +118,52 @@ pub fn render_transcript_segments(
             .map(|started_at| started_at - base_started_at)
             .unwrap_or(0);
 
-        let (words, mut assignments) =
+        let (words, assignments) =
             offset_transcript_data(transcript.words, transcript.assignments, offset);
-        let segment_options = if speaker_context.is_some() {
-            crate::segment_options_for_assignments(&assignments)
+        let segment_options = if let Some(context) = speaker_context.as_ref() {
+            let mut options = crate::segment_options_for_assignments(&assignments);
+            // Call-evidence changes split context intervals even while isolation
+            // holds; coalesce overlapping or contiguous isolated ranges so a word
+            // straddling that boundary is still inside a verified isolated period.
+            let mut isolated_ranges: Vec<(i64, i64)> = context
+                .intervals
+                .iter()
+                // `resolve_speaker` refuses self-labeling on shared mics; the
+                // range fallback must honor the same guard or index-less room
+                // speech would permanently inherit the owner.
+                .filter(|interval| {
+                    interval.mic_isolated == Some(true) && !interval.shared_microphone
+                })
+                .map(|interval| {
+                    (
+                        interval.start_ms - base_started_at,
+                        interval.end_ms - base_started_at,
+                    )
+                })
+                .collect();
+            isolated_ranges.sort_unstable();
+            let mut coalesced: Vec<(i64, i64)> = Vec::with_capacity(isolated_ranges.len());
+            for (start, end) in isolated_ranges {
+                match coalesced.last_mut() {
+                    Some((_, prev_end)) if start <= *prev_end => {
+                        *prev_end = (*prev_end).max(end);
+                    }
+                    _ => coalesced.push((start, end)),
+                }
+            }
+            options.isolated_mic_ranges = Some(coalesced);
+            // Verified isolated intervals carry only the local voice, matching
+            // the live engine's `isolated_mic_human` fallback; without it an
+            // index-less word would inherit a guest's channel-level assignment.
+            options.isolated_mic_human = self_human_id
+                .as_deref()
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned);
+            options
         } else {
-            assignments.extend(channel_assignments_for_participants(
-                &participant_human_ids,
-                self_human_id.as_deref(),
-            ));
-            segment_options_for_participants(&participant_human_ids, self_human_id.as_deref())
+            // A channel identifies an audio source, not a person. Old mobile
+            // recordings have no capture context and can contain several voices.
+            crate::segment_options_for_assignments(&assignments)
         };
 
         let segments = build_segments(&words, &[], &assignments, Some(&segment_options));
@@ -113,23 +173,14 @@ pub fn render_transcript_segments(
     all_segments.sort_by_key(|seg| seg.words.first().map(|w| w.start_ms).unwrap_or(i64::MAX));
 
     let ctx = SpeakerLabelContext {
-        self_human_id: if speaker_context.is_none() {
-            self_human_id.clone()
-        } else {
-            None
-        },
+        self_human_id: None,
         human_name_by_id: humans
             .iter()
             .cloned()
             .map(|human| (human.human_id, human.name))
             .collect::<HashMap<_, _>>(),
     };
-    let max_speaker_number = if speaker_context.is_some() {
-        None
-    } else {
-        max_speaker_number_for_participants(&participant_human_ids, self_human_id.as_deref())
-    };
-    let mut labeler = SpeakerLabeler::from_segments(&all_segments, Some(&ctx), max_speaker_number);
+    let mut labeler = SpeakerLabeler::from_segments(&all_segments, Some(&ctx), None);
 
     let segments = all_segments
         .into_iter()
@@ -165,24 +216,6 @@ pub fn render_transcript_segments(
         }
         None => segments,
     }
-}
-
-fn max_speaker_number_for_participants(
-    participant_human_ids: &[String],
-    self_human_id: Option<&str>,
-) -> Option<usize> {
-    let mut participants = participant_human_ids.to_vec();
-
-    if let Some(self_human_id) = self_human_id
-        && !participants.iter().any(|id| id == self_human_id)
-    {
-        participants.push(self_human_id.to_string());
-    }
-
-    participants.sort();
-    participants.dedup();
-
-    (participants.len() > 1).then_some(participants.len())
 }
 
 fn offset_transcript_data(
@@ -295,6 +328,7 @@ mod tests {
             end_ms,
             channel,
             speaker_index: None,
+            synthetic_timing: None,
         }
     }
 
@@ -313,6 +347,7 @@ mod tests {
             end_ms,
             channel,
             speaker_index: Some(speaker_index),
+            synthetic_timing: None,
         }
     }
 
@@ -338,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_segments_with_labels() {
+    fn renders_segments_with_explicit_labels() {
         let segments = render_transcript_segments(RenderTranscriptRequest {
             speaker_context: None,
             preview: None,
@@ -348,7 +383,10 @@ mod tests {
                     word("w1", " hello", 0, 100, 0),
                     word("w2", " world", 120, 240, 1),
                 ],
-                assignments: vec![],
+                assignments: vec![
+                    channel_assignment("human-1", ChannelProfile::DirectMic),
+                    channel_assignment("human-2", ChannelProfile::RemoteParty),
+                ],
             }],
             participant_human_ids: vec!["human-1".to_string(), "human-2".to_string()],
             self_human_id: Some("human-1".to_string()),
@@ -372,7 +410,56 @@ mod tests {
     }
 
     #[test]
-    fn caps_unknown_speaker_labels_to_participant_count() {
+    fn grouped_channel_inputs_keep_words_in_sentence_segments() {
+        let segments = render_transcript_segments(RenderTranscriptRequest {
+            speaker_context: None,
+            preview: None,
+            transcripts: vec![
+                RenderTranscriptInput {
+                    started_at: Some(0),
+                    words: vec![
+                        word("mic-1", " Hello", 0, 400, 0),
+                        word("mic-2", " world.", 400, 800, 0),
+                    ],
+                    assignments: vec![],
+                },
+                RenderTranscriptInput {
+                    started_at: Some(0),
+                    words: vec![
+                        word("remote-1", " Remote", 0, 400, 1),
+                        word("remote-2", " reply.", 400, 800, 1),
+                    ],
+                    assignments: vec![],
+                },
+            ],
+            participant_human_ids: vec![],
+            self_human_id: None,
+            humans: vec![],
+        });
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].text, "Hello world.");
+        assert_eq!(segments[1].text, "Remote reply.");
+        assert_eq!(
+            segments[0]
+                .words
+                .iter()
+                .map(|word| word.id.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("mic-1"), Some("mic-2")]
+        );
+        assert_eq!(
+            segments[1]
+                .words
+                .iter()
+                .map(|word| word.id.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("remote-1"), Some("remote-2")]
+        );
+    }
+
+    #[test]
+    fn does_not_cap_unknown_voices_to_the_invited_participant_count() {
         let segments = render_transcript_segments(RenderTranscriptRequest {
             speaker_context: None,
             preview: None,
@@ -393,17 +480,21 @@ mod tests {
         assert_eq!(segments.len(), 3);
         assert_eq!(segments[0].speaker_label, "Speaker 1");
         assert_eq!(segments[1].speaker_label, "Speaker 2");
-        assert_eq!(segments[2].speaker_label, "Speaker 2");
+        assert_eq!(segments[2].speaker_label, "Speaker 3");
     }
 
     #[test]
-    fn labels_diarized_direct_mic_as_self_without_remote_participant() {
+    fn preserves_shared_microphone_turns_without_capture_context() {
         let segments = render_transcript_segments(RenderTranscriptRequest {
             speaker_context: None,
             preview: None,
             transcripts: vec![RenderTranscriptInput {
                 started_at: Some(0),
-                words: vec![word_si("w1", " hello", 0, 100, 0, 2)],
+                words: vec![
+                    word_si("w1", " hello", 0, 100, 0, 0),
+                    word_si("w2", " hi", 100, 200, 0, 1),
+                    word_si("w3", " again", 200, 300, 0, 0),
+                ],
                 assignments: vec![],
             }],
             participant_human_ids: vec![],
@@ -414,10 +505,55 @@ mod tests {
             }],
         });
 
-        assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].speaker_label, "Me");
-        assert_eq!(segments[0].key.speaker_index, Some(2));
-        assert_eq!(segments[0].key.speaker_human_id.as_deref(), Some("self"));
+        assert_eq!(segments.len(), 3);
+        assert_eq!(
+            segments
+                .iter()
+                .map(|s| s.speaker_label.as_str())
+                .collect::<Vec<_>>(),
+            ["Speaker 1", "Speaker 2", "Speaker 1"]
+        );
+        assert_eq!(segments[0].key.speaker_index, Some(0));
+        assert!(segments.iter().all(|s| s.key.speaker_human_id.is_none()));
+    }
+
+    #[test]
+    fn explicit_channel_assignment_wins_over_participant_default() {
+        let segments = render_transcript_segments(RenderTranscriptRequest {
+            speaker_context: None,
+            preview: None,
+            transcripts: vec![RenderTranscriptInput {
+                started_at: Some(0),
+                words: vec![
+                    word("w1", " hello", 0, 100, 0),
+                    word("w2", " world", 120, 240, 1),
+                ],
+                assignments: vec![channel_assignment(
+                    "human-pinned",
+                    ChannelProfile::RemoteParty,
+                )],
+            }],
+            participant_human_ids: vec!["self".to_string(), "remote".to_string()],
+            self_human_id: Some("self".to_string()),
+            humans: vec![
+                RenderTranscriptHuman {
+                    human_id: "self".to_string(),
+                    name: "Me".to_string(),
+                },
+                RenderTranscriptHuman {
+                    human_id: "human-pinned".to_string(),
+                    name: "Pinned".to_string(),
+                },
+                RenderTranscriptHuman {
+                    human_id: "remote".to_string(),
+                    name: "Remote".to_string(),
+                },
+            ],
+        });
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].speaker_label, "Speaker 1");
+        assert_eq!(segments[1].speaker_label, "Pinned");
     }
 
     #[test]
@@ -582,7 +718,7 @@ mod tests {
         });
 
         assert_eq!(segments.len(), 2);
-        assert_eq!(segments[0].speaker_label, "Me");
+        assert_eq!(segments[0].speaker_label, "Speaker 1");
         assert_eq!(segments[1].speaker_label, "Remote");
         assert_eq!(segments[1].text, "remote more");
     }

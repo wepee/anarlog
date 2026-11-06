@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   } | null,
   goBack: vi.fn(),
   openCurrent: vi.fn(),
+  platform: null as string | null,
   select: vi.fn(),
   sendEvent: vi.fn(),
   tabs: [] as {
@@ -20,6 +21,15 @@ const mocks = vi.hoisted(() => ({
     slotId?: string;
     type: string;
   }[],
+}));
+
+vi.mock("@tauri-apps/plugin-os", () => ({
+  platform: () => {
+    if (mocks.platform === null) {
+      throw new Error("not in tauri");
+    }
+    return mocks.platform;
+  },
 }));
 
 vi.mock("~/contexts/shell", () => ({
@@ -51,7 +61,10 @@ vi.mock("~/store/zustand/tabs", () => {
   };
 });
 
-import { CustomSidebarHeader } from "./custom-sidebar-header";
+import {
+  CustomSidebarHeader,
+  TITLE_BAR_SIDEBAR_ACTIONS_SLOT_ID,
+} from "./custom-sidebar-header";
 
 describe("CustomSidebarHeader", () => {
   afterEach(() => {
@@ -64,6 +77,7 @@ describe("CustomSidebarHeader", () => {
     mocks.currentTab = { type: "settings" };
     mocks.goBack.mockClear();
     mocks.openCurrent.mockClear();
+    mocks.platform = null;
     mocks.select.mockClear();
     mocks.sendEvent.mockClear();
     mocks.tabs = [];
@@ -89,48 +103,37 @@ describe("CustomSidebarHeader", () => {
     expect(mocks.openCurrent).not.toHaveBeenCalled();
   });
 
-  it.each(["folders", "calendar", "contacts", "templates"] as const)(
-    "returns %s to settings when opened from there",
-    (type) => {
-      const settingsTab = { slotId: "slot-settings", type: "settings" };
-      mocks.currentTab = {
-        returnToSlotId: "slot-settings",
-        returnToTabId: "settings",
-        slotId: `slot-${type}`,
-        type,
-      };
-      mocks.tabs = [settingsTab, mocks.currentTab, { type: "empty" }];
+  it("returns a workspace opened from settings back to settings", () => {
+    const settingsTab = { slotId: "slot-settings", type: "settings" };
+    mocks.currentTab = {
+      returnToSlotId: "slot-settings",
+      returnToTabId: "settings",
+      slotId: "slot-folders",
+      type: "folders",
+    };
+    mocks.tabs = [settingsTab, mocks.currentTab, { type: "empty" }];
+
+    render(<CustomSidebarHeader />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Go home" }));
+
+    expect(mocks.select).toHaveBeenCalledWith(settingsTab);
+    expect(mocks.openCurrent).not.toHaveBeenCalled();
+  });
+
+  it.each(["FloatingOpen", "RightPanelOpen"])(
+    "closes %s chat before opening home",
+    (chatMode) => {
+      mocks.chatMode = chatMode;
 
       render(<CustomSidebarHeader />);
 
       fireEvent.click(screen.getByRole("button", { name: "Go home" }));
 
-      expect(mocks.select).toHaveBeenCalledWith(settingsTab);
+      expect(mocks.sendEvent).toHaveBeenCalledWith({ type: "CLOSE" });
       expect(mocks.openCurrent).not.toHaveBeenCalled();
     },
   );
-
-  it("closes floating chat before opening home", () => {
-    mocks.chatMode = "FloatingOpen";
-
-    render(<CustomSidebarHeader />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Go home" }));
-
-    expect(mocks.sendEvent).toHaveBeenCalledWith({ type: "CLOSE" });
-    expect(mocks.openCurrent).not.toHaveBeenCalled();
-  });
-
-  it("closes right panel chat before opening home", () => {
-    mocks.chatMode = "RightPanelOpen";
-
-    render(<CustomSidebarHeader />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Go home" }));
-
-    expect(mocks.sendEvent).toHaveBeenCalledWith({ type: "CLOSE" });
-    expect(mocks.openCurrent).not.toHaveBeenCalled();
-  });
 
   it("opens home directly from Automations without collapsing its chat", () => {
     mocks.chatMode = "RightPanelOpen";
@@ -144,10 +147,25 @@ describe("CustomSidebarHeader", () => {
     expect(mocks.sendEvent).not.toHaveBeenCalled();
   });
 
-  it("does not render history controls", () => {
-    render(<CustomSidebarHeader />);
+  it("portals header actions next to the title bar back button on windows", () => {
+    mocks.platform = "windows";
+    const slot = document.createElement("div");
+    slot.id = TITLE_BAR_SIDEBAR_ACTIONS_SLOT_ID;
+    document.body.appendChild(slot);
 
-    expect(screen.queryByRole("button", { name: "Go back" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Go forward" })).toBeNull();
+    try {
+      const { container } = render(
+        <CustomSidebarHeader>
+          <button type="button">New folder</button>
+        </CustomSidebarHeader>,
+      );
+
+      expect(container.innerHTML).toBe("");
+      expect(
+        slot.contains(screen.getByRole("button", { name: "New folder" })),
+      ).toBe(true);
+    } finally {
+      slot.remove();
+    }
   });
 });

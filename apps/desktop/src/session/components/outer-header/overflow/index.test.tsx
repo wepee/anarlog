@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -19,6 +20,7 @@ const {
   audioExists,
   audioExistsResolved,
   currentNoteContent,
+  exportModalMounts,
   exportModalMock,
   useHasTranscriptMock,
   useListenerMock,
@@ -27,6 +29,12 @@ const {
   transcriptionLanguages,
   platformMock,
   windowShowMock,
+  audioExistMock,
+  sessionDirMock,
+  openPathMock,
+  toastErrorMock,
+  sessionRecord,
+  authenticateMock,
 } = vi.hoisted(() => ({
   uploadAudioMock: vi.fn(),
   uploadTranscriptMock: vi.fn(),
@@ -34,6 +42,7 @@ const {
   audioExists: { value: false },
   audioExistsResolved: { value: true },
   currentNoteContent: { value: "" },
+  exportModalMounts: { value: 0 },
   exportModalMock: vi.fn(
     (_props: { open: boolean; onOpenChange: (open: boolean) => void }) => null,
   ),
@@ -44,6 +53,12 @@ const {
   transcriptionLanguages: { value: ["fr", "en"] as string[] },
   platformMock: vi.fn(() => "macos"),
   windowShowMock: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
+  audioExistMock: vi.fn(),
+  sessionDirMock: vi.fn(),
+  openPathMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  sessionRecord: { value: null as { locked?: boolean } | null },
+  authenticateMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-os", () => ({
@@ -102,13 +117,29 @@ vi.mock("@anlg/ui/components/ui/dropdown-menu", () => ({
   ),
 }));
 
+vi.mock("./always-on-top", () => ({
+  AlwaysOnTop: () => <button type="button">Always on Top</button>,
+}));
+
 vi.mock("./delete", () => ({
   DeleteNote: () => <button type="button">Delete note</button>,
 }));
 
-vi.mock("./export-modal", () => ({
-  ExportModal: exportModalMock,
-}));
+vi.mock("./export-modal", async () => {
+  const React = await import("react");
+  return {
+    ExportModal: (props: {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+    }) => {
+      React.useEffect(() => {
+        exportModalMounts.value += 1;
+      }, []);
+      exportModalMock(props);
+      return null;
+    },
+  };
+});
 
 vi.mock("./listening", () => ({
   Listening: ({ resume }: { resume: boolean }) => (
@@ -116,10 +147,6 @@ vi.mock("./listening", () => ({
       {resume ? "Resume listening" : "Start listening"}
     </button>
   ),
-}));
-
-vi.mock("./misc", () => ({
-  ShowInFolder: () => <button type="button">Show in folder</button>,
 }));
 
 vi.mock("./lock-note", () => ({
@@ -153,6 +180,35 @@ vi.mock("@anlg/plugin-windows", () => ({
   },
 }));
 
+vi.mock("@anlg/plugin-fs-sync", () => ({
+  commands: {
+    audioExist: audioExistMock,
+    sessionDir: sessionDirMock,
+  },
+}));
+
+vi.mock("@anlg/plugin-opener2", () => ({
+  commands: {
+    openPath: openPathMock,
+  },
+}));
+
+vi.mock("@anlg/ui/components/ui/toast", () => ({
+  toast: {
+    error: toastErrorMock,
+  },
+}));
+
+vi.mock("~/session/queries", () => ({
+  useSession: () => sessionRecord.value,
+}));
+
+vi.mock("~/lock/store", () => ({
+  useAppLock: {
+    getState: () => ({ authenticate: authenticateMock }),
+  },
+}));
+
 vi.mock("~/session/components/shared", () => ({
   useCurrentNoteHasContent: () => currentNoteContent.value.trim().length > 0,
   useHasTranscript: useHasTranscriptMock,
@@ -178,6 +234,75 @@ vi.mock("~/stt/useUploadFile", () => ({
   })),
 }));
 
+type Scenario = {
+  transcript?: boolean;
+  content?: string;
+  audio?: boolean;
+  audioResolved?: boolean;
+  mode?: string;
+  floatingPanel?: boolean;
+  platform?: string;
+};
+
+const ACTIONS = [
+  "Upload audio",
+  "Upload transcript",
+  "Start listening",
+  "Resume listening",
+  "Re-transcribe",
+  "Show Audio in Finder",
+  "Show Audio in Explorer",
+  "Show Audio in Folder",
+  "Open floating panel",
+  "Open in New Window",
+  "Delete recording",
+  "Delete note",
+] as const;
+
+function arrange({
+  transcript = true,
+  content = "",
+  audio = false,
+  audioResolved = true,
+  mode = "inactive",
+  floatingPanel = false,
+  platform = "macos",
+}: Scenario) {
+  useHasTranscriptMock.mockReturnValue(transcript);
+  currentNoteContent.value = content;
+  audioExists.value = audio;
+  audioExistsResolved.value = audioResolved;
+  useConfigValueMock.mockReturnValue(floatingPanel);
+  platformMock.mockReturnValue(platform);
+  useListenerMock.mockImplementation((selector) =>
+    selector({ getSessionMode: () => mode, stop: vi.fn() }),
+  );
+  sessionRecord.value = { locked: false };
+  audioExistMock.mockResolvedValue({ status: "ok", data: true });
+  sessionDirMock.mockResolvedValue({
+    status: "ok",
+    data: "/sessions/session-1",
+  });
+  openPathMock.mockResolvedValue({ status: "ok", data: null });
+  authenticateMock.mockResolvedValue(true);
+}
+
+function renderOverflow(
+  props: Partial<React.ComponentProps<typeof OverflowButton>> = {},
+) {
+  return render(
+    <OverflowButton
+      sessionId="session-1"
+      currentView={{ type: "enhanced", id: "note-1" } as EditorView}
+      {...props}
+    />,
+  );
+}
+
+function visibleActions() {
+  return ACTIONS.filter((name) => screen.queryByRole("button", { name }));
+}
+
 describe("OverflowButton", () => {
   afterEach(() => {
     cleanup();
@@ -185,31 +310,117 @@ describe("OverflowButton", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    audioExists.value = false;
-    audioExistsResolved.value = true;
-    currentNoteContent.value = "";
+    exportModalMounts.value = 0;
     sessionLanguage.value = "";
     transcriptionLanguages.value = ["fr", "en"];
-    useHasTranscriptMock.mockReturnValue(true);
-    useConfigValueMock.mockReturnValue(false);
-    platformMock.mockReturnValue("macos");
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "inactive",
-        stop: vi.fn(),
-      }),
-    );
+    arrange({});
   });
 
-  it("keeps upload actions available when the current note is empty", () => {
-    useHasTranscriptMock.mockReturnValue(false);
+  it.each<
+    [
+      string,
+      Scenario,
+      Partial<React.ComponentProps<typeof OverflowButton>>,
+      string[],
+    ]
+  >([
+    [
+      "empty note without a recording",
+      { transcript: false },
+      {},
+      [
+        "Upload audio",
+        "Upload transcript",
+        "Start listening",
+        "Open in New Window",
+        "Delete note",
+      ],
+    ],
+    [
+      "note with content",
+      { transcript: false, content: "Existing content" },
+      {},
+      ["Start listening", "Open in New Window", "Delete note"],
+    ],
+    [
+      "pending audio lookup",
+      { transcript: false, audio: true, audioResolved: false },
+      {},
+      ["Resume listening", "Open in New Window", "Delete note"],
+    ],
+    [
+      "transcript without a recording",
+      {},
+      {},
+      ["Resume listening", "Open in New Window", "Delete note"],
+    ],
+    [
+      "recorded audio",
+      { transcript: false, audio: true },
+      {},
+      [
+        "Resume listening",
+        "Re-transcribe",
+        "Show Audio in Finder",
+        "Open in New Window",
+        "Delete note",
+      ],
+    ],
+    [
+      "active listening",
+      { transcript: false, mode: "active", floatingPanel: true },
+      {},
+      [
+        "Start listening",
+        "Open floating panel",
+        "Open in New Window",
+        "Delete note",
+      ],
+    ],
+    [
+      "finalizing",
+      { audio: true, mode: "finalizing", floatingPanel: true },
+      {},
+      [
+        "Resume listening",
+        "Show Audio in Finder",
+        "Open in New Window",
+        "Delete note",
+      ],
+    ],
+    [
+      "batch transcription",
+      { audio: true, mode: "running_batch" },
+      {},
+      [
+        "Resume listening",
+        "Show Audio in Finder",
+        "Open in New Window",
+        "Delete note",
+      ],
+    ],
+    [
+      "listening disabled",
+      { mode: "active", floatingPanel: true },
+      { allowListening: false },
+      ["Open in New Window", "Delete note"],
+    ],
+    [
+      "standalone window",
+      {},
+      { standaloneWindow: true },
+      ["Resume listening", "Delete note"],
+    ],
+  ])("offers the right actions for %s", (_label, scenario, props, expected) => {
+    arrange(scenario);
+    renderOverflow(props);
 
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
+    expect(visibleActions()).toEqual(expected);
+  });
+
+  it("uploads audio and transcripts into an empty note", () => {
+    arrange({ transcript: false });
+    renderOverflow();
 
     fireEvent.click(screen.getByRole("button", { name: "Upload audio" }));
     fireEvent.click(screen.getByRole("button", { name: "Upload transcript" }));
@@ -331,7 +542,7 @@ describe("OverflowButton", () => {
     },
   );
 
-  it("renders one separator when meeting actions are disabled", () => {
+  it("omits the recording-actions separator when meeting actions are disabled", () => {
     useHasTranscriptMock.mockReturnValue(false);
     currentNoteContent.value = "Existing content";
 
@@ -343,7 +554,9 @@ describe("OverflowButton", () => {
       />,
     );
 
-    expect(container.querySelectorAll("hr")).toHaveLength(2);
+    // Version history, Export and window actions each close a group; the
+    // recording-actions group is absent, so it adds no separator of its own.
+    expect(container.querySelectorAll("hr")).toHaveLength(3);
   });
 
   it("offers resume and re-transcribe when recorded audio exists", () => {
@@ -359,218 +572,27 @@ describe("OverflowButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Re-transcribe" }));
 
-    expect(
-      screen.getByRole("button", { name: "Resume listening" }),
-    ).not.toBeNull();
     expect(regenerateTranscriptMock).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Upload audio" })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Upload transcript" }),
-    ).toBeNull();
   });
 
-  it("separates visible meeting actions from the static actions", () => {
-    useHasTranscriptMock.mockReturnValue(false);
+  it.each(["macos", "linux"])(
+    "opens the floating panel while actively listening on %s",
+    (platform) => {
+      arrange({ mode: "active", floatingPanel: true, platform });
+      renderOverflow();
 
-    const { container } = render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(container.querySelectorAll("hr")).toHaveLength(3);
-  });
-
-  it("nests meeting info in a hover submenu", () => {
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "Meeting info" })).not.toBeNull();
-    expect(screen.getByTestId("meeting-info-popover").textContent).toBe(
-      "session-1",
-    );
-  });
-
-  it("keeps folder selection out of the overflow menu", () => {
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(screen.queryByRole("combobox", { name: /folder/i })).toBeNull();
-    expect(screen.queryByText("Folder")).toBeNull();
-  });
-
-  it("keeps the overflow trigger out of the header drag region", () => {
-    const { container } = render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    const trigger = container.querySelector(
-      "button[data-tauri-drag-region='false']",
-    );
-
-    expect(trigger).not.toBeNull();
-    expect(trigger?.className).toContain("[&_svg]:size-4");
-    expect(trigger?.querySelector("svg")?.getAttribute("class")).toContain(
-      "size-4",
-    );
-  });
-
-  it("mounts the export modal only after export is selected", () => {
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(0);
-      return 0;
-    });
-
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(exportModalMock).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Export" }));
-
-    expect(exportModalMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the export modal mounted after it closes", async () => {
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(0);
-      return 0;
-    });
-
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Export" }));
-    exportModalMock.mock.lastCall?.[0].onOpenChange(false);
-
-    await waitFor(() => {
-      expect(exportModalMock).toHaveBeenLastCalledWith(
-        expect.objectContaining({ open: false }),
-        undefined,
+      fireEvent.click(
+        screen.getByRole("button", { name: "Open floating panel" }),
       );
-    });
-  });
 
-  it("hides upload actions when the current note has content", () => {
-    useHasTranscriptMock.mockReturnValue(false);
-    currentNoteContent.value = "Existing content";
-
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(screen.queryByRole("button", { name: "Upload audio" })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Upload transcript" }),
-    ).toBeNull();
-  });
-
-  it("hides upload actions while a meeting is in progress", () => {
-    useHasTranscriptMock.mockReturnValue(false);
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "active",
-      }),
-    );
-
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(screen.queryByRole("button", { name: "Upload audio" })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Upload transcript" }),
-    ).toBeNull();
-  });
-
-  it("opens the floating panel while actively listening", () => {
-    useConfigValueMock.mockReturnValue(true);
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "active",
-      }),
-    );
-
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open floating panel" }),
-    );
-
-    expect(openFloatingMeetingPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: "session-1",
-        enabled: true,
-      }),
-    );
-  });
-
-  it("opens the floating panel on Windows and Linux", () => {
-    platformMock.mockReturnValue("linux");
-    useConfigValueMock.mockReturnValue(true);
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "active",
-      }),
-    );
-
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open floating panel" }),
-    );
-
-    expect(openFloatingMeetingPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: "session-1",
-        enabled: true,
-      }),
-    );
-  });
+      expect(openFloatingMeetingPanel).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: "session-1", enabled: true }),
+      );
+    },
+  );
 
   it("opens the current note in a standalone window", () => {
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
+    renderOverflow();
 
     fireEvent.click(screen.getByRole("button", { name: "Open in New Window" }));
 
@@ -580,75 +602,99 @@ describe("OverflowButton", () => {
     });
   });
 
-  it("hides the standalone window action in standalone windows", () => {
-    render(
-      <OverflowButton
-        standaloneWindow
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
+  it("opens the session folder for recorded audio", async () => {
+    arrange({ transcript: false, audio: true });
+    renderOverflow();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Audio in Finder" }),
     );
 
-    expect(
-      screen.queryByRole("button", { name: "Open in New Window" }),
-    ).toBeNull();
+    await waitFor(() => {
+      expect(openPathMock).toHaveBeenCalledWith("/sessions/session-1", null);
+    });
   });
 
-  it("hides listening actions when listening is disabled", () => {
-    useConfigValueMock.mockReturnValue(true);
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "active",
-      }),
+  it("reports a recording deleted after the menu opened", async () => {
+    arrange({ transcript: false, audio: true });
+    audioExistMock.mockResolvedValue({ status: "ok", data: false });
+    renderOverflow();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Audio in Finder" }),
     );
 
-    render(
-      <OverflowButton
-        allowListening={false}
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(
-      screen.queryByRole("button", { name: "Resume listening" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Open floating panel" }),
-    ).toBeNull();
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalled();
+    });
+    expect(openPathMock).not.toHaveBeenCalled();
   });
 
-  it("hides the floating panel action while finalizing", () => {
-    useConfigValueMock.mockReturnValue(true);
-    useListenerMock.mockImplementation((selector) =>
-      selector({
-        getSessionMode: () => "finalizing",
-      }),
+  it("requires authentication while the session record is still loading", async () => {
+    arrange({ transcript: false, audio: true });
+    sessionRecord.value = null;
+    authenticateMock.mockResolvedValue(false);
+    renderOverflow();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Audio in Finder" }),
     );
 
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
-    );
-
-    expect(
-      screen.queryByRole("button", { name: "Open floating panel" }),
-    ).toBeNull();
+    await waitFor(() => {
+      expect(authenticateMock).toHaveBeenCalled();
+    });
+    expect(openPathMock).not.toHaveBeenCalled();
   });
 
-  it("does not show the delete recording action", () => {
-    render(
-      <OverflowButton
-        sessionId="session-1"
-        currentView={{ type: "enhanced", id: "note-1" } as EditorView}
-      />,
+  it("requires authentication for a locked note before opening the folder", async () => {
+    arrange({ transcript: false, audio: true });
+    sessionRecord.value = { locked: true };
+    authenticateMock.mockResolvedValue(false);
+    renderOverflow();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Audio in Finder" }),
     );
 
-    expect(
-      screen.queryByRole("button", { name: "Delete recording" }),
-    ).toBeNull();
-    expect(screen.getByRole("button", { name: "Delete note" })).not.toBeNull();
+    await waitFor(() => {
+      expect(authenticateMock).toHaveBeenCalled();
+    });
+    expect(openPathMock).not.toHaveBeenCalled();
+  });
+
+  it("opens the export modal when export is selected", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 0;
+    });
+    renderOverflow();
+
+    expect(exportModalMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+
+    expect(exportModalMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true }),
+    );
+  });
+
+  it("remounts the export modal on every open", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 0;
+    });
+    renderOverflow();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(exportModalMounts.value).toBe(1);
+
+    const calls = exportModalMock.mock.calls;
+    const lastProps = calls[calls.length - 1]?.[0];
+    act(() => {
+      lastProps?.onOpenChange(false);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(exportModalMounts.value).toBe(2);
   });
 });

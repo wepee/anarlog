@@ -11,7 +11,7 @@ enum FloatingBarLayout {
   static let compactStopWidth: CGFloat = 62
   static let compactSoloStopWidth: CGFloat = 68
   static let compactIconSize: CGFloat = 30
-  static let compactGap: CGFloat = 3
+  static let compactGap: CGFloat = 0
   static let compactHorizontalPadding: CGFloat = 4
   static let expandedWidth: CGFloat = 360
   static let expandedHeight: CGFloat = 430
@@ -63,6 +63,7 @@ struct FloatingBarView: View {
   @State private var suppressNextClick = false
   @State private var dragStart: FloatingBarDragStart?
   private let transcriptBottomAnchorId = "floating-transcript-bottom-anchor"
+  private let transcriptNoticeId = "floating-transcript-notice"
 
   private var bodyHeight: CGFloat {
     containerSize.height - FloatingBarLayout.inset * 2 - FloatingBarLayout.hoverHandleReservedHeight
@@ -71,13 +72,14 @@ struct FloatingBarView: View {
   private var expandsUpward: Bool { model.placement?.expandsUpward ?? true }
 
   var body: some View {
+    let showsHoverHandle = isBarHovered && !model.isExpanded
     let width = containerSize.width - FloatingBarLayout.inset * 2
     let radius =
       model.isExpanded
       ? FloatingBarLayout.expandedCornerRadius : FloatingBarLayout.compactCornerRadius
     let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
     ZStack(alignment: .bottom) {
-      if isBarHovered {
+      if showsHoverHandle {
         FloatingBarHoverHandle(color: dragHandleDotColor, width: width)
           .frame(height: FloatingBarLayout.hoverHandleHeight)
           .padding(.top, FloatingBarLayout.hoverHandleTopPadding)
@@ -107,7 +109,7 @@ struct FloatingBarView: View {
     }
     .frame(
       width: width,
-      height: bodyHeight + (isBarHovered ? FloatingBarLayout.hoverHandleReservedHeight : 0),
+      height: bodyHeight + (showsHoverHandle ? FloatingBarLayout.hoverHandleReservedHeight : 0),
       alignment: .bottom
     )
     .background(shape.fill(isBarHovered && !model.isExpanded ? envelopeSurfaceColor : surfaceColor))
@@ -130,22 +132,6 @@ struct FloatingBarView: View {
 
   private var expandedPanel: some View {
     VStack(spacing: 12) {
-      HStack {
-        Text(
-          model.dictation?.phase == "transcribing"
-            ? "Finishing…" : model.dictation?.phase == "starting" ? "Starting…" : model.title
-        )
-        .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(primaryContentColor)
-        .lineLimit(1)
-        .truncationMode(.tail)
-
-        Spacer(minLength: 12)
-      }
-      .padding(.leading, FloatingBarLayout.expandedPadding + 4)
-      .padding(.trailing, FloatingBarLayout.expandedPadding + 4)
-      .frame(height: FloatingBarLayout.compactHeight)
-
       ScrollViewReader { proxy in
         ZStack(alignment: .bottom) {
           ScrollView(.vertical, showsIndicators: false) {
@@ -162,6 +148,15 @@ struct FloatingBarView: View {
                   )
                   .id(bubble.id)
                 }
+                if let notice = model.transcriptNotice {
+                  Text(notice)
+                    .font(.system(size: 12))
+                    .foregroundStyle(primaryContentColor.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .id(transcriptNoticeId)
+                }
               }
               Color.clear
                 .frame(height: FloatingBarLayout.expandedPadding)
@@ -175,6 +170,11 @@ struct FloatingBarView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .onChange(of: model.transcriptBubbles.last?.id) { _, bubbleId in
             if bubbleId != nil, shouldAutoScrollTranscript {
+              scrollTranscriptToBottom(proxy)
+            }
+          }
+          .onChange(of: model.transcriptNotice) { _, notice in
+            if notice != nil, shouldAutoScrollTranscript {
               scrollTranscriptToBottom(proxy)
             }
           }
@@ -203,7 +203,7 @@ struct FloatingBarView: View {
       }
       .id(model.dictation?.sessionId)
       .padding(.horizontal, FloatingBarLayout.expandedPadding)
-      .padding(.bottom, FloatingBarLayout.expandedPadding)
+      .padding(.vertical, FloatingBarLayout.expandedPadding)
     }
   }
 
@@ -282,7 +282,14 @@ struct FloatingBarView: View {
         ? "Finish dictation"
         : model.status == .reconnecting
           ? "Reconnecting live transcription; stop listening"
-          : model.status == .error ? "Transcription unavailable; stop listening" : "Stop listening"
+          : model.status == .error
+            ? "\(model.transcriptNotice ?? "Recording needs attention"); stop listening"
+            : "Stop listening"
+    )
+    .help(
+      model.status == .error
+        ? "\(model.transcriptNotice ?? "Recording needs attention"). Open BlackMushi to retry or change devices."
+        : "Stop listening"
     )
     .onHover { isStopHovered = $0 }
   }
@@ -661,19 +668,13 @@ private struct TranscriptBubbleView: View {
         Spacer(minLength: 40)
       }
 
-      VStack(alignment: bubble.isSelf ? .trailing : .leading, spacing: 4) {
+      VStack(alignment: .leading, spacing: 4) {
         if showsSpeakerLabel || isOverlapping {
           HStack(spacing: 4) {
-            if bubble.isSelf {
-              overlapGlyph
-              speakerLabel
-            } else {
-              speakerLabel
-              overlapGlyph
-            }
+            speakerLabel
+            overlapGlyph
           }
-          .frame(maxWidth: .infinity, alignment: bubble.isSelf ? .trailing : .leading)
-          .padding(.horizontal, 3)
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)

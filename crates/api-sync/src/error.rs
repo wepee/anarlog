@@ -38,6 +38,12 @@ pub enum SyncError {
     #[error("E2EE freshness witness is not initialized")]
     E2eeWitnessUninitialized,
 
+    #[error("Cloud state changed; pull before retrying")]
+    E2eeReplicaBaseChanged,
+
+    #[error("Encrypted sync is busy; retry later")]
+    E2eeWitnessBusy,
+
     #[error("E2EE freshness witness is unavailable")]
     E2eeWitnessServiceUnavailable,
 
@@ -107,13 +113,27 @@ pub enum SyncError {
     #[error("Shared attachment verification is busy")]
     SharedAttachmentVerificationBusy,
 
+    #[error("Meeting device is not a registered sync device")]
+    MeetingDeviceNotRegistered,
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
 
 impl IntoResponse for SyncError {
     fn into_response(self) -> Response {
+        let retry_after = matches!(self, Self::E2eeWitnessBusy);
         let (status, code, message) = match self {
+            Self::E2eeWitnessBusy => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "e2ee_witness_busy",
+                "Encrypted sync is busy; retry later".to_string(),
+            ),
+            Self::E2eeReplicaBaseChanged => (
+                StatusCode::CONFLICT,
+                "e2ee_replica_base_changed",
+                "Cloud state changed; pull before retrying".to_string(),
+            ),
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, "bad_request", message),
             Self::ProPlanRequired => (
                 StatusCode::FORBIDDEN,
@@ -278,6 +298,11 @@ impl IntoResponse for SyncError {
                 "shared_attachment_verification_busy",
                 "Shared attachment verification is busy".to_string(),
             ),
+            Self::MeetingDeviceNotRegistered => (
+                StatusCode::NOT_FOUND,
+                "meeting_device_not_registered",
+                "This device is not a registered sync device".to_string(),
+            ),
             Self::Internal(message) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "internal_server_error",
@@ -285,6 +310,13 @@ impl IntoResponse for SyncError {
             ),
         };
 
-        anlg_api_error::error_response(status, code, &message)
+        let mut response = anlg_api_error::error_response(status, code, &message);
+        if retry_after {
+            response.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from_static("1"),
+            );
+        }
+        response
     }
 }

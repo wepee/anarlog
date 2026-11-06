@@ -2,17 +2,19 @@ import {
   AlibabaCloud,
   Anthropic,
   Apple,
-  Aws,
+  Bedrock,
   Azure,
   AzureAI,
   Cerebras,
-  Cloudflare,
+  Claude,
+  WorkersAI,
   Cohere,
   DeepSeek,
   Fireworks,
   Gemini,
   GithubCopilot,
-  GoogleCloud,
+  Grok,
+  VertexAI,
   Groq,
   LmStudio,
   Mistral,
@@ -67,14 +69,17 @@ const _PROVIDERS = [
     displayName: "BlackMushi",
     badge: "Recommended",
     icon: <AnarlogProviderIcon />,
-    baseUrl: new URL("/llm", env.VITE_API_URL).toString(),
+    baseUrl: new URL(
+      "/llm",
+      env.VITE_AI_API_URL ?? env.VITE_API_URL,
+    ).toString(),
     requirements: [{ kind: "requires_config", fields: ["api_key"] }],
   },
   {
     id: "claude",
     displayName: "Claude",
     badge: "Subscription",
-    icon: <ProviderLobeIcon icon={Anthropic} />,
+    icon: <ProviderLobeIcon icon={Claude} />,
     baseUrl: "https://api.anthropic.com/v1",
     authKind: "subscription",
     hideAdvanced: true,
@@ -106,7 +111,7 @@ const _PROVIDERS = [
     id: "grok",
     displayName: "Grok",
     badge: "Subscription",
-    icon: <ProviderLobeIcon icon={XAI} />,
+    icon: <ProviderLobeIcon icon={Grok} />,
     baseUrl: "https://api.x.ai/v1",
     authKind: "subscription",
     hideAdvanced: true,
@@ -204,13 +209,11 @@ const _PROVIDERS = [
     id: "unsloth",
     displayName: "Unsloth",
     badge: null,
-    // Rendered unfiltered: the brand filter flattens this multi-color mark
-    // into a solid blob in dark mode.
     icon: (
-      <img
+      <ProviderBrandImage
         src="/assets/unsloth-mark.png"
         alt="Unsloth"
-        className="size-full object-contain object-center"
+        preserveColor
       />
     ),
     baseUrl: "http://127.0.0.1:8888/v1",
@@ -228,6 +231,26 @@ const _PROVIDERS = [
       setup: {
         label: "Setup guide",
         url: "https://docs.anarlog.so/ai-setup#unsloth",
+      },
+    },
+  },
+  {
+    id: "venice",
+    displayName: "Venice",
+    badge: null,
+    icon: (
+      <ProviderBrandImage src="/assets/venice.png" alt="Venice" preserveColor />
+    ),
+    baseUrl: "https://api.venice.ai/api/v1",
+    requirements: [{ kind: "requires_config", fields: ["api_key"] }],
+    links: {
+      models: {
+        label: "Available models",
+        url: "https://docs.venice.ai/models/text",
+      },
+      setup: {
+        label: "API setup",
+        url: "https://venice.ai/settings/api",
       },
     },
   },
@@ -469,7 +492,7 @@ const _PROVIDERS = [
     id: "amazon_bedrock",
     displayName: "Amazon Bedrock",
     badge: null,
-    icon: <ProviderLobeIcon icon={Aws} />,
+    icon: <ProviderLobeIcon icon={Bedrock} />,
     baseUrl: undefined,
     requirements: [
       { kind: "requires_config", fields: ["base_url", "api_key"] },
@@ -489,7 +512,7 @@ const _PROVIDERS = [
     id: "google_vertex_ai",
     displayName: "Google Vertex AI",
     badge: null,
-    icon: <ProviderLobeIcon icon={GoogleCloud} />,
+    icon: <ProviderLobeIcon icon={VertexAI} />,
     baseUrl: undefined,
     requirements: [
       { kind: "requires_config", fields: ["base_url", "api_key"] },
@@ -509,7 +532,7 @@ const _PROVIDERS = [
     id: "cloudflare_workers_ai",
     displayName: "Cloudflare Workers AI",
     badge: null,
-    icon: <ProviderLobeIcon icon={Cloudflare} />,
+    icon: <ProviderLobeIcon icon={WorkersAI} />,
     baseUrl: undefined,
     requirements: [
       { kind: "requires_config", fields: ["base_url", "api_key"] },
@@ -569,6 +592,7 @@ const _PROVIDERS = [
       <ProviderBrandImage
         src="/assets/model-icons/meta-logo.svg"
         alt="Meta Muse"
+        preserveColor
         className="rounded-xs"
       />
     ),
@@ -665,6 +689,7 @@ const PROVIDER_ORDER = [
   "anthropic",
   "google_generative_ai",
   "openrouter",
+  "venice",
   "moonshot",
   "zai",
   "deepseek",

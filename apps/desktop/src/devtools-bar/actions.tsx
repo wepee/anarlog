@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 
 import { commands as notificationCommands } from "@anlg/plugin-notification";
 import { openUrlWithInstruction } from "@anlg/plugin-windows";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 
 import { populateRecurringMeetingNotes } from "./recurring-notes";
 
@@ -17,7 +17,6 @@ import {
   type DevtoolsToastPreview,
   useDevtoolsToastPreview,
 } from "~/store/zustand/devtools-toast-preview";
-import { showBatchCompletedNotification } from "~/store/zustand/listener/general-batch";
 import { listenerStore } from "~/store/zustand/listener/instance";
 import { useTabs } from "~/store/zustand/tabs";
 import {
@@ -38,7 +37,6 @@ export type DevtoolsAction =
   | "notifications:mic-detected"
   | "notifications:mic-options"
   | "notifications:auto-stop"
-  | "notifications:batch-done"
   | "notifications:clear"
   | "countdown:note-60"
   | "countdown:note-300"
@@ -47,7 +45,7 @@ export type DevtoolsAction =
   | "data:recurring-notes"
   | "error:trigger";
 
-export type DevtoolsMenuItem = {
+type DevtoolsMenuItem = {
   label: string;
   description: string;
   action: DevtoolsAction;
@@ -184,12 +182,6 @@ export const DEVTOOLS_MENU: DevtoolsMenuGroup[] = [
         description:
           'Show the "Did your meeting end?" countdown for the live session.',
         action: "notifications:auto-stop",
-      },
-      {
-        label: "Batch done",
-        description:
-          "Show the notification for a finished batch transcription.",
-        action: "notifications:batch-done",
       },
       {
         label: "Clear",
@@ -348,6 +340,8 @@ export function useDevtoolsActions() {
         location: "Conference Room",
       },
       action_label: "Open BlackMushi",
+      action: null,
+      action_menu: null,
       action_variant: null,
       options: null,
       footer: null,
@@ -371,6 +365,8 @@ export function useDevtoolsActions() {
       participants: null,
       event_details: null,
       action_label: null,
+      action: null,
+      action_menu: null,
       action_variant: null,
       options: null,
       footer: null,
@@ -394,11 +390,13 @@ export function useDevtoolsActions() {
       participants: null,
       event_details: null,
       action_label: "Yes",
+      action: null,
+      action_menu: null,
       action_variant: null,
       options: null,
       footer: {
         text: "Ignore Zoom and Chrome?",
-        actionLabel: "Yes",
+        actionLabel: "Ignore them",
         icon: { type: "bundle_id", bundle_id: "us.zoom.xos" },
       },
       icon: null,
@@ -420,6 +418,8 @@ export function useDevtoolsActions() {
       participants: null,
       event_details: null,
       action_label: "Stop",
+      action: null,
+      action_menu: null,
       action_variant: "destructive",
       options: null,
       footer: null,
@@ -466,7 +466,7 @@ export function useDevtoolsActions() {
       const sessionId = await populateRecurringMeetingNotes({ userId });
       openNew({ type: "sessions", id: sessionId });
     } catch (error) {
-      sonnerToast.error(
+      toast.error(
         error instanceof Error ? error.message : "Failed to seed notes",
       );
     }
@@ -520,9 +520,6 @@ export function useDevtoolsActions() {
           return;
         case "notifications:auto-stop":
           void showAutoStopNotification();
-          return;
-        case "notifications:batch-done":
-          void showBatchCompletedNotification("devtool", { force: true });
           return;
         case "notifications:clear":
           void clearNotifications();

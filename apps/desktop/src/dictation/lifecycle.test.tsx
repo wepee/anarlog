@@ -96,7 +96,7 @@ vi.mock("@anlg/plugin-transcription", () => ({
   commands: { getCaptureState: mocks.getCaptureState },
 }));
 vi.mock("@anlg/ui/components/ui/toast", () => ({
-  sonnerToast: { error: vi.fn() },
+  toast: { error: vi.fn() },
 }));
 
 import {
@@ -127,8 +127,22 @@ describe("dictation access and lifecycle", () => {
     expect(useDictationStatus.getState().lastTranscript).toBe("");
   });
 
+  it("unregisters dictation while capturing a shortcut and restores it afterwards", async () => {
+    render(<DictationLifecycle />);
+    await waitFor(() => expect(useDictationStatus.getState().ready).toBe(true));
+    act(() => useDictationStatus.setState({ capturingShortcut: true }));
+    await waitFor(() => expect(mocks.configure).toHaveBeenLastCalledWith(null));
+    expect(useDictationStatus.getState().ready).toBe(false);
+    act(() => useDictationStatus.setState({ capturingShortcut: false }));
+    await waitFor(() =>
+      expect(mocks.configure).toHaveBeenLastCalledWith("Control+Alt+Space"),
+    );
+    expect(mocks.startSystemRecording).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    useDictationStatus.setState({ capturingShortcut: false });
     mocks.session = { user: { id: "user-1" } };
     mocks.platform = "macos";
     mocks.connection = null;
@@ -252,6 +266,55 @@ describe("dictation access and lifecycle", () => {
       );
     },
   );
+  it("reuses the finalized live transcript even when preview display is disabled", async () => {
+    mocks.settings.dictation_live_preview = false;
+    mocks.connection = {
+      provider: "wisprflow",
+      model: "flow",
+      apiKey: "test",
+      baseUrl: "https://platform-api.wisprflow.ai",
+    };
+    mocks.stopRecording.mockResolvedValue({
+      status: "ok",
+      data: { filePath: "/tmp/dictation.wav", transcript: "Finished live." },
+    });
+    render(<DictationLifecycle />);
+    await waitFor(() => expect(useDictationStatus.getState().ready).toBe(true));
+    await act(async () => {
+      mocks.listener?.({ payload: { type: "pressed" } });
+    });
+    expect(mocks.startSystemRecording.mock.calls[0]![2]).toEqual(
+      expect.objectContaining({ provider: "wisprflow" }),
+    );
+    const channel = mocks.startSystemRecording.mock.calls[0]![3];
+    await act(async () => {
+      channel.onmessage({
+        type: "transcript",
+        text: "Hidden",
+        partial: "words",
+      });
+      channel.onmessage({ type: "previewUnavailable" });
+      channel.onmessage({ type: "amplitude", amplitude: 0.5 });
+    });
+    expect(useDictationStatus.getState()).toMatchObject({
+      text: "",
+      partial: "",
+      previewUnavailable: false,
+      amplitude: 0.5,
+    });
+    await act(async () => {
+      mocks.listener?.({ payload: { type: "released" } });
+    });
+    await waitFor(() =>
+      expect(mocks.insertText).toHaveBeenCalledWith(
+        "focused-field",
+        "Finished live.",
+      ),
+    );
+    expect(mocks.runBatch).not.toHaveBeenCalled();
+    expect(mocks.discardRecording).toHaveBeenCalledWith("/tmp/dictation.wav");
+  });
+
   it("shows live words without inserting until finish, then ignores stale preview updates", async () => {
     mocks.settings.dictation_live_preview = true;
     mocks.connection = {

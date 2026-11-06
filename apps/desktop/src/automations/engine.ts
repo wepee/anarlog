@@ -192,12 +192,17 @@ async function executeMarkdownExport(
   sessionId: string,
   directory: string,
 ): Promise<string> {
+  // [fork] Upstream's configurable export options and file replacement are
+  // not exposed here: this build keeps the single "export every meeting"
+  // automation, so it always writes a fresh file with the default options.
   const result = await localApiCommands.exportMeetingMarkdown(
     sessionId,
     directory,
+    null,
+    null,
   );
   if (result.status === "error") {
     throw new Error(result.error);
   }
-  return result.data;
+  return result.data.path;
 }

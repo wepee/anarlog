@@ -121,12 +121,16 @@ pub(super) async fn spawn_recorder(
     Ok(recorder_ref.get_cell())
 }
 
+// Returns the listener cell and the mic-isolation verdict the provider session
+// was configured with; the supervisor keeps it to spot routing changes that flip
+// the verdict after the stream is already open.
 pub(super) async fn spawn_listener(
     supervisor_cell: ActorCell,
     ctx: &SessionContext,
     stream_offset_secs: Option<f64>,
-) -> Result<ActorCell, ractor::SpawnErr> {
+) -> Result<(ActorCell, bool), ractor::SpawnErr> {
     let mode = ChannelMode::determine(ctx.params.onboarding);
+    let mic_isolated = source_mic_isolated(ctx).await;
     let (listener_ref, _): (ActorRef<crate::actors::ListenerMsg>, _) = Actor::spawn_linked(
         Some(ListenerActor::name(&ctx.params.session_id)),
         ListenerActor,
@@ -147,11 +151,29 @@ pub(super) async fn spawn_listener(
             participant_human_ids: ctx.params.participant_human_ids.clone(),
             self_human_id: ctx.params.self_human_id.clone(),
             speaker_assignments: ctx.params.speaker_assignments.clone(),
+            live_transcript: ctx.live_transcript.clone(),
+            mic_isolated,
         },
         supervisor_cell,
     )
     .await?;
-    Ok(listener_ref.get_cell())
+    Ok((listener_ref.get_cell(), mic_isolated))
+}
+
+pub(super) async fn source_mic_isolated(ctx: &SessionContext) -> bool {
+    if ChannelMode::determine(ctx.params.onboarding) != ChannelMode::MicAndSpeaker {
+        return false;
+    }
+    if let Some(source) = ractor::registry::where_is(SourceActor::name(&ctx.params.session_id)) {
+        let source: ActorRef<SourceMsg> = source.into();
+        if let Ok(ractor::rpc::CallResult::Success(isolated)) = source
+            .call(SourceMsg::GetMicIsolated, Some(Duration::from_secs(1)))
+            .await
+        {
+            return isolated;
+        }
+    }
+    crate::actors::source::mic_isolated(&ctx.params.mic_device, ctx.audio.as_ref())
 }
 
 pub(super) async fn try_restart_source(
@@ -159,7 +181,11 @@ pub(super) async fn try_restart_source(
     state: &mut SessionState,
     count_against_budget: bool,
 ) -> bool {
-    if count_against_budget && !state.source_restarts.record_restart(&SOURCE_RESTART_BUDGET) {
+    if count_against_budget
+        && !state
+            .source_restarts
+            .record_consecutive_restart(&SOURCE_RESTART_BUDGET)
+    {
         return false;
     }
 

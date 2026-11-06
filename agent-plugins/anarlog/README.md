@@ -2,7 +2,7 @@
 
 Query BlackMushi meetings through hosted Cloud MCP and a bundled skill. The plugin finds meetings and reads notes, summaries, participants, action items, bounded transcript excerpts, recurring history, and complete exports when explicitly needed. When Cloud has no snapshot for a meeting, the skill fills the gap from the local `anarlog` CLI.
 
-## Prerequisites
+## Local access
 
 1. Sign in to an BlackMushi Pro account in the desktop app.
 2. Open **Settings → Developers → Cloud API & Connectors**, review the disclosure, and enable it.
@@ -45,6 +45,8 @@ codex plugin marketplace add fastrepl/anarlog \
 ```
 
 Restart the ChatGPT desktop app, open the Plugins Directory, select the Fastrepl source, and install **BlackMushi**.
+
+The plugin includes an optional **BlackMushi Cloud** App connection. Connect it for hosted access; leave it disconnected to use the local CLI. The public directory listing has its own review and release process, separate from this repository marketplace.
 
 ### Cursor
 

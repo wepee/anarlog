@@ -18,6 +18,34 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> FsSync<'a, R, M> {
         Ok(anlg_fs_sync_core::FsSyncCore::new(base_dir))
     }
 
+    pub async fn lock_session_audio(&self, session_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        self.manager
+            .state::<crate::SessionAudioLocks>()
+            .lock(session_id)
+            .await
+    }
+
+    /// Deletes the session's local audio. Callers must hold `lock_session_audio`.
+    pub fn delete_session_audio_locked(&self, session_id: &str) -> Result<bool, String> {
+        let app = self.manager.app_handle();
+        let session_dir = crate::commands::resolve_session_dir(app, session_id)?;
+        let deleted = crate::audio::delete(&session_dir).map_err(|e| e.to_string())?;
+        crate::commands::remove_audio_peaks_cache(app, session_id);
+        Ok(deleted)
+    }
+
+    /// [fork] Moves the session's finished recording into `archive_dir`, leaving
+    /// a link in its place. Callers must hold `lock_session_audio`.
+    pub fn archive_session_audio_locked(
+        &self,
+        session_id: &str,
+        archive_dir: &std::path::Path,
+    ) -> Result<crate::audio::ArchiveOutcome, String> {
+        let app = self.manager.app_handle();
+        let session_dir = crate::commands::resolve_session_dir(app, session_id)?;
+        crate::audio::archive(&session_dir, archive_dir, session_id).map_err(|e| e.to_string())
+    }
+
     pub fn list_folders(&self) -> Result<crate::ListFoldersResult, crate::Error> {
         self.core()?.list_folders()
     }

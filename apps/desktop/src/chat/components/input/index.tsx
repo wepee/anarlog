@@ -12,7 +12,7 @@ import {
   Square,
 } from "@anlg/ui/components/icons";
 import { Button } from "@anlg/ui/components/ui/button";
-import { sonnerToast } from "@anlg/ui/components/ui/toast";
+import { toast } from "@anlg/ui/components/ui/toast";
 import { cn } from "@anlg/utils";
 
 import {
@@ -147,7 +147,7 @@ export function ChatMessageInput({
             mentionConfig={mentionConfig}
             placeholder={placeholder}
             submitShortcut="enter"
-            onAttachmentError={(message) => sonnerToast.error(message)}
+            onAttachmentError={(message) => toast.error(message)}
             onUpdate={handleEditorUpdate}
             onSubmit={handleSubmit}
             onHistoryNavigate={history.navigate}
@@ -235,7 +235,7 @@ function Container({
           "flex max-h-full border",
           isFloating
             ? [
-                "border-border/70 text-card-foreground max-h-40 min-h-[38px] flex-row overflow-hidden rounded-[19px] bg-white pr-[6px] pl-4 text-sm shadow-none",
+                "border-border/70 text-card-foreground max-h-40 min-h-10 flex-row overflow-hidden rounded-[20px] bg-white pr-[6px] pl-4 text-sm shadow-none",
                 "dark:bg-card dark:text-card-foreground",
                 hasVoiceStatus ? "items-stretch py-2" : "items-center py-[3px]",
               ]

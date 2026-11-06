@@ -30,6 +30,8 @@ const LISTENER_BACKPRESSURE_RETRY_DELAY: Duration = Duration::from_millis(10);
 const MAX_BACKLOG_DISPATCH_PER_FRAME: usize = 2;
 const RECORDER_DISPATCH_CAPACITY: usize = 32;
 const RECORDER_RPC_TIMEOUT: Duration = Duration::from_millis(100);
+const RECORDER_BACKPRESSURE_TIMEOUT: Duration = Duration::from_secs(2);
+const RECORDER_BACKPRESSURE_RETRY_DELAY: Duration = Duration::from_millis(25);
 const DROPOUT_WINDOW_SAMPLES: usize = SAMPLE_RATE as usize * 5;
 const DROPOUT_RATIO_THRESHOLD: f32 = 0.15;
 
@@ -284,11 +286,14 @@ impl RecorderDispatcher {
                 if failed_actor == Some(actor.get_id()) {
                     continue;
                 }
-                for attempt in 0..=8 {
+                let started_at = Instant::now();
+                loop {
                     match Pipeline::write_to_recorder(&actor, &item).await {
                         Ok(RecorderEnqueueResult::Accepted) => break,
-                        Ok(RecorderEnqueueResult::Backpressured) if attempt < 8 => {
-                            tokio::time::sleep(Duration::from_millis(25)).await;
+                        Ok(RecorderEnqueueResult::Backpressured)
+                            if started_at.elapsed() < RECORDER_BACKPRESSURE_TIMEOUT =>
+                        {
+                            tokio::time::sleep(RECORDER_BACKPRESSURE_RETRY_DELAY).await;
                         }
                         _ => {
                             // A timeout may already have accepted this frame; only
@@ -1045,6 +1050,38 @@ mod tests {
         }
     }
 
+    struct StalledRecorderProbe(tokio::sync::mpsc::UnboundedSender<Vec<f32>>, Duration);
+
+    #[ractor::async_trait]
+    impl Actor for StalledRecorderProbe {
+        type Msg = RecMsg;
+        type State = Instant;
+        type Arguments = ();
+        async fn pre_start(
+            &self,
+            _: ActorRef<Self::Msg>,
+            _: (),
+        ) -> Result<Instant, ActorProcessingErr> {
+            Ok(Instant::now())
+        }
+        async fn handle(
+            &self,
+            _: ActorRef<Self::Msg>,
+            message: RecMsg,
+            started_at: &mut Instant,
+        ) -> Result<(), ActorProcessingErr> {
+            if let RecMsg::AudioSingle(samples, reply) = message {
+                if started_at.elapsed() < self.1 {
+                    let _ = reply.send(RecorderEnqueueResult::Backpressured);
+                } else {
+                    let _ = self.0.send(samples.to_vec());
+                    let _ = reply.send(RecorderEnqueueResult::Accepted);
+                }
+            }
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn transient_recorder_backpressure_preserves_frame_order_without_duplicates() {
         let mut pipeline = test_pipeline();
@@ -1088,6 +1125,7 @@ mod tests {
 
     fn source_frame(mic_muted: bool) -> SourceFrame {
         SourceFrame {
+            captured: true,
             capture: capture_frame(),
             mic_muted,
         }
@@ -1095,6 +1133,7 @@ mod tests {
 
     fn source_frame_with_speaker_value(value: f32) -> SourceFrame {
         SourceFrame {
+            captured: true,
             capture: CaptureFrame {
                 raw_mic: Arc::from([0.0_f32; 4]),
                 raw_speaker: Arc::from([value; 4]),
@@ -1102,89 +1141,6 @@ mod tests {
             },
             mic_muted: false,
         }
-    }
-
-    #[tokio::test]
-    async fn buffers_until_listener_attaches_then_flushes() {
-        let mut pipeline = test_pipeline();
-
-        pipeline
-            .dispatch_frame(
-                source_frame(false),
-                ChannelMode::MicAndSpeaker,
-                &ListenerRouting::Buffering,
-                None,
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(pipeline.audio_buffer.len(), 1);
-
-        let (probe_tx, mut probe_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (listener_ref, handle) = Actor::spawn(None, ListenerProbe(probe_tx), ())
-            .await
-            .unwrap();
-
-        pipeline.on_listener_routing_changed(&ListenerRouting::Attached(listener_ref));
-
-        let event = tokio::time::timeout(std::time::Duration::from_secs(1), probe_rx.recv())
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(matches!(event, ProbeEvent::ListenerDual));
-        assert!(pipeline.audio_buffer.is_empty());
-
-        handle.abort();
-    }
-
-    #[tokio::test]
-    async fn listener_refresh_replays_recent_audio_history() {
-        let mut pipeline = test_pipeline();
-
-        let (old_probe_tx, mut old_probe_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (old_listener_ref, old_handle) = Actor::spawn(None, ListenerProbe(old_probe_tx), ())
-            .await
-            .unwrap();
-
-        for _ in 0..3 {
-            pipeline
-                .dispatch_frame(
-                    source_frame(false),
-                    ChannelMode::MicAndSpeaker,
-                    &ListenerRouting::Attached(old_listener_ref.clone()),
-                    None,
-                )
-                .await
-                .unwrap();
-        }
-
-        for _ in 0..3 {
-            tokio::time::timeout(std::time::Duration::from_secs(1), old_probe_rx.recv())
-                .await
-                .unwrap()
-                .unwrap();
-        }
-
-        let replay = pipeline.prepare_listener_refresh();
-
-        assert_eq!(pipeline.audio_buffer.len(), 3);
-        assert!(replay.duration_secs > 0.0);
-
-        let (new_probe_tx, mut new_probe_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (new_listener_ref, new_handle) = Actor::spawn(None, ListenerProbe(new_probe_tx), ())
-            .await
-            .unwrap();
-
-        pipeline.on_listener_routing_changed(&ListenerRouting::Attached(new_listener_ref));
-
-        let event = tokio::time::timeout(std::time::Duration::from_secs(1), new_probe_rx.recv())
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(matches!(event, ProbeEvent::ListenerDual));
-
-        old_handle.abort();
-        new_handle.abort();
     }
 
     #[tokio::test]
@@ -1486,44 +1442,84 @@ mod tests {
                 Some(ProbeEvent::ListenerDual)
             ));
         }
-        tokio::time::timeout(Duration::from_secs(1), recorder_task)
+        tokio::time::timeout(RECORDER_BACKPRESSURE_TIMEOUT * 2, recorder_task)
             .await
             .unwrap()
             .unwrap();
         listener_task.abort();
     }
 
-    #[test]
-    fn select_tracks_prefers_aec_mic() {
-        let (mic, speaker) =
-            Pipeline::select_tracks(source_frame(false), ChannelMode::MicAndSpeaker);
-        assert_eq!(mic, vec![0.1, -0.1, 0.2, -0.2]);
-        assert_eq!(&*speaker, &[0.75, -0.75, 1.0, -1.0]);
+    #[tokio::test]
+    async fn recorder_survives_a_writer_stall_shorter_than_the_backpressure_timeout() {
+        let mut pipeline = test_pipeline();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let stall = RECORDER_BACKPRESSURE_TIMEOUT / 2;
+        let (recorder, task) = Actor::spawn(None, StalledRecorderProbe(tx, stall), ())
+            .await
+            .unwrap();
+        for value in [1.0, 2.0, 3.0] {
+            pipeline
+                .dispatch_frame(
+                    source_frame_with_speaker_value(value),
+                    ChannelMode::SpeakerOnly,
+                    &ListenerRouting::Dropped,
+                    Some(&recorder),
+                )
+                .await
+                .unwrap();
+        }
+        tokio::time::timeout(RECORDER_BACKPRESSURE_TIMEOUT, pipeline.flush_recorder())
+            .await
+            .unwrap();
+        for value in [1.0, 2.0, 3.0] {
+            assert_eq!(rx.try_recv().unwrap(), vec![value; 4]);
+        }
+        assert!(rx.try_recv().is_err());
+        assert!(!task.is_finished());
+        task.abort();
     }
 
     #[test]
-    fn select_tracks_falls_back_to_raw_mic() {
-        let mut frame = source_frame(false);
-        frame.capture.aec_mic = None;
+    fn select_tracks_picks_mic_by_availability_mute_and_mode() {
+        for (mic_muted, aec_mic, mode, expected_mic, label) in [
+            (
+                false,
+                true,
+                ChannelMode::MicAndSpeaker,
+                vec![0.1, -0.1, 0.2, -0.2],
+                "prefers aec mic",
+            ),
+            (
+                false,
+                false,
+                ChannelMode::MicAndSpeaker,
+                vec![0.25, -0.25, 0.5, -0.5],
+                "falls back to raw mic",
+            ),
+            (
+                true,
+                true,
+                ChannelMode::MicAndSpeaker,
+                vec![0.0, 0.0, 0.0, 0.0],
+                "zeroes muted mic",
+            ),
+            (
+                false,
+                true,
+                ChannelMode::SpeakerOnly,
+                vec![0.0, 0.0, 0.0, 0.0],
+                "zeroes mic for speaker only",
+            ),
+        ] {
+            let mut frame = source_frame(mic_muted);
+            if !aec_mic {
+                frame.capture.aec_mic = None;
+            }
 
-        let (mic, speaker) = Pipeline::select_tracks(frame, ChannelMode::MicAndSpeaker);
-        assert_eq!(mic, vec![0.25, -0.25, 0.5, -0.5]);
-        assert_eq!(&*speaker, &[0.75, -0.75, 1.0, -1.0]);
-    }
-
-    #[test]
-    fn select_tracks_zeroes_muted_mic() {
-        let (mic, speaker) =
-            Pipeline::select_tracks(source_frame(true), ChannelMode::MicAndSpeaker);
-        assert_eq!(mic, vec![0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(&*speaker, &[0.75, -0.75, 1.0, -1.0]);
-    }
-
-    #[test]
-    fn select_tracks_zeroes_mic_for_speaker_only() {
-        let (mic, speaker) = Pipeline::select_tracks(source_frame(false), ChannelMode::SpeakerOnly);
-        assert_eq!(mic, vec![0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(&*speaker, &[0.75, -0.75, 1.0, -1.0]);
+            let (mic, speaker) = Pipeline::select_tracks(frame, mode);
+            assert_eq!(mic, expected_mic, "case: {label}");
+            assert_eq!(&*speaker, &[0.75, -0.75, 1.0, -1.0], "case: {label}");
+        }
     }
 
     fn feed_window(monitor: &mut DropoutMonitor, zero_ratio: f32) {
@@ -1537,7 +1533,7 @@ mod tests {
     }
 
     #[test]
-    fn dropout_monitor_reports_gated_mic_once_per_stream() {
+    fn dropout_monitor_reports_gated_mic_once_until_reset() {
         let runtime = Arc::new(DropoutRuntime::default());
         let mut monitor = DropoutMonitor::new(runtime.clone(), "session".to_string());
 
@@ -1547,10 +1543,15 @@ mod tests {
         let reported = runtime.0.lock().unwrap().clone();
         assert_eq!(reported.len(), 1);
         assert!((reported[0] - 0.3).abs() < 0.01, "ratio {}", reported[0]);
+
+        monitor.reset();
+        feed_window(&mut monitor, 0.5);
+
+        assert_eq!(runtime.0.lock().unwrap().len(), 2);
     }
 
     #[test]
-    fn dropout_monitor_ignores_healthy_mic() {
+    fn dropout_monitor_ignores_healthy_or_not_yet_started_mic() {
         let runtime = Arc::new(DropoutRuntime::default());
         let mut monitor = DropoutMonitor::new(runtime.clone(), "session".to_string());
 
@@ -1558,10 +1559,7 @@ mod tests {
         feed_window(&mut monitor, 0.0);
 
         assert!(runtime.0.lock().unwrap().is_empty());
-    }
 
-    #[test]
-    fn dropout_monitor_ignores_silence_before_the_mic_starts() {
         let runtime = Arc::new(DropoutRuntime::default());
         let mut monitor = DropoutMonitor::new(runtime.clone(), "session".to_string());
 
@@ -1571,17 +1569,5 @@ mod tests {
         feed_window(&mut monitor, 0.0);
 
         assert!(runtime.0.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn dropout_monitor_reports_again_after_reset() {
-        let runtime = Arc::new(DropoutRuntime::default());
-        let mut monitor = DropoutMonitor::new(runtime.clone(), "session".to_string());
-
-        feed_window(&mut monitor, 0.5);
-        monitor.reset();
-        feed_window(&mut monitor, 0.5);
-
-        assert_eq!(runtime.0.lock().unwrap().len(), 2);
     }
 }

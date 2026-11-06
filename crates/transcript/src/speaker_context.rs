@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{ChannelProfile, RenderTranscriptHuman, RenderedTranscriptSegment};
 
@@ -63,8 +63,37 @@ impl SpeakerContext {
                 && end_ms <= interval.end_ms
                 && interval.start_ms < interval.end_ms
         });
-        let (index, _) = matches.next()?;
-        matches.next().is_none().then_some(index)
+        if let Some((index, _)) = matches.next() {
+            return matches.next().is_none().then_some(index);
+        }
+        self.isolated_run_at(start_ms, end_ms)
+    }
+
+    // Call-evidence changes split context intervals even while `mic_isolated`
+    // stays true on both sides, so adjacent isolated intervals form one
+    // verified isolated period; a word straddling that seam still belongs to
+    // the run's first interval.
+    fn isolated_run_at(&self, start_ms: i64, end_ms: i64) -> Option<usize> {
+        let mut run: Option<(usize, i64, i64)> = None;
+        for (index, interval) in self.intervals.iter().enumerate() {
+            if interval.mic_isolated != Some(true) {
+                continue;
+            }
+            match &mut run {
+                Some((_, _, run_end)) if interval.start_ms <= *run_end => {
+                    *run_end = (*run_end).max(interval.end_ms);
+                }
+                _ => run = Some((index, interval.start_ms, interval.end_ms)),
+            }
+            if let Some((first, run_start, run_end)) = run
+                && run_start <= start_ms
+                && end_ms <= run_end
+                && run_start < run_end
+            {
+                return Some(first);
+            }
+        }
+        None
     }
 
     pub fn label_segments(
@@ -74,22 +103,22 @@ impl SpeakerContext {
         self_human_id: Option<&str>,
         humans: &[RenderTranscriptHuman],
     ) -> Vec<RenderedTranscriptSegment> {
-        let mut counts = vec![(HashSet::new(), HashSet::new()); self.intervals.len()];
+        // Mic words per diarization voice per interval. Remote voices are not counted: diarization
+        // indices restart with every stream refresh, so their number says nothing about how
+        // many people are on the far end of a call.
+        let mut local_voices = vec![HashMap::<Option<i32>, usize>::new(); self.intervals.len()];
         for segment in &segments {
+            if segment.key.channel != ChannelProfile::DirectMic {
+                continue;
+            }
             for word in &segment.words {
                 if let Some(index) = self.interval_at(
                     started_at.saturating_add(word.start_ms),
                     started_at.saturating_add(word.end_ms),
                 ) {
-                    match segment.key.channel {
-                        ChannelProfile::DirectMic => {
-                            counts[index].0.insert(segment.key.speaker_index);
-                        }
-                        ChannelProfile::RemoteParty => {
-                            counts[index].1.insert(segment.key.speaker_index);
-                        }
-                        ChannelProfile::MixedCapture => {}
-                    }
+                    *local_voices[index]
+                        .entry(segment.key.speaker_index)
+                        .or_default() += 1;
                 }
             }
         }
@@ -148,8 +177,7 @@ impl SpeakerContext {
                     part.provisional_speaker = resolve_speaker(
                         &self.intervals[index],
                         part.key.channel,
-                        counts[index].0.len(),
-                        counts[index].1.len(),
+                        is_owner_voice(&local_voices[index], part.key.speaker_index),
                         self_human_id,
                         humans,
                     );
@@ -176,21 +204,40 @@ impl SpeakerContext {
     }
 }
 
+// A room mic on a call also catches nearby chatter and diarization splits of the owner's own
+// voice, so the voice carrying at least this share of the interval's mic words is the owner.
+const OWNER_VOICE_SHARE_PERCENT: usize = 80;
+
+fn is_owner_voice(voices: &HashMap<Option<i32>, usize>, speaker_index: Option<i32>) -> bool {
+    if voices.len() <= 1 {
+        return true;
+    }
+    // Unindexed words carry no voice identity once diarized voices are present.
+    if speaker_index.is_none() {
+        return false;
+    }
+    let total: usize = voices.values().sum();
+    voices
+        .get(&speaker_index)
+        .is_some_and(|count| count * 100 >= total * OWNER_VOICE_SHARE_PERCENT)
+}
+
 fn resolve_speaker(
     context: &SpeakerContextInterval,
     source: ChannelProfile,
-    local_voices: usize,
-    remote_voices: usize,
+    owner_voice: bool,
     self_id: Option<&str>,
     humans: &[RenderTranscriptHuman],
 ) -> Option<ProvisionalSpeakerLabel> {
     let self_id = self_id.filter(|id| !id.trim().is_empty())?;
     let virtual_call = context.active_call || context.calendar_call;
+    // A headset only hears its wearer however diarization splits the voice; a room microphone
+    // on a call is the owner only for the voice that dominates it.
+    let personal_microphone = context.mic_isolated == Some(true);
     match source {
         ChannelProfile::DirectMic
             if !context.shared_microphone
-                && local_voices <= 1
-                && (virtual_call || context.mic_isolated == Some(true)) =>
+                && (personal_microphone || (virtual_call && owner_voice)) =>
         {
             let name = humans
                 .iter()
@@ -201,14 +248,16 @@ fn resolve_speaker(
             Some(ProvisionalSpeakerLabel {
                 name: name.to_owned(),
                 human_id: Some(self_id.to_owned()),
-                reason: if context.mic_isolated == Some(true) {
+                reason: if personal_microphone {
                     SpeakerResolutionReason::PersonalMicrophone
                 } else {
                     SpeakerResolutionReason::VirtualMeetingMicrophone
                 },
             })
         }
-        ChannelProfile::RemoteParty if virtual_call && remote_voices == 1 => {
+        // The far end of a call is whoever else was invited, regardless of how many voices
+        // diarization reports for it.
+        ChannelProfile::RemoteParty if virtual_call => {
             let remotes = context
                 .participants
                 .iter()

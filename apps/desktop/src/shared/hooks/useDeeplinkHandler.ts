@@ -7,18 +7,18 @@ import {
   events as deeplink2Events,
 } from "@anlg/plugin-deeplink2";
 import { dismissInstruction } from "@anlg/plugin-windows";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import { stopActiveWelcomeDemo } from "~/onboarding/welcome-note";
 import {
   allowReconnectedCalendarConnections,
   CALENDAR_SYNC_TASK_ID,
-  removeDisconnectedCalendarConnection,
+  removeDisconnectedCalendarConnectionFromCallback,
   syncCalendarEvents,
 } from "~/services/calendar";
 import { useScheduleTaskRunCallback } from "~/services/task-scheduler";
 import { subscribeThenDrainDeepLinks } from "~/shared/deeplink";
 import { useLatestRef } from "~/shared/hooks/useLatestRef";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { useTabs } from "~/store/zustand/tabs";
 
 export function useDeeplinkHandler() {
@@ -65,7 +65,7 @@ export function useDeeplinkHandler() {
           console.log(`[deeplink] integration updated: ${integration_id}`);
           if (disconnected_connection_id) {
             invalidateIntegrationState();
-            void removeDisconnectedCalendarConnection(
+            void removeDisconnectedCalendarConnectionFromCallback(
               integration_id,
               disconnected_connection_id,
             )

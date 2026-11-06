@@ -55,6 +55,32 @@ const uniffiIsDebug =
 
 // Public interface members begin here.
 
+export function renderStoredTranscript(requestJson: string): string /*throws*/ {
+  return ((__rb: Uint8Array) => {
+    try {
+      return FfiConverterString.lift(__rb);
+    } finally {
+      nativeModule().rustbuffer_free(__rb);
+    }
+  })(
+    uniffiCaller.rustCallWithError(
+      /*liftError:*/ FfiConverterTypeBridgeError.lift.bind(
+        FfiConverterTypeBridgeError,
+      ),
+      /*caller:*/ (callStatus) => {
+        return nativeModule().ubrn_uniffi_mobile_bridge_fn_func_render_stored_transcript(
+          FfiConverterString.lower(
+            requestJson,
+            nativeModule().rustbuffer_alloc,
+          ),
+          callStatus,
+        );
+      },
+      /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ),
+  );
+}
+
 export async function startProviderLiveTranscription(
   requestJson: string,
   listener: TranscriptionEventListener,
@@ -1396,6 +1422,12 @@ export interface MobileDbBridgeLike {
     requestJson: string,
     asyncOpts_?: { signal: AbortSignal },
   ) /*throws*/ : Promise<string>;
+  sealE2eeDeviceEnrollment(
+    accountUserId: string,
+    requestId: string,
+    recoveryKeyCode: string,
+    recipientPublicKey: string,
+  ) /*throws*/ : string;
   startCloudsync() /*throws*/ : void;
   stopCloudsync() /*throws*/ : void;
   subscribe(
@@ -2229,6 +2261,50 @@ export class MobileDbBridge
     }
   }
 
+  sealE2eeDeviceEnrollment(
+    accountUserId: string,
+    requestId: string,
+    recoveryKeyCode: string,
+    recipientPublicKey: string,
+  ): string /*throws*/ {
+    return ((__rb: Uint8Array) => {
+      try {
+        return FfiConverterString.lift(__rb);
+      } finally {
+        nativeModule().rustbuffer_free(__rb);
+      }
+    })(
+      uniffiCaller.rustCallWithError(
+        /*liftError:*/ FfiConverterTypeBridgeError.lift.bind(
+          FfiConverterTypeBridgeError,
+        ),
+        /*caller:*/ (callStatus) => {
+          return nativeModule().ubrn_uniffi_mobile_bridge_fn_method_mobiledbbridge_seal_e2ee_device_enrollment(
+            uniffiTypeMobileDbBridgeObjectFactory.clonePointer(this),
+            FfiConverterString.lower(
+              accountUserId,
+              nativeModule().rustbuffer_alloc,
+            ),
+            FfiConverterString.lower(
+              requestId,
+              nativeModule().rustbuffer_alloc,
+            ),
+            FfiConverterString.lower(
+              recoveryKeyCode,
+              nativeModule().rustbuffer_alloc,
+            ),
+            FfiConverterString.lower(
+              recipientPublicKey,
+              nativeModule().rustbuffer_alloc,
+            ),
+            callStatus,
+          );
+        },
+        /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+      ),
+    );
+  }
+
   startCloudsync(): void /*throws*/ {
     uniffiCaller.rustCallWithError(
       /*liftError:*/ FfiConverterTypeBridgeError.lift.bind(
@@ -2806,6 +2882,14 @@ function uniffiEnsureInitialized() {
     );
   }
   if (
+    nativeModule().ubrn_uniffi_mobile_bridge_checksum_func_render_stored_transcript() !==
+    41007
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      "uniffi_mobile_bridge_checksum_func_render_stored_transcript",
+    );
+  }
+  if (
     nativeModule().ubrn_uniffi_mobile_bridge_checksum_func_start_provider_live_transcription() !==
     2753
   ) {
@@ -3035,6 +3119,14 @@ function uniffiEnsureInitialized() {
   ) {
     throw new UniffiInternalError.ApiChecksumMismatch(
       "uniffi_mobile_bridge_checksum_method_mobiledbbridge_restore_attachment",
+    );
+  }
+  if (
+    nativeModule().ubrn_uniffi_mobile_bridge_checksum_method_mobiledbbridge_seal_e2ee_device_enrollment() !==
+    43093
+  ) {
+    throw new UniffiInternalError.ApiChecksumMismatch(
+      "uniffi_mobile_bridge_checksum_method_mobiledbbridge_seal_e2ee_device_enrollment",
     );
   }
   if (

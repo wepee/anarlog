@@ -1,54 +1,17 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useCallback, useState } from "react";
 
-import {
-  ArrowUpRight,
-  Bell,
-  BookOpen,
-  Brain,
-  CalendarDots,
-  ChartLineUp,
-  Code,
-  DownloadSimple,
-  FileText,
-  FolderSimple,
-  Gear,
-  Lightning,
-  type Icon,
-  Lock,
-  MagnifyingGlass,
-  ShieldCheck,
-  Sun,
-  Users,
-  VideoCamera,
-  Waveform,
-  X,
-} from "@anlg/ui/components/icons";
+import { ArrowUpRight, MagnifyingGlass, X } from "@anlg/ui/components/icons";
 import { useSquircleRef } from "@anlg/ui/hooks/use-squircle";
 import { cn } from "@anlg/utils";
 
 import { CustomSidebarHeader } from "./custom-sidebar-header";
+import { useSettingsNavGroups } from "./settings-nav-groups";
 
-import { privacyMessages } from "~/settings/general/app-settings";
-import { type SettingsTab, type TabInput, useTabs } from "~/store/zustand/tabs";
-
-type SettingsNavItem =
-  | {
-      id: SettingsTab;
-      label: string;
-      icon: Icon;
-    }
-  | {
-      id: "automations" | "calendar" | "contacts" | "folders" | "templates";
-      label: string;
-      icon: Icon;
-      destination: TabInput;
-    };
-
-type SettingsNavGroup = { label: string; items: SettingsNavItem[] };
+import { type SettingsTab, useTabs } from "~/store/zustand/tabs";
 
 export function SettingsNav() {
-  const { i18n, t } = useLingui();
+  const { t } = useLingui();
   const [search, setSearch] = useState("");
   const searchRef = useSquircleRef<HTMLDivElement>();
   const currentTab = useTabs((state) => state.currentTab);
@@ -75,86 +38,7 @@ export function SettingsNav() {
     [currentTab, updateSettingsTabState],
   );
 
-  const groups: SettingsNavGroup[] = [
-    {
-      label: t`App`,
-      items: [
-        { id: "app", label: t`General`, icon: Gear },
-        { id: "insights", label: t`Insights`, icon: ChartLineUp },
-        { id: "appearance", label: t`Appearance`, icon: Sun },
-        { id: "notifications", label: t`Notifications`, icon: Bell },
-      ],
-    },
-    {
-      label: "AI",
-      items: [
-        { id: "transcription", label: t`Transcription`, icon: Waveform },
-        {
-          id: "dictation",
-          label: t`Dictation`,
-          icon: Waveform,
-        },
-        { id: "intelligence", label: t`Intelligence`, icon: Brain },
-        {
-          id: "dictionary",
-          label: t`Dictionary`,
-          icon: BookOpen,
-        },
-      ],
-    },
-    {
-      label: t`Workspace`,
-      items: [
-        { id: "meetings", label: t`Meetings`, icon: VideoCamera },
-        {
-          id: "folders",
-          label: t`Folders`,
-          icon: FolderSimple,
-          destination: { type: "folders" },
-        },
-        {
-          id: "calendar",
-          label: t`Calendar`,
-          icon: CalendarDots,
-          destination: { type: "calendar" },
-        },
-        {
-          id: "contacts",
-          label: t`Contacts`,
-          icon: Users,
-          destination: { type: "contacts" },
-        },
-        {
-          id: "templates",
-          label: t`Templates`,
-          icon: FileText,
-          destination: { type: "templates" },
-        },
-        {
-          id: "automations",
-          label: t`Automations`,
-          icon: Lightning,
-          destination: { type: "automations" },
-        },
-      ],
-    },
-    {
-      label: t`Data`,
-      items: [{ id: "imports", label: t`Imports`, icon: DownloadSimple }],
-    },
-    {
-      label: t`Advanced`,
-      items: [
-        {
-          id: "privacy",
-          label: i18n._(privacyMessages.title),
-          icon: ShieldCheck,
-        },
-        { id: "permissions", label: t`Permissions`, icon: Lock },
-        { id: "developers", label: t`Developers`, icon: Code },
-      ],
-    },
-  ];
+  const groups = useSettingsNavGroups();
 
   const query = search.trim().toLowerCase();
   const visibleGroups = query

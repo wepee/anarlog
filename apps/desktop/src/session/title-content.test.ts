@@ -5,9 +5,10 @@ import { schema } from "@anlg/editor/note";
 import {
   documentTitlePlaceholder,
   ensureFirstLineTitle,
-  ensureMarkdownFirstLineTitle,
+  extractBodyHeadingsKey,
   extractFirstLineTitle,
   isPlausibleTitle,
+  extractSectionHeadings,
   removeDocumentTitle,
 } from "./title-content";
 
@@ -327,19 +328,58 @@ describe("ensureFirstLineTitle", () => {
   });
 });
 
-describe("ensureMarkdownFirstLineTitle", () => {
-  it("prepends the session title before markdown summary headings", () => {
+describe("extractSectionHeadings", () => {
+  it("returns trimmed level-two headings and skips the rest", () => {
     expect(
-      ensureMarkdownFirstLineTitle(
-        "# Summary Section\n\n- Follow up",
-        "Meeting Title",
-      ),
-    ).toBe("# Meeting Title\n\n# Summary Section\n\n- Follow up");
+      extractSectionHeadings({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Title" }],
+          },
+          {
+            type: "heading",
+            attrs: { level: 2 },
+            content: [
+              { type: "text", text: "  Updates " },
+              { type: "text", text: " & notes" },
+            ],
+          },
+          { type: "heading", attrs: { level: 2 } },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Body" }],
+          },
+        ],
+      }),
+    ).toEqual(["Updates  & notes"]);
   });
+});
 
-  it("does not duplicate an exact markdown heading without a trailing newline", () => {
+describe("extractBodyHeadingsKey", () => {
+  it("joins headings from JSON and markdown bodies and rejects garbage", () => {
     expect(
-      ensureMarkdownFirstLineTitle("# Meeting Title", "Meeting Title"),
-    ).toBe("# Meeting Title");
+      extractBodyHeadingsKey(
+        JSON.stringify({
+          type: "doc",
+          content: [
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Updates" }],
+            },
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Next Steps" }],
+            },
+          ],
+        }),
+      ),
+    ).toBe("Updates\nNext Steps");
+    expect(extractBodyHeadingsKey("## Updates\n", "markdown")).toBe("Updates");
+    expect(extractBodyHeadingsKey("not json")).toBeNull();
   });
 });

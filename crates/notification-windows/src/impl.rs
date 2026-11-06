@@ -10,10 +10,10 @@ use windows::Win32::Graphics::Dwm::{
 };
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush,
-    DEFAULT_CHARSET, DEFAULT_PITCH, DRAW_TEXT_FORMAT, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE,
-    DT_TOP, DT_VCENTER, DT_WORDBREAK, DeleteObject, DrawTextW, EndPaint, FW_NORMAL, FW_SEMIBOLD,
-    FillRect, HDC, HFONT, InvalidateRect, OUT_DEFAULT_PRECIS, PAINTSTRUCT, SelectObject, SetBkMode,
-    SetTextColor, TRANSPARENT,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DRAW_TEXT_FORMAT, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT,
+    DT_SINGLELINE, DT_TOP, DT_VCENTER, DT_WORDBREAK, DeleteObject, DrawTextW, EndPaint, FW_NORMAL,
+    FW_SEMIBOLD, FillRect, HDC, HFONT, InvalidateRect, OUT_DEFAULT_PRECIS, PAINTSTRUCT,
+    SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
@@ -39,7 +39,9 @@ use anlg_notification_interface::{
 
 use crate::callbacks;
 use crate::icon::{destroy_icon, header_title, load_notification_icon};
-use crate::layout::{HitTarget, MAX_NOTIFICATIONS, NotificationLayout, stacked_origin};
+use crate::layout::{
+    HitTarget, MAX_NOTIFICATIONS, NotificationLayout, Rect, fit_stack, stacked_origin, try_expand,
+};
 
 const CLASS_NAME: windows::core::PCWSTR = w!("AnarlogNotification");
 const TIMER_ID: usize = 1;
@@ -97,7 +99,7 @@ impl NotificationManager {
         let layout = NotificationLayout::compact(&notification);
         let occupied = self.occupied_height();
         let (work_x, work_y, work_width, _) = work_area();
-        let (x, y) = stacked_origin(work_x, work_y, work_width, occupied);
+        let (x, y) = stacked_origin(work_x, work_y, work_width, occupied, &layout);
         let hwnd = match create_overlay_window(x, y, layout.width, layout.height) {
             Some(hwnd) => hwnd,
             None => return,
@@ -117,25 +119,55 @@ impl NotificationManager {
         };
         unsafe {
             let _ = SetTimer(Some(hwnd), TIMER_ID, 50, None);
-            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
         self.active.insert(key, instance);
         self.reposition();
+        if self.active.values().any(|instance| instance.hwnd == hwnd) {
+            unsafe {
+                let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            }
+        }
     }
 
     fn occupied_height(&self) -> i32 {
         self.active
             .values()
-            .map(|instance| instance.layout.height + crate::layout::NOTIFICATION_SPACING)
+            .map(|instance| {
+                instance.layout.height + instance.layout.scale(crate::layout::NOTIFICATION_SPACING)
+            })
             .sum()
     }
 
     fn reposition(&mut self) {
-        let (work_x, work_y, work_width, _) = work_area();
+        let (work_x, work_y, work_width, work_height) = work_area();
+        let mut layouts: Vec<_> = self
+            .active
+            .values()
+            .map(|instance| {
+                let dpi = unsafe { GetDpiForWindow(instance.hwnd) }.max(96);
+                NotificationLayout::for_state(&instance.payload, instance.is_expanded).at_dpi(dpi)
+            })
+            .collect();
+        let first = fit_stack(&mut layouts, work_height);
+        for _ in 0..first {
+            if let Some((_, instance)) = self.active.shift_remove_index(0) {
+                unsafe {
+                    let _ = KillTimer(Some(instance.hwnd), TIMER_ID);
+                    let _ = DestroyWindow(instance.hwnd);
+                }
+                destroy_icon(instance.icon);
+            }
+        }
         let mut occupied = 0;
-        for instance in self.active.values() {
-            let (x, y) = stacked_origin(work_x, work_y, work_width, occupied);
-            occupied += instance.layout.height + crate::layout::NOTIFICATION_SPACING;
+        for (instance, layout) in self
+            .active
+            .values_mut()
+            .zip(layouts.into_iter().skip(first))
+        {
+            instance.layout = layout;
+            let (x, y) = stacked_origin(work_x, work_y, work_width, occupied, &instance.layout);
+            occupied +=
+                instance.layout.height + instance.layout.scale(crate::layout::NOTIFICATION_SPACING);
             unsafe {
                 let _ = SetWindowPos(
                     instance.hwnd,
@@ -181,6 +213,12 @@ impl NotificationManager {
     }
 
     fn tick(&mut self, hwnd: HWND) {
+        if self
+            .instance_by_hwnd_mut(hwnd)
+            .is_some_and(|instance| unsafe { GetDpiForWindow(hwnd) }.max(96) != instance.layout.dpi)
+        {
+            self.reposition();
+        }
         let now = Instant::now();
         let key = self.instance_by_hwnd_mut(hwnd).and_then(|instance| {
             instance
@@ -267,12 +305,28 @@ impl NotificationManager {
     }
 
     fn toggle_expanded(&mut self, hwnd: HWND) {
-        let Some(instance) = self.instance_by_hwnd_mut(hwnd) else {
+        let Some(index) = self
+            .active
+            .values()
+            .position(|instance| instance.hwnd == hwnd)
+        else {
             return;
         };
+        let instance = self.active.get_index(index).unwrap().1;
         if !instance.payload.has_expandable_content() && !instance.is_expanded {
             return;
         }
+        if !instance.is_expanded {
+            let mut layouts: Vec<_> = self
+                .active
+                .values()
+                .map(|instance| instance.layout.clone())
+                .collect();
+            if !try_expand(&mut layouts, index, &instance.payload, work_area().3) {
+                return;
+            }
+        }
+        let instance = self.active.get_index_mut(index).unwrap().1;
         instance.is_expanded = !instance.is_expanded;
         instance.layout = NotificationLayout::for_state(&instance.payload, instance.is_expanded);
         if let Some(timer) = &mut instance.dismiss_timer {
@@ -292,10 +346,14 @@ impl NotificationManager {
         let Some(instance) = self.instance_by_hwnd_mut(hwnd) else {
             return;
         };
-        let PrimaryAction::Options(options) = instance.payload.primary_action() else {
-            return;
+        let semantic_menu = instance.payload.action_menu.clone();
+        let options = match instance.payload.primary_action() {
+            PrimaryAction::Options(options) => options.to_vec(),
+            PrimaryAction::Accept { .. } if semantic_menu.is_some() => {
+                vec![semantic_menu.as_ref().unwrap().label.clone()]
+            }
+            PrimaryAction::Accept { .. } => return,
         };
-        let options = options.to_vec();
         let key = instance.key.clone();
         let menu = unsafe { CreatePopupMenu().ok() };
         let Some(menu) = menu else {
@@ -307,14 +365,16 @@ impl NotificationManager {
                 let _ = AppendMenuW(menu, MF_STRING, index + 1, PCWSTR(text.as_mut_ptr()));
             }
         }
-        let mut create_new = wide("Create New Note...");
-        unsafe {
-            let _ = AppendMenuW(
-                menu,
-                MF_STRING,
-                options.len() + 1,
-                PCWSTR(create_new.as_mut_ptr()),
-            );
+        if semantic_menu.is_none() {
+            let mut create_new = wide("Create New Note...");
+            unsafe {
+                let _ = AppendMenuW(
+                    menu,
+                    MF_STRING,
+                    options.len() + 1,
+                    PCWSTR(create_new.as_mut_ptr()),
+                );
+            }
         }
         let mut cursor = POINT::default();
         unsafe {
@@ -540,7 +600,7 @@ fn draw_notification(hdc: HDC, instance: &NotificationInstance) {
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, rgb(26, 26, 26));
 
-        let dpi = GetDpiForWindow(instance.hwnd).max(96);
+        let dpi = instance.layout.dpi;
         if let (Some(icon), Some(icon_rect)) = (instance.icon, instance.layout.icon) {
             let _ = DrawIconEx(
                 hdc,
@@ -610,6 +670,20 @@ fn draw_notification(hdc: HDC, instance: &NotificationInstance) {
                 },
             );
             draw_label(hdc, action, label, DT_VCENTER | DT_SINGLELINE);
+            if instance.payload.has_action_menu() && !instance.is_expanded {
+                SetTextColor(hdc, rgb(26, 26, 26));
+                draw_label(
+                    hdc,
+                    Rect {
+                        x: action.right() - instance.layout.scale(28),
+                        y: action.y,
+                        width: instance.layout.scale(28),
+                        height: action.height,
+                    },
+                    "▾",
+                    DT_VCENTER | DT_SINGLELINE | DT_CENTER,
+                );
+            }
         }
 
         if let Some(collapse) = instance.layout.collapse {
@@ -624,9 +698,9 @@ fn draw_notification(hdc: HDC, instance: &NotificationInstance) {
             draw_label(
                 hdc,
                 crate::layout::Rect {
-                    x: 12,
+                    x: instance.layout.scale(12),
                     y: footer.y,
-                    width: footer.x - 20,
+                    width: footer.x - instance.layout.scale(20),
                     height: footer.height,
                 },
                 &footer_payload.text,

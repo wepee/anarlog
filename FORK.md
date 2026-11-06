@@ -58,6 +58,25 @@ un artefact signé par la clé d'upstream est rejeté à la vérification. La cl
 privée correspondante vit dans le secret GitHub `TAURI_SIGNING_PRIVATE_KEY`
 du dépôt ; sans elle, plus aucune mise à jour ne peut être publiée.
 
+## 2 ter. Un seul élément dans le trousseau
+
+Upstream range chaque secret dans son propre élément du trousseau macOS :
+clés API, identifiants d'import, et chaque échantillon d'empreinte vocale.
+Un élément n'autorise que la signature de code qui l'a créé. Or les builds
+du fork sont signés ad-hoc, avec une signature qui change à chaque build :
+chaque élément redemandait donc l'accès séparément. Le nettoyage des empreintes
+expirées, lancé au démarrage, suffisait à enchaîner des dizaines de demandes.
+
+| Fichier | Changement |
+|---|---|
+| `plugins/store2/src/vault.rs` | coffre : secrets chiffrés (XChaCha20-Poly1305) dans `secure-store.vault.json`, clé maîtresse dans un seul élément du trousseau |
+| `plugins/store2/src/commands.rs` | lecture coffre d'abord ; un ancien élément est lu une dernière fois puis migré ; suppressions dans le trousseau sans interaction (`SecKeychainSetUserInteractionAllowed`) |
+
+Il reste au plus une demande par nouveau build, pour la clé maîtresse. Les
+empreintes candidates (`voiceprint_candidates`) ne sont migrées que si le
+trousseau les livre sans demander. Si la clé maîtresse est refusée, le
+comportement d'origine, un élément par secret, reprend.
+
 ## 3. Déverrouillage des fonctions Pro
 
 Une seule ligne, volontairement : `isPro: true` dans le contexte de
@@ -93,6 +112,28 @@ termine alors avant d'ouvrir sa fenêtre.
 
 La barre de devtools est également retirée (`apps/desktop/src/main/shell-frame.tsx`),
 elle était activée en dur par le mode debug.
+
+## 4 bis. Archivage des enregistrements
+
+Upstream ne laisse plus choisir où vivent les enregistrements (fastrepl/anarlog#7723) : tout
+reste dans le dossier de l'app. Le fork ajoute à la place un archivage, sans
+toucher à ce choix : passé un délai (1 jour à 1 mois), l'audio d'une réunion
+est copié dans un dossier choisi par l'utilisateur, typiquement iCloud Drive,
+et le fichier local est remplacé par un lien symbolique. La lecture, les
+pics d'onde et la retranscription suivent ce lien sans le savoir.
+
+| Fichier | Changement |
+|---|---|
+| `crates/fs-sync-core/src/audio/archive.rs` | copie vérifiée, puis remplacement atomique du fichier par un lien |
+| `crates/fs-sync-core/src/audio/mod.rs` | supprimer un audio archivé supprime aussi le fichier archivé |
+| `plugins/fs-sync/src/{ext,commands}.rs` | `archive_session_audio_locked` ; `audio_path` renvoie le chemin résolu |
+| `plugins/transcription/src/audio_retention.rs` | passe d'archivage toutes les 10 min, puis éviction iCloud (`brctl evict`) |
+| `apps/desktop/src/settings/general/audio-archive.tsx` | réglage dans Réunions → Audio |
+
+Copier dans iCloud Drive ne libère rien tant que macOS garde la copie
+locale, et il ne l'évince que sous pression disque : d'où l'éviction
+explicite, une heure après la copie. Un dossier d'archive absent (disque
+débranché) suspend l'archivage au lieu de recréer le dossier en local.
 
 ## 5. Après une mise à jour upstream
 

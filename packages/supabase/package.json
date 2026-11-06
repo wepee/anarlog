@@ -6,8 +6,10 @@
     "./attachment-backups": "./src/attachment-backups.ts",
     "./billing": "./src/billing.ts",
     "./middleware": "./src/middleware.ts",
+    "./profile-avatar": "./src/profile-avatar.ts",
     "./profile": "./src/profile.ts",
-    "./storage": "./src/storage.ts"
+    "./storage": "./src/storage.ts",
+    "./referrals": "./src/referrals.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

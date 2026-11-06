@@ -17,6 +17,7 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost,
   captureMeetingChat,
   liveAssistEnabled,
+  captureSharedScreens,
 }: {
   autoJoinScheduledMeetings: SettingItem;
   autoStartScheduledMeetings: SettingItem;
@@ -26,11 +27,14 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost: SettingItem;
   captureMeetingChat: SettingItem;
   liveAssistEnabled: SettingItem;
+  captureSharedScreens: SettingItem;
 }) {
   const currentPlatform = platform();
   const supportsMeetingAx =
     currentPlatform === "macos" || currentPlatform === "linux";
   const supportsMicDetection = currentPlatform !== "windows";
+  const supportsScreenCapture =
+    currentPlatform === "macos" || currentPlatform === "windows";
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,6 +99,19 @@ export function MeetingSettingsView({
             onChange={captureMeetingChat.onChange}
           />
         </>
+      )}
+      {supportsScreenCapture && (
+        <SettingSwitchRow
+          title={<Trans>Capture shared screens in Memos</Trans>}
+          description={
+            <Trans>
+              Save slides and screens others share in meetings. Requires Screen
+              Recording.
+            </Trans>
+          }
+          checked={captureSharedScreens.value}
+          onChange={captureSharedScreens.onChange}
+        />
       )}
       <SettingSwitchRow
         title={<Trans>Show floating bar</Trans>}

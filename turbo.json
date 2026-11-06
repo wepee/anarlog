@@ -13,7 +13,7 @@
       "cache": false
     },
     "//#dev:desktop": {
-      "dependsOn": ["@anlg/ui#build"],
+      "passThroughEnv": ["CARGO_TARGET_DIR"],
       "persistent": true,
       "cache": false
     },

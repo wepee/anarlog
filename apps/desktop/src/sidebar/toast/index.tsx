@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
-import { sonnerToast, TOAST_DURATIONS } from "@anlg/ui/components/ui/toast";
+import {
+  toast as notificationToast,
+  TOAST_DURATIONS,
+} from "@anlg/ui/components/ui/toast";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import {
   createDevtoolsToastPreview,
@@ -14,10 +18,8 @@ import { useNotifications } from "~/contexts/notifications";
 import { useDesktopUpdateControl } from "~/main/update-banner";
 import { useConfigValues } from "~/shared/config";
 import { useLatestRef } from "~/shared/hooks/useLatestRef";
-import { useMountEffect } from "~/shared/hooks/useMountEffect";
 import { useDevtoolsToastPreview } from "~/store/zustand/devtools-toast-preview";
 import { useTabs } from "~/store/zustand/tabs";
-import { useToastAction } from "~/store/zustand/toast-action";
 import { isConfiguredSttModel } from "~/stt/capabilities";
 import { useListener } from "~/stt/contexts";
 
@@ -48,21 +50,22 @@ export function ToastNotifications() {
     }
   }
 
-  useEffect(() => {
-    if (hasActiveDownload) {
-      return;
+  const [observedHasActiveDownload, setObservedHasActiveDownload] =
+    useState(hasActiveDownload);
+  if (observedHasActiveDownload !== hasActiveDownload) {
+    setObservedHasActiveDownload(hasActiveDownload);
+    if (!hasActiveDownload) {
+      setSessionDismissedToastIds((current) => {
+        if (!current.has("downloading-model")) {
+          return current;
+        }
+
+        const next = new Set(current);
+        next.delete("downloading-model");
+        return next;
+      });
     }
-
-    setSessionDismissedToastIds((current) => {
-      if (!current.has("downloading-model")) {
-        return current;
-      }
-
-      const next = new Set(current);
-      next.delete("downloading-model");
-      return next;
-    });
-  }, [hasActiveDownload]);
+  }
 
   const {
     current_llm_provider,
@@ -112,7 +115,6 @@ export function ToastNotifications() {
   const updateSettingsTabState = useTabs(
     (state) => state.updateSettingsTabState,
   );
-  const setToastActionTarget = useToastAction((state) => state.setTarget);
 
   const openAiTab = useCallback(
     (tab: "intelligence" | "transcription") => {
@@ -130,9 +132,8 @@ export function ToastNotifications() {
   }, [openAiTab]);
 
   const handleOpenSTTSettings = useCallback(() => {
-    setToastActionTarget("stt");
     openAiTab("transcription");
-  }, [openAiTab, setToastActionTarget]);
+  }, [openAiTab]);
 
   const registry = useMemo(
     () =>
@@ -256,7 +257,7 @@ export function ToastNotifications() {
       : displayToast.id;
 
   return (
-    <SonnerNotification
+    <NotificationToast
       key={previewKey}
       toast={displayToast}
       onDismiss={
@@ -272,13 +273,14 @@ function toastPresentation(toast: ToastType) {
   return [
     toast.id,
     description,
+    toast.detail ?? "",
     toast.variant ?? "default",
     toast.loading ? "loading" : "idle",
     toast.primaryAction?.label ?? "",
   ].join(":");
 }
 
-function showSonnerNotification(
+function showNotification(
   toast: ToastType,
   toastRef: { current: ToastType },
   onDismissRef: { current?: () => void },
@@ -287,6 +289,7 @@ function showSonnerNotification(
   const dismissible = toast.lifecycle.type === "persistent";
   const options = {
     id: toast.id,
+    description: toast.detail,
     duration: toast.variant === "error" ? TOAST_DURATIONS.error : Infinity,
     closeButton: dismissible,
     dismissible,
@@ -308,17 +311,17 @@ function showSonnerNotification(
   };
 
   if (toast.loading) {
-    sonnerToast.loading(toast.description, options);
+    notificationToast.loading(toast.description, options);
   } else if (toast.variant === "error") {
-    sonnerToast.error(toast.description, options);
+    notificationToast.error(toast.description, options);
   } else if (toast.variant === "warning") {
-    sonnerToast.warning(toast.description, options);
+    notificationToast.warning(toast.description, options);
   } else {
-    sonnerToast.message(toast.description, options);
+    notificationToast.message(toast.description, options);
   }
 }
 
-function SonnerNotification({
+function NotificationToast({
   toast,
   onDismiss,
 }: {
@@ -336,17 +339,17 @@ function SonnerNotification({
     shownPresentationRef.current !== presentation
   ) {
     shownPresentationRef.current = presentation;
-    showSonnerNotification(toast, toastRef, onDismissRef, dismissalRef.current);
+    showNotification(toast, toastRef, onDismissRef, dismissalRef.current);
   }
 
   useMountEffect(() => {
     dismissalRef.current.persist = true;
     shownPresentationRef.current = toastPresentation(toast);
-    showSonnerNotification(toast, toastRef, onDismissRef, dismissalRef.current);
+    showNotification(toast, toastRef, onDismissRef, dismissalRef.current);
 
     return () => {
       dismissalRef.current.persist = false;
-      sonnerToast.dismiss(toast.id);
+      notificationToast.dismiss(toast.id);
     };
   });
 

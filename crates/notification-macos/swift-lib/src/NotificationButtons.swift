@@ -269,8 +269,40 @@ class ActionButton: NotificationButton {
   }
 }
 
+final class InsetButtonCell: NSButtonCell {
+  var trailingInset: CGFloat = 0
+
+  override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+    var frame = cellFrame
+    frame.size.width = max(0, frame.width - trailingInset)
+    super.drawInterior(withFrame: frame, in: controlView)
+  }
+}
+
 class CompactActionButton: ActionButton {
+  override class var cellClass: AnyClass? {
+    get { InsetButtonCell.self }
+    set {}
+  }
+
   let progressLayer = CALayer()
+  // AppKit draws the button's label into its own layer contents, which sit beneath any
+  // sublayer. The countdown gauge lives in a sibling view behind the button instead.
+  private let gaugeView = NSView()
+
+  var trailingContentInset: CGFloat = 0 {
+    didSet {
+      (cell as? InsetButtonCell)?.trailingInset = trailingContentInset
+      invalidateIntrinsicContentSize()
+      needsDisplay = true
+    }
+  }
+
+  override var intrinsicContentSize: NSSize {
+    var size = super.intrinsicContentSize
+    size.width += trailingContentInset
+    return size
+  }
 
   private var totalDuration: Double = 0
   private var remainingDuration: Double = 0
@@ -310,16 +342,46 @@ class CompactActionButton: ActionButton {
       layer?.cornerCurve = .continuous
     }
 
+    gaugeView.wantsLayer = true
+    gaugeView.translatesAutoresizingMaskIntoConstraints = false
+    gaugeView.isHidden = true
+    gaugeView.layer?.masksToBounds = true
+    if #available(macOS 11.0, *) {
+      gaugeView.layer?.cornerCurve = .continuous
+    }
+
     progressLayer.backgroundColor = progressFillColor
     progressLayer.anchorPoint = CGPoint(x: 0, y: 0.5)
     progressLayer.isHidden = true
-    layer?.addSublayer(progressLayer)
+    gaugeView.layer?.addSublayer(progressLayer)
+  }
+
+  override func viewDidMoveToSuperview() {
+    super.viewDidMoveToSuperview()
+    gaugeView.removeFromSuperview()
+    guard let superview else { return }
+    superview.addSubview(gaugeView, positioned: .below, relativeTo: self)
+    NSLayoutConstraint.activate([
+      gaugeView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      gaugeView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      gaugeView.topAnchor.constraint(equalTo: topAnchor),
+      gaugeView.bottomAnchor.constraint(equalTo: bottomAnchor),
+    ])
+  }
+
+  override var isHidden: Bool {
+    didSet { syncGaugeVisibility() }
+  }
+
+  override var alphaValue: CGFloat {
+    didSet { gaugeView.alphaValue = alphaValue }
   }
 
   override func layout() {
     super.layout()
     CATransaction.begin()
     CATransaction.setDisableActions(true)
+    gaugeView.layer?.cornerRadius = layer?.cornerRadius ?? bounds.height / 2
     syncProgressLayerFrame()
     CATransaction.commit()
   }
@@ -329,6 +391,19 @@ class CompactActionButton: ActionButton {
     DispatchQueue.main.asyncAfter(deadline: .now() + Timing.buttonPress) {
       self.alphaValue = 1.0
     }
+  }
+
+  private var isGaugeActive = false
+
+  private func showGauge(baseColor: CGColor) {
+    isGaugeActive = true
+    gaugeView.layer?.backgroundColor = baseColor
+    layer?.backgroundColor = NSColor.clear.cgColor
+    syncGaugeVisibility()
+  }
+
+  private func syncGaugeVisibility() {
+    gaugeView.isHidden = isHidden || !isGaugeActive
   }
 
   func configureDestructiveCountdownStyle() {
@@ -396,7 +471,7 @@ class CompactActionButton: ActionButton {
     isCountdownActive = true
     progressRatio = 1.0
 
-    layer?.backgroundColor = progressBaseBackgroundColor
+    showGauge(baseColor: progressBaseBackgroundColor)
     progressLayer.backgroundColor = progressFillColor
     progressLayer.isHidden = false
     progressLayer.removeAllAnimations()
@@ -443,7 +518,7 @@ class CompactActionButton: ActionButton {
     clearProgressState()
 
     if showsProgress {
-      layer?.backgroundColor = progressBaseBackgroundColor
+      showGauge(baseColor: progressBaseBackgroundColor)
     }
 
     CATransaction.begin()
@@ -520,6 +595,30 @@ class OptionsButton: NotificationButton {
   @objc func optionSelected(_ sender: NSMenuItem) {
     guard let notification = notification else { return }
     RustBridge.onOptionSelected(key: notification.key, selectedIndex: Int32(sender.tag))
+    notification.dismiss()
+  }
+}
+
+class SemanticMenuButton: NotificationButton {
+  var menuLabel = "Open meeting"
+
+  override func layout() {
+    super.layout()
+    layer?.cornerRadius = 0
+  }
+
+  override func performAction() {
+    guard notification != nil else { return }
+    let menu = NSMenu()
+    let item = NSMenuItem(title: menuLabel, action: #selector(selected(_:)), keyEquivalent: "")
+    item.target = self
+    menu.addItem(item)
+    menu.popUp(positioning: nil, at: NSPoint(x: 0, y: bounds.height), in: self)
+  }
+
+  @objc func selected(_ sender: NSMenuItem) {
+    guard let notification = notification else { return }
+    RustBridge.onOptionSelected(key: notification.key, selectedIndex: 0)
     notification.dismiss()
   }
 }

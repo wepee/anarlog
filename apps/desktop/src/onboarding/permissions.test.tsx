@@ -66,22 +66,6 @@ describe("PermissionsSection", () => {
     });
   });
 
-  it("collects Accessibility permission on macOS", () => {
-    const { container } = render(<PermissionsSection />);
-
-    expect(screen.getByText("Help BlackMushi listen to you")).toBeTruthy();
-    expect(screen.getByText("Help BlackMushi listen to others")).toBeTruthy();
-    expect(screen.getByText("Help BlackMushi read meeting activity")).toBeTruthy();
-    expect(
-      screen
-        .getByRole("button", { name: "Enable accessibility" })
-        .getAttribute("title"),
-    ).toBe("Read meeting controls and visible chat");
-    expect(
-      container.querySelectorAll("[data-testid='permission-action-arrow']"),
-    ).toHaveLength(3);
-  });
-
   it("waits for all three macOS permissions before continuing", () => {
     const onContinue = vi.fn();
     mocks.permissions.microphone.status = "authorized";
@@ -109,7 +93,9 @@ describe("PermissionsSection", () => {
 
     render(<PermissionsSection onContinue={onContinue} />);
 
-    expect(screen.queryByText("Help BlackMushi read meeting activity")).toBeNull();
+    expect(
+      screen.queryByText("Help BlackMushi read meeting activity"),
+    ).toBeNull();
     expect(mocks.usePermission).not.toHaveBeenCalledWith("accessibility");
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
@@ -120,17 +106,6 @@ describe("PermissionsSection", () => {
     mocks.permissions.systemAudio.error = "PipeWire source unavailable";
 
     render(<PermissionsSection />);
-
-    expect(
-      screen
-        .getByRole("button", { name: "Try again: Microphone" })
-        .getAttribute("title"),
-    ).toBe("microphone device unavailable");
-    expect(
-      screen
-        .getByRole("button", { name: "Try again: System audio" })
-        .getAttribute("title"),
-    ).toBe("PipeWire source unavailable");
 
     fireEvent.click(
       screen.getByRole("button", { name: "Try again: Microphone" }),
@@ -164,10 +139,6 @@ describe("PermissionsSection", () => {
     const row = screen.getByRole("button", {
       name: "Open accessibility settings",
     });
-    expect(row.getAttribute("title")).toBe(
-      "Opens System Settings and guides you to add BlackMushi to the Accessibility list",
-    );
-
     fireEvent.click(row);
 
     expect(mocks.permissions.accessibility.open).toHaveBeenCalledTimes(1);

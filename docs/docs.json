@@ -23,15 +23,18 @@
         "group": "Using BlackMushi",
         "pages": [
           "meetings",
+          "dictation",
           "automatic-capture",
           "import-recordings",
           "imports",
+          "zoom",
           "notes",
           "sharing",
           "teams",
           "chat",
           "customize-summaries",
           "calendar",
+          "contacts",
           "sync",
           "automations",
           "languages"
@@ -80,7 +83,7 @@
       "anchors": [
         {
           "anchor": "BlackMushi",
-          "href": "https://anarlog.so",
+          "href": "https://anarlog.so/",
           "icon": "house"
         },
         {
@@ -105,7 +108,7 @@
     "primary": {
       "type": "button",
       "label": "Download BlackMushi",
-      "href": "https://anarlog.so/download"
+      "href": "https://anarlog.so/download/"
     }
   },
   "contextual": {

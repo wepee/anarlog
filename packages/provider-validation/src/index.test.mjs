@@ -401,18 +401,118 @@ test("Nari verifies keys using its non-billable authenticated voice catalog", as
     async (url, init) => {
       requests.push({ url, init });
       return requests.length === 1
-        ? Response.json({ object: "list", model: "qwen3-tts:free", data: [] })
+        ? Response.json({ object: "list", model: "qwen3-tts", data: [] })
         : new Response(null, { status: 401 });
     },
   );
   assert.equal(requests.length, 2);
   assert.equal(
     requests[0].url,
-    "https://api.narilabs.com/v1/voices?model=qwen3-tts:free",
+    "https://api.narilabs.com/v1/voices?model=qwen3-tts",
   );
   assert.equal(requests[0].init.headers.Authorization, "Bearer synthetic-key");
   assert.equal(
     requests[1].init.headers.Authorization,
     "Bearer anarlog-invalid-key-verification",
+  );
+});
+
+test("validates Wispr Flow with its authenticated warmup endpoint", async () => {
+  const requests = [];
+  await verifyProviderCredentials(
+    {
+      provider: "wisprflow",
+      baseUrl: "https://platform-api.wisprflow.ai",
+      apiKey: "synthetic-key",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      assert.equal(
+        url,
+        "https://platform-api.wisprflow.ai/api/v1/dash/warmup_dash",
+      );
+      if (init.headers.Authorization !== "Bearer synthetic-key")
+        return new Response(null, { status: 401 });
+      return Response.json({ status: "warmed" });
+    },
+  );
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].init.headers.Authorization, "Bearer synthetic-key");
+  assert.equal(
+    requests[1].init.headers.Authorization,
+    "Bearer anarlog-invalid-key-verification",
+  );
+});
+
+test("Venice verifies account access instead of its public model catalog", async () => {
+  const requests = [];
+  await verifyProviderCredentials(
+    {
+      ...credential,
+      provider: "venice",
+      baseUrl: "https://api.venice.ai/api/v1",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      return Response.json({ data: { accessPermitted: true } });
+    },
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://api.venice.ai/api/v1/api_keys/rate_limits",
+  );
+  assert.equal(requests[0].init.headers.Authorization, "Bearer synthetic-key");
+});
+
+for (const data of [{ accessPermitted: false }, [], {}]) {
+  test(`Venice rejects unconfirmed access: ${JSON.stringify(data)}`, async () => {
+    await assert.rejects(
+      verifyProviderCredentials(
+        {
+          ...credential,
+          provider: "venice",
+          baseUrl: "https://api.venice.ai/api/v1",
+        },
+        async () => Response.json({ data }),
+      ),
+      ProviderCredentialError,
+    );
+  });
+}
+
+test("native streaming providers validate input without requiring a model catalog", async () => {
+  const fetcher = async () => {
+    throw new Error("No documented credential probe");
+  };
+  for (const provider of [
+    "inworld",
+    "gradium",
+    "amazon_bedrock",
+    "modulate",
+    "alebex",
+    "nvidia",
+  ]) {
+    await verifyProviderCredentials(
+      { ...credential, type: "stt", provider },
+      fetcher,
+    );
+  }
+  await verifyProviderCredentials(
+    {
+      ...credential,
+      type: "stt",
+      provider: "nvidia",
+      baseUrl: "http://localhost:9000",
+      apiKey: "",
+    },
+    fetcher,
+  );
+  await assert.rejects(
+    verifyProviderCredentials(
+      { ...credential, type: "stt", provider: "inworld", apiKey: "" },
+      fetcher,
+    ),
+    /valid API key/,
   );
 });

@@ -25,6 +25,7 @@ function renderMeetingSettings({
   captureMeetingChat = setting(false),
   liveAssistEnabled = setting(false),
   autoRecordDetectedMeetings = setting(true),
+  captureSharedScreens = setting(false),
 } = {}) {
   return {
     ...render(
@@ -37,6 +38,7 @@ function renderMeetingSettings({
         meetingDisclosureAutoPost={meetingDisclosureAutoPost}
         captureMeetingChat={captureMeetingChat}
         liveAssistEnabled={liveAssistEnabled}
+        captureSharedScreens={captureSharedScreens}
       />,
     ),
     meetingDisclosureAutoPost,

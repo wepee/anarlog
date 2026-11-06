@@ -6,16 +6,16 @@ import "./styles/cursor.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
-import { StrictMode, useEffect, useMemo } from "react";
+import { StrictMode, useMemo } from "react";
 import ReactDOM from "react-dom/client";
 
-import "@anlg/ui/globals.css";
 import { commands as analyticsCommands } from "@anlg/plugin-analytics";
 import {
   getCurrentWebviewWindowLabel,
   init as initWindowsPlugin,
 } from "@anlg/plugin-windows";
 import { Toaster } from "@anlg/ui/components/ui/toast";
+import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
 import { AITaskWindowSyncBridge } from "./ai/task-window-sync";
 import { trackAnalyticsEvent } from "./analytics";
@@ -23,6 +23,7 @@ import { createToolRegistry } from "./contexts/tool-registry/core";
 import {
   captureOperationalError,
   initializeErrorReporting,
+  reportCaughtReactError,
 } from "./error-reporting";
 import { AppI18nProvider } from "./i18n/provider";
 import { AppLockGate } from "./lock/gate";
@@ -111,9 +112,9 @@ function ReadyApp() {
   const theme = useConfigValue("theme") as ThemePreference;
   useRemoteSessionDeletionUndoListener(isMainWindow);
 
-  useEffect(() => {
+  useMountEffect(() => {
     runMainWindowStartupTasks();
-  }, []);
+  });
 
   return (
     <AppThemeProvider>
@@ -165,7 +166,9 @@ async function renderApp() {
   }
 
   await Promise.all([bootstrapThemeFromSettings(), initializeAppStoreBuild()]);
-  const root = ReactDOM.createRoot(rootElement);
+  const root = ReactDOM.createRoot(rootElement, {
+    onCaughtError: reportCaughtReactError,
+  });
   root.render(
     <StrictMode>
       <AppRoot />

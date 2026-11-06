@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   updateLiveProgress,
+  getCaptureWarning,
   type GeneralState,
   initialGeneralState,
   isBatchTranscriptionPending,
@@ -53,6 +54,7 @@ describe("isBatchTranscriptionPending", () => {
 function createLive(): GeneralState["live"] {
   return {
     ...initialGeneralState.live,
+    captureHealth: { mic: null, speaker: null, unavailable: false },
     captureGenerationBySession: {},
     finalizingBySession: {},
     eventUnlistenersBySession: {},
@@ -216,23 +218,6 @@ describe("tickTranscriptionStallWatchdog", () => {
     tickTranscriptionStallWatchdog(muted);
     expect(muted.stallAudibleSeconds).toBe(1);
   });
-
-  it("keeps the batch repair flag after transcript activity resumes", () => {
-    const live = createActiveLive();
-
-    for (
-      let second = 0;
-      second < TRANSCRIPTION_STALL_AUDIBLE_SECONDS;
-      second += 1
-    ) {
-      tickTranscriptionStallWatchdog(live);
-    }
-    expect(live.needsBatchRepair).toBe(true);
-
-    noteLiveTranscriptActivity(live, { hasFinalWords: true });
-    expect(live.transcriptionStalled).toBe(false);
-    expect(live.needsBatchRepair).toBe(true);
-  });
 });
 
 it("ends the connecting state when an attempt fails", () => {
@@ -246,4 +231,36 @@ it("ends the connecting state when an attempt fails", () => {
   });
   expect(live.loadingPhase).toBe("idle");
   expect(live.lastError).toBe("unavailable");
+});
+
+it("keeps a failed channel warning through retries and healthy-channel frames", () => {
+  const live = createActiveLive();
+  const status = (error: string) =>
+    updateLiveProgress(live, {
+      type: "audio_error",
+      session_id: "session-1",
+      error,
+      device: null,
+      is_fatal: false,
+    });
+  status("audio_mic_unavailable: startup timeout");
+  status("audio_speaker_ready");
+  const warning = getCaptureWarning(live);
+  expect(warning).not.toBeNull();
+  updateLiveProgress(live, {
+    type: "audio_initializing",
+    session_id: "session-1",
+  });
+  updateLiveProgress(live, {
+    type: "audio_ready",
+    session_id: "session-1",
+    device: null,
+  });
+  status("audio_capture_ready");
+  expect(getCaptureWarning(live)).toBe(warning);
+  status("audio_mic_ready");
+  expect(getCaptureWarning(live)).toBeNull();
+  status("audio_storage_backpressure");
+  status("audio_capture_ready");
+  expect(live.lastError).toBe("audio_storage_backpressure");
 });

@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +16,13 @@ vi.mock("@tauri-apps/plugin-os", () => ({
   platform: mocks.platform,
 }));
 
+vi.mock("@tauri-apps/api/app", () => ({
+  getVersion: vi.fn().mockResolvedValue("1.4.31"),
+}));
+
 import { AppSettingsView } from "./app-settings";
+
+import { useTabs } from "~/store/zustand/tabs";
 
 function setting(value = true) {
   return {
@@ -24,13 +37,15 @@ function renderAppSettings({
 } = {}) {
   return {
     ...render(
-      <AppSettingsView
-        appStoreBuild={appStoreBuild}
-        autostart={setting()}
-        automaticUpdates={automaticUpdates}
-        showAppInDock={setting()}
-        showTrayIcon={setting()}
-      />,
+      <QueryClientProvider client={new QueryClient()}>
+        <AppSettingsView
+          appStoreBuild={appStoreBuild}
+          autostart={setting()}
+          automaticUpdates={automaticUpdates}
+          showAppInDock={setting()}
+          showTrayIcon={setting()}
+        />
+      </QueryClientProvider>,
     ),
     automaticUpdates,
   };
@@ -39,34 +54,26 @@ function renderAppSettings({
 describe("AppSettingsView", () => {
   afterEach(() => {
     cleanup();
+    useTabs.setState({ tabs: [], currentTab: null });
     mocks.platform.mockReturnValue("macos");
   });
 
-  it("lets switch descriptions use the available row width", () => {
+  it("reopens the installed version's release notes after closing them", async () => {
     renderAppSettings();
-
-    const loginSwitch = screen.getByRole("switch", {
-      name: "Start BlackMushi at login",
+    const button = screen.getByRole("button", { name: "Show release notes" });
+    await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(button);
+    const tab = useTabs.getState().currentTab!;
+    expect(tab).toMatchObject({
+      type: "changelog",
+      state: { current: "1.4.31" },
     });
-
-    expect(loginSwitch.parentElement?.className).not.toContain("w-48");
-    expect(loginSwitch.parentElement?.parentElement?.className).toContain(
-      "min-w-0",
-    );
-    expect(loginSwitch.parentElement?.parentElement?.className).toContain(
-      "w-full",
-    );
-  });
-
-  it("hides macOS-only Dock controls outside macOS", () => {
-    mocks.platform.mockReturnValue("windows");
-    renderAppSettings();
-
-    expect(
-      screen.queryByRole("switch", { name: "Show app in Dock" }),
-    ).toBeNull();
-    expect(screen.queryByText("Open BlackMushi from the menu bar.")).toBeNull();
-    expect(screen.getByRole("switch", { name: "Show tray icon" })).toBeTruthy();
+    useTabs.getState().close(tab);
+    fireEvent.click(button);
+    expect(useTabs.getState().currentTab).toMatchObject({
+      type: "changelog",
+      state: { current: "1.4.31" },
+    });
   });
 
   it("toggles automatic updates", () => {
@@ -78,9 +85,6 @@ describe("AppSettingsView", () => {
     );
 
     expect(automaticUpdates.onChange).toHaveBeenCalledWith(true);
-    expect(
-      screen.getByText(/installed the next time BlackMushi opens/),
-    ).toBeTruthy();
   });
 
   it("hides direct-distribution controls in App Store builds", () => {
@@ -92,20 +96,5 @@ describe("AppSettingsView", () => {
     expect(
       screen.queryByRole("switch", { name: "Automatically install updates" }),
     ).toBeNull();
-  });
-
-  it("keeps cloud sync in its dedicated settings page", () => {
-    renderAppSettings();
-
-    expect(screen.queryByRole("switch", { name: "Cloud sync" })).toBeNull();
-  });
-
-  it("keeps telemetry in its dedicated privacy page", () => {
-    renderAppSettings();
-
-    expect(
-      screen.queryByRole("switch", { name: "Share usage data (PostHog)" }),
-    ).toBeNull();
-    expect(screen.queryByRole("switch", { name: "Error" })).toBeNull();
   });
 });

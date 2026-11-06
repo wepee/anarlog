@@ -14,7 +14,7 @@ import {
   buildRenderTranscriptRequestFromRows,
   resolveScopedWordHumanIds,
 } from "~/stt/render-transcript";
-import { coalesceLiveTranscriptDeltas } from "~/stt/transcript-persistence-worker";
+import { coalesceLiveTranscriptDeltas } from "~/stt/transcript-delta-coalescing";
 import type { SpeakerHintWithId, WordWithId } from "~/stt/types";
 import {
   applyLiveTranscriptDelta,
@@ -29,6 +29,8 @@ import {
 } from "~/stt/utils";
 
 type TranscriptSqlRow = {
+  source?: string;
+  provider?: string;
   id: string;
   owner_user_id: string;
   session_id: string;
@@ -55,6 +57,7 @@ type TranscriptMutationSqlRow = {
   speaker_hints_json: string;
   content_revision: number;
   pending_deltas_json: string;
+  max_read_sequence: number | null;
 };
 
 type TranscriptInsert = {
@@ -76,6 +79,8 @@ type TranscriptInsert = {
 };
 
 export type TranscriptRecord = {
+  source?: string;
+  provider?: string;
   id: string;
   ownerUserId: string;
   sessionId: string;
@@ -99,6 +104,8 @@ const EMPTY_IDS: string[] = [];
 const EMPTY_HUMANS: RenderTranscriptHuman[] = [];
 
 const TRANSCRIPT_COLUMNS = `
+  transcript.source,
+  transcript.provider,
   transcript.id,
   transcript.owner_user_id,
   transcript.session_id,
@@ -119,6 +126,8 @@ const TRANSCRIPT_COLUMNS = `
 `;
 
 const TRANSCRIPT_BASE_COLUMNS = `
+  transcript.source,
+  transcript.provider,
   transcript.id,
   transcript.owner_user_id,
   transcript.session_id,
@@ -320,11 +329,27 @@ const SESSION_REMOTE_PARTICIPANT_IDS_SQL = `
             WHERE session.id = participant.session_id
               AND (
                 (
-                  NULLIF(lower(self_human.email), '') IS NOT NULL
-                  AND lower(self_human.email) = lower(COALESCE(
-                    NULLIF(human.email, ''),
-                    participant.email
-                  ))
+                  (
+                    NULLIF(lower(self_human.email), '') IS NOT NULL
+                    AND lower(self_human.email) = lower(COALESCE(
+                      NULLIF(human.email, ''),
+                      participant.email
+                    ))
+                  )
+                  OR EXISTS (
+                      SELECT 1
+                      FROM json_each(CASE
+                        WHEN json_valid(self_human.metadata_json)
+                          AND json_type(self_human.metadata_json, '$.additionalEmails') = 'array'
+                        THEN json_extract(self_human.metadata_json, '$.additionalEmails')
+                        ELSE '[]'
+                      END) AS self_additional_email
+                      WHERE lower(self_additional_email.value) = lower(COALESCE(
+                        NULLIF(human.email, ''),
+                        participant.email
+                      ))
+                    )
+                  )
                 )
                 OR (
                   NULLIF(lower(owner_participant.email), '') IS NOT NULL
@@ -363,29 +388,54 @@ export function useSessionParticipantHumanIds(sessionId: string): string[] {
   return sessionId ? data : EMPTY_IDS;
 }
 
-export function useTranscriptHumans(
-  humanIds: readonly string[],
-): RenderTranscriptHuman[] {
-  const uniqueIds = [...new Set(humanIds.filter(Boolean))].sort();
-  const placeholders = uniqueIds.map(() => "?").join(", ");
-  const { data = EMPTY_HUMANS } = useLiveQuery<
-    HumanSqlRow,
-    RenderTranscriptHuman[]
-  >({
+function getTranscriptHumansQuery(humanIds: readonly string[]) {
+  const ids = [...new Set(humanIds.filter(Boolean))].sort();
+  const placeholders = ids.map(() => "?").join(", ");
+  return {
+    humanIds: ids,
     sql: `
       SELECT id, name
       FROM humans
       WHERE id IN (${placeholders || "NULL"})
         AND name <> ''
-        AND deleted_at IS NULL
       ORDER BY id
     `,
-    params: uniqueIds,
-    enabled: uniqueIds.length > 0,
-    mapRows: (rows) =>
-      rows.map((row) => ({ human_id: row.id, name: row.name })),
+  };
+}
+
+function mapTranscriptHumans(rows: HumanSqlRow[]): RenderTranscriptHuman[] {
+  return rows.map((row) => ({ human_id: row.id, name: row.name }));
+}
+
+export async function getTranscriptHumans(
+  humanIds: readonly string[],
+): Promise<RenderTranscriptHuman[]> {
+  const query = getTranscriptHumansQuery(humanIds);
+  if (query.humanIds.length === 0) {
+    return [];
+  }
+
+  const rows = await liveQueryClient.execute<HumanSqlRow>(
+    query.sql,
+    query.humanIds,
+  );
+  return mapTranscriptHumans(rows);
+}
+
+export function useTranscriptHumans(
+  humanIds: readonly string[],
+): RenderTranscriptHuman[] {
+  const query = getTranscriptHumansQuery(humanIds);
+  const { data = EMPTY_HUMANS } = useLiveQuery<
+    HumanSqlRow,
+    RenderTranscriptHuman[]
+  >({
+    sql: query.sql,
+    params: query.humanIds,
+    enabled: query.humanIds.length > 0,
+    mapRows: mapTranscriptHumans,
   });
-  return uniqueIds.length > 0 ? data : EMPTY_HUMANS;
+  return query.humanIds.length > 0 ? data : EMPTY_HUMANS;
 }
 
 export function createTranscript(input: TranscriptInsert): Promise<void> {
@@ -476,52 +526,6 @@ export async function transcriptExists(transcriptId: string): Promise<boolean> {
     [transcriptId],
   );
   return Boolean(rows[0]);
-}
-
-export function applyLiveTranscriptDeltaToDatabase(
-  transcriptId: string,
-  delta: LiveTranscriptDelta,
-): Promise<void> {
-  return enqueueDatabaseWrite(`transcript:${transcriptId}`, async () => {
-    const now = new Date().toISOString();
-    const journalId = `${transcriptId}:${crypto.randomUUID()}`;
-    const [, inserted = 0] = await executeTransaction([
-      {
-        sql: `
-          INSERT OR IGNORE INTO transcript_live_state (
-            transcript_id, next_sequence, updated_at
-          )
-          SELECT id, 0, ?
-          FROM transcripts
-          WHERE id = ? AND deleted_at IS NULL
-        `,
-        params: [now, transcriptId],
-      },
-      {
-        sql: `
-          INSERT INTO transcript_live_deltas (
-            id, transcript_id, sequence, delta_json, created_at
-          )
-          SELECT ?, transcript_id, next_sequence, ?, ?
-          FROM transcript_live_state
-          WHERE transcript_id = ?
-        `,
-        params: [journalId, JSON.stringify(delta), now, transcriptId],
-      },
-      {
-        sql: `
-          UPDATE transcript_live_state
-          SET next_sequence = next_sequence + 1, updated_at = ?
-          WHERE transcript_id = ?
-        `,
-        params: [now, transcriptId],
-      },
-    ]);
-
-    if (inserted !== 1) {
-      throw new Error(`Transcript ${transcriptId} does not exist`);
-    }
-  });
 }
 
 export function flushLiveTranscriptDeltasToDatabase(
@@ -948,6 +952,8 @@ function mapTranscriptRow(row: TranscriptSqlRow): TranscriptRecord {
     row.pending_deltas_json,
   );
   return {
+    ...(row.source ? { source: row.source } : {}),
+    ...(row.provider ? { provider: row.provider } : {}),
     id: row.id,
     ownerUserId: row.owner_user_id,
     sessionId: row.session_id,
@@ -1001,7 +1007,12 @@ async function mutateTranscript(
                 WHERE delta.transcript_id = transcript.id
                 ORDER BY delta.sequence
               ) AS ordered_delta
-            ), '[]') AS pending_deltas_json
+            ), '[]') AS pending_deltas_json,
+            (
+              SELECT MAX(delta.sequence)
+              FROM transcript_live_deltas AS delta
+              WHERE delta.transcript_id = transcript.id
+            ) AS max_read_sequence
           FROM transcripts AS transcript
           WHERE transcript.id = ? AND transcript.deleted_at IS NULL
           LIMIT 1
@@ -1024,6 +1035,10 @@ async function mutateTranscript(
         current.pending_deltas_json,
         transcriptId,
       );
+      const maxReadSequence =
+        current.max_read_sequence == null
+          ? null
+          : Number(current.max_read_sequence);
       if (!mutation && pendingDeltas.length === 0) return;
 
       const materialized = materializeTranscriptSnapshot(
@@ -1045,7 +1060,7 @@ async function mutateTranscript(
         : materialized;
       if (!shouldPersist) return;
       const now = new Date().toISOString();
-      const [updated = 0] = await executeTransaction([
+      const statements = [
         {
           sql: `
             UPDATE transcripts
@@ -1065,14 +1080,33 @@ async function mutateTranscript(
             Number(current.content_revision ?? 0),
           ],
         },
+        ...(maxReadSequence == null
+          ? []
+          : [
+              {
+                sql: `
+                  DELETE FROM transcript_live_deltas
+                  WHERE transcript_id = ?
+                    AND sequence <= ?
+                    AND changes() = 1
+                `,
+                params: [transcriptId, maxReadSequence],
+              },
+            ]),
         {
           sql: `
             DELETE FROM transcript_live_state
-            WHERE transcript_id = ? AND changes() = 1
+            WHERE transcript_id = ?
+              AND NOT EXISTS (
+                SELECT 1
+                FROM transcript_live_deltas
+                WHERE transcript_id = ?
+              )
           `,
-          params: [transcriptId],
+          params: [transcriptId, transcriptId],
         },
-      ]);
+      ];
+      const [updated = 0] = await executeTransaction(statements);
 
       if (updated === 1) return;
     }

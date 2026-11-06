@@ -42,6 +42,8 @@ export async function showSummaryReadyNotification(
       participants: null,
       event_details: null,
       action_label: t`Open BlackMushi`,
+      action: null,
+      action_menu: null,
       action_variant: null,
       options: null,
       footer: null,

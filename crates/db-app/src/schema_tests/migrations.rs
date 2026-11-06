@@ -1,6 +1,62 @@
 use super::*;
 
 #[tokio::test]
+async fn cloud_authority_upgrade_preserves_pending_legacy_ciphertext() {
+    let db = Db::connect_memory_plain().await.unwrap();
+    anlg_db_migrate::migrate(
+        &db,
+        anlg_db_migrate::DbSchema {
+            steps: migration_steps_before("20261005090000_e2ee_cloud_authority"),
+            validate_cloudsync_table: cloudsync_alter_guard_required,
+        },
+    )
+    .await
+    .unwrap();
+    let key = anlg_e2ee::RecoveryKey::parse(
+        "anarlog-e2ee-v1:BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+    )
+    .unwrap()
+    .workspace_key("user-a")
+    .unwrap();
+    let sealed = key
+        .seal_field(
+            "user-a",
+            "sessions",
+            "s",
+            "title",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            1,
+            false,
+            serde_json::json!("Offline before upgrade"),
+        )
+        .unwrap();
+    let hash = anlg_e2ee::payload_hash(&sealed.payload);
+    sqlx::query("INSERT INTO e2ee_local_state(record_id,workspace_id,table_name,row_id,field_name,revision,writer_id,payload_hash,payload) VALUES(?,'user-a','sessions','s','title',1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',?,?)")
+        .bind(&sealed.record_id).bind(&hash).bind(&sealed.payload)
+        .execute(db.pool()).await.unwrap();
+    sqlx::query("INSERT INTO e2ee_witness_pending(record_id,workspace_id) VALUES(?,'user-a')")
+        .bind(&sealed.record_id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    prepare_schema(&db).await.unwrap();
+    for _ in 0..2 {
+        crate::configure_e2ee_cloud_authority(db.pool(), "user-a", Some(0))
+            .await
+            .unwrap();
+    }
+    let batch = crate::pending_e2ee_cloud_batch(db.pool(), "user-a", false)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(batch.events.len(), 1);
+    assert_eq!(batch.events[0].record_id, sealed.record_id);
+    assert_eq!(batch.events[0].payload_hash, hash);
+    assert_eq!(batch.events[0].payload, sealed.payload);
+}
+
+#[tokio::test]
 async fn schema_declares_legacy_migrations_and_cloudsync_registry() {
     let db = test_db().await;
 
@@ -96,6 +152,9 @@ async fn migrations_apply_cleanly() {
             "daily_notes",
             "e2ee_apply_guard",
             "e2ee_ciphertext_archive",
+            "e2ee_cloud_authority",
+            "e2ee_cloud_batches",
+            "e2ee_cloud_outbox",
             "e2ee_dirty_rows",
             "e2ee_field_conflicts",
             "e2ee_local_device",
@@ -118,6 +177,10 @@ async fn migrations_apply_cleanly() {
             "humans",
             "local_library_attachment_state",
             "local_library_connections",
+            "local_meeting_purges",
+            "local_recording_import_jobs",
+            "local_recording_import_worker",
+            "managed_app_settings",
             "migration_import_items",
             "migration_import_runs",
             "migration_import_targets",
@@ -151,6 +214,117 @@ async fn migrations_apply_cleanly() {
             "workspaces",
         ]
     );
+}
+
+#[tokio::test]
+async fn event_attendance_migration_is_plain_and_downgrade_safe() {
+    let migration = APP_MIGRATION_STEPS
+        .iter()
+        .find(|step| step.id == "20260930120000_event_attendance")
+        .unwrap();
+    assert!(matches!(
+        migration.scope,
+        anlg_db_migrate::MigrationScope::Plain
+    ));
+    assert!(
+        !cloudsync_table_registry()
+            .iter()
+            .any(|table| table.table_name == "events" && table.enabled)
+    );
+
+    let db = Db::connect_memory_plain().await.unwrap();
+    anlg_db_migrate::migrate(
+        &db,
+        anlg_db_migrate::DbSchema {
+            steps: migration_steps_before("20260930120000_event_attendance"),
+            validate_cloudsync_table: cloudsync_alter_guard_required,
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO events (
+            id, tracking_id_event, calendar_id, title, participants_json,
+            created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind("before-migration")
+    .bind("tracking-before")
+    .bind("calendar-1")
+    .bind("Existing event")
+    .bind(r#"[{"email":"person@example.com"}]"#)
+    .bind("2026-09-30T10:00:00Z")
+    .bind("2026-09-30T10:00:00Z")
+    .execute(db.pool())
+    .await
+    .unwrap();
+
+    anlg_db_migrate::migrate(&db, schema()).await.unwrap();
+
+    let column_type: String = sqlx::query_scalar(
+        "SELECT type FROM pragma_table_info('events') WHERE name = 'attendance_json'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(column_type, "TEXT");
+
+    let existing: (String, String, Option<String>) = sqlx::query_as(
+        "SELECT title, participants_json, attendance_json
+         FROM events WHERE id = 'before-migration'",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    assert_eq!(existing.0, "Existing event");
+    assert_eq!(
+        existing.1,
+        r#"[{"email":"person@example.com"}]"#.to_string()
+    );
+    assert_eq!(existing.2, None);
+
+    sqlx::query(
+        "INSERT INTO events (
+            id, tracking_id_event, calendar_id, title, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind("old-client-insert")
+    .bind("tracking-old")
+    .bind("calendar-1")
+    .bind("Old client event")
+    .bind("2026-09-30T10:01:00Z")
+    .bind("2026-09-30T10:01:00Z")
+    .execute(db.pool())
+    .await
+    .unwrap();
+
+    let old_client_attendance: Option<String> =
+        sqlx::query_scalar("SELECT attendance_json FROM events WHERE id = 'old-client-insert'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(old_client_attendance, None);
+
+    let attendance = r#"{"version":1,"self_status":"accepted"}"#;
+    sqlx::query("UPDATE events SET attendance_json = ? WHERE id = 'before-migration'")
+        .bind(attendance)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("UPDATE events SET title = ? WHERE id = 'before-migration'")
+        .bind("Updated by old client")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    let after_old_update: (String, String) =
+        sqlx::query_as("SELECT title, attendance_json FROM events WHERE id = 'before-migration'")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    assert_eq!(after_old_update.0, "Updated by old client");
+    assert_eq!(after_old_update.1, attendance);
 }
 
 #[tokio::test]
