@@ -361,6 +361,11 @@ async fn archive_sweep<R: tauri::Runtime>(
             continue;
         }
         let session_id = candidate.session_id;
+        // Early imports used ids like "meeting-import:<hash>"; the session
+        // folder only accepts UUIDs, so they never had a recording to move.
+        if !tauri_plugin_fs_sync::is_uuid(&session_id) {
+            continue;
+        }
         let _guard = app.fs_sync().lock_session_audio(&session_id).await;
         if !session_audio_is_idle(app, &session_id).await {
             continue;
