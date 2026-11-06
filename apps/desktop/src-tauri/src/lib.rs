@@ -218,6 +218,14 @@ pub fn main() {
         }));
     }
 
+    // [fork] Plugin setups run in registration order, and several plugins
+    // (updater2, analytics, tray) spawn work from their setup that reads store2
+    // at once. Registered after them, store2 could lose that race and panic
+    // with "state() called before manage() for Store2State" at launch.
+    builder = builder
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_store2::init());
+
     builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_opener2::init())
@@ -280,9 +288,7 @@ pub fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_notify::init())
         .plugin(tauri_plugin_overlay::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_store2::init());
+        .plugin(tauri_plugin_clipboard_manager::init());
 
     builder = builder
         .plugin(tauri_plugin_tray::init(!cfg!(feature = "app-store")))
