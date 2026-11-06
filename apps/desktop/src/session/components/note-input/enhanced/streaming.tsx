@@ -8,6 +8,7 @@ import { streamdownComponents } from "../../streamdown";
 
 import { useAITaskTask, useLLMConnection } from "~/ai/hooks";
 import { createTaskId } from "~/store/zustand/ai-task/task-configs";
+import { stripMeetingScreenImages } from "~/store/zustand/ai-task/task-configs/enhance-screens";
 import { getPersistableGeneratedTitle } from "~/store/zustand/ai-task/task-configs/title-success";
 import { isLocalModelProviderId } from "~/store/zustand/ai-task/tasks";
 
@@ -108,7 +109,7 @@ export function StreamingView({
           caret="block"
           isAnimating={isGenerating}
         >
-          {streamedText}
+          {stripMeetingScreenImages(streamedText)}
         </Streamdown>
       </div>
     </div>

@@ -10,6 +10,10 @@ import { commands as templateCommands } from "@anlg/plugin-template";
 
 import type { TaskArgsMapTransformed, TaskConfig } from ".";
 import type { EnhanceImageContext } from "./enhance-images";
+import {
+  formatMeetingScreenPromptNote,
+  type MeetingScreenReference,
+} from "./enhance-screens";
 import { createEnhanceValidator } from "./enhance-validator";
 import { appendPreferredNamesGuidance } from "./preferred-names";
 
@@ -55,7 +59,11 @@ async function* executeWorkflow(params: {
 
   const system = await getSystemPrompt(args);
   const prompt = withLengthGuidance(
-    withImageContextNote(await getUserPrompt(args), args.imageContext.length),
+    withImageContextNote(
+      await getUserPrompt(args),
+      args.imageContext.filter((image) => !image.label).length,
+      args.meetingScreens,
+    ),
     args.lengthPolicy,
     args.template?.sections.length ?? 0,
     Boolean(args.formatOverride.trim()),
@@ -210,14 +218,20 @@ async function* withCleanup<T>(
   }
 }
 
-function withImageContextNote(prompt: string, imageCount: number): string {
-  if (imageCount === 0) {
+function withImageContextNote(
+  prompt: string,
+  noteImageCount: number,
+  meetingScreens: MeetingScreenReference[],
+): string {
+  const notes = [
+    noteImageCount > 0 ? IMAGE_CONTEXT_NOTE : "",
+    formatMeetingScreenPromptNote(meetingScreens),
+  ].filter(Boolean);
+  if (notes.length === 0) {
     return prompt;
   }
 
-  return `${prompt}
-
-${IMAGE_CONTEXT_NOTE}`;
+  return [prompt, ...notes].join("\n\n");
 }
 
 function withLengthGuidance(
@@ -256,12 +270,17 @@ function createPromptInput(
         role: "user",
         content: [
           { type: "text", text: prompt },
-          ...imageContext.map(
-            (image): ImagePart => ({
-              type: "image",
-              image: image.base64,
-              mediaType: image.mimeType,
-            }),
+          ...imageContext.flatMap(
+            (image): Array<TextPart | ImagePart> => [
+              ...(image.label
+                ? [{ type: "text" as const, text: image.label }]
+                : []),
+              {
+                type: "image",
+                image: image.base64,
+                mediaType: image.mimeType,
+              },
+            ],
           ),
         ],
       },

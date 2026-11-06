@@ -17,6 +17,7 @@ import { sessionEventSchema } from "@anlg/store";
 
 import type { TaskArgsMap, TaskArgsMapTransformed, TaskConfig } from ".";
 import { collectEnhanceImageContext } from "./enhance-images";
+import { collectMeetingScreenContext } from "./enhance-screens";
 
 import { resolveSummaryLanguage } from "~/services/enhancer/summary-language";
 import {
@@ -33,6 +34,7 @@ import {
   formatMeetingChatContext,
   loadMeetingChatRecords,
 } from "~/stt/meeting-chat-records";
+import { loadMeetingScreenRecords } from "~/stt/meeting-screen-records";
 import { getTemplateById } from "~/templates/queries";
 
 type TranscriptMeta = {
@@ -123,15 +125,25 @@ async function transformArgs(
     throw new Error(policyResult.error);
   }
 
-  const imageContext = modelSupportsImageInput(
+  const supportsImages = modelSupportsImageInput(
     getOptionalSettingsValue(settingsValues, "current_llm_provider"),
     getOptionalSettingsValue(settingsValues, "current_llm_model"),
-  )
+  );
+  const noteImages = supportsImages
     ? await collectEnhanceImageContext(sessionId, [
         sessionContext.preMeetingMemo,
         sessionContext.postMeetingMemo,
       ])
     : [];
+  const meetingScreenContext = supportsImages
+    ? await collectMeetingScreenContext({
+        sessionId,
+        records: await loadMeetingScreenRecords(sessionId),
+        recordingStartedAt: getRecordingStartedAt(
+          sessionContext.transcriptsMeta,
+        ),
+      })
+    : { images: [], screens: [] };
 
   return {
     language,
@@ -142,7 +154,8 @@ async function transformArgs(
     preMeetingMemo: sessionContext.preMeetingMemo,
     postMeetingMemo: sessionContext.postMeetingMemo,
     transcripts,
-    imageContext,
+    imageContext: [...noteImages, ...meetingScreenContext.images],
+    meetingScreens: meetingScreenContext.screens,
     lengthPolicy: policyResult.data,
     dictionaryTerms: parseDictionaryTermsJson(
       settingsValues.personalization_dictionary_terms,
@@ -622,6 +635,15 @@ async function loadTemplate(templateId: string | undefined) {
     console.error("[enhance] failed to load template", error);
     return null;
   }
+}
+
+function getRecordingStartedAt(
+  transcriptsMeta: TranscriptMeta[],
+): number | null {
+  const startedAt = Math.min(
+    ...transcriptsMeta.map((transcript) => transcript.startedAt),
+  );
+  return Number.isFinite(startedAt) ? startedAt : null;
 }
 
 function formatTranscripts(

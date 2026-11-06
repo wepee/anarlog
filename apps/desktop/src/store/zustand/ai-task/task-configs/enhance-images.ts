@@ -7,6 +7,8 @@ export type EnhanceImageContext = {
   base64: string;
   mimeType: string;
   filename?: string;
+  // Sent as text right before the image so the model can refer to it.
+  label?: string;
 };
 
 type ImageReference = {
@@ -113,10 +115,10 @@ export async function collectEnhanceImageContext(
       continue;
     }
 
-    const budgetedImage = await prepareImageForBudget(
-      sourceImage,
-      totalImageBytes,
-    );
+    const budgetedImage = await prepareImageForBudget(sourceImage, {
+      maxImageBytes: MAX_IMAGE_BYTES,
+      remainingBytes: MAX_TOTAL_IMAGE_BYTES - totalImageBytes,
+    });
     if (!budgetedImage) {
       continue;
     }
@@ -132,14 +134,11 @@ export async function collectEnhanceImageContext(
   return sortImageContexts(images);
 }
 
-async function prepareImageForBudget(
+export async function prepareImageForBudget(
   image: EnhanceImageContext,
-  currentTotalBytes: number,
+  budget: { maxImageBytes: number; remainingBytes: number },
 ): Promise<EnhanceImageContext | null> {
-  const targetBytes = Math.min(
-    MAX_IMAGE_BYTES,
-    MAX_TOTAL_IMAGE_BYTES - currentTotalBytes,
-  );
+  const targetBytes = Math.min(budget.maxImageBytes, budget.remainingBytes);
   if (targetBytes <= 0) {
     return null;
   }
@@ -223,21 +222,23 @@ function getCandidateImageReferences(
 function prioritizeImageReferences(
   references: IndexedImageReference[],
 ): IndexedImageReference[] {
-  if (references.length <= MAX_IMAGE_COUNT) {
-    return references;
+  return prioritizeEvenlySpread(references, MAX_IMAGE_COUNT);
+}
+
+// Puts an evenly spread sample first so a budget cut keeps the whole
+// timeline covered; the rest follow as fallbacks for unreadable items.
+export function prioritizeEvenlySpread<T>(items: T[], count: number): T[] {
+  if (items.length <= count) {
+    return items;
   }
 
   const selectedIndexes = new Set<number>();
-  for (let i = 0; i < MAX_IMAGE_COUNT; i++) {
-    selectedIndexes.add(
-      Math.round((i * (references.length - 1)) / (MAX_IMAGE_COUNT - 1)),
-    );
+  for (let i = 0; i < count; i++) {
+    selectedIndexes.add(Math.round((i * (items.length - 1)) / (count - 1)));
   }
 
-  const sampled = [...selectedIndexes].map((index) => references[index]);
-  const remaining = references.filter(
-    (_, index) => !selectedIndexes.has(index),
-  );
+  const sampled = [...selectedIndexes].map((index) => items[index]);
+  const remaining = items.filter((_, index) => !selectedIndexes.has(index));
   return [...sampled, ...remaining];
 }
 
@@ -286,7 +287,7 @@ export function collectImageReferences(rawContent: string): ImageReference[] {
   return collectMarkdownImageReferences(trimmed);
 }
 
-async function readImageAttachment(
+export async function readImageAttachment(
   sessionId: string,
   attachment: AttachmentInfo,
 ): Promise<EnhanceImageContext | null> {
