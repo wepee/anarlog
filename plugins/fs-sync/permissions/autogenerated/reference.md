@@ -23,6 +23,8 @@ Default permissions for the fs-sync plugin
 - `allow-audio-has-speech`
 - `allow-audio-path`
 - `allow-audio-peaks`
+- `allow-audio-availability`
+- `allow-audio-download`
 - `allow-audio-copy`
 - `allow-session-dir`
 - `allow-load-session-content`
@@ -155,6 +157,32 @@ Denies the attachment_save command without any pre-configured scope.
 <tr>
 <td>
 
+`fs-sync:allow-audio-availability`
+
+</td>
+<td>
+
+Enables the audio_availability command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`fs-sync:deny-audio-availability`
+
+</td>
+<td>
+
+Denies the audio_availability command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `fs-sync:allow-audio-copy`
 
 </td>
@@ -226,6 +254,32 @@ Enables the audio_delete_orphaned_expired command without any pre-configured sco
 <td>
 
 Denies the audio_delete_orphaned_expired command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`fs-sync:allow-audio-download`
+
+</td>
+<td>
+
+Enables the audio_download command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`fs-sync:deny-audio-download`
+
+</td>
+<td>
+
+Denies the audio_download command without any pre-configured scope.
 
 </td>
 </tr>

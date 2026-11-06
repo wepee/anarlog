@@ -3,7 +3,10 @@
 // symlink, so every reader that opens `<session>/audio.*` (playback, peaks,
 // re-transcription) follows it without knowing about the archive.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use super::AUDIO_FORMATS;
 
@@ -98,7 +101,12 @@ pub fn archive(
         ));
         let copy = (|| {
             std::fs::copy(&source, &partial)?;
-            std::fs::File::open(&partial)?.sync_all()?;
+            // Keep the recording's own timestamp: the waveform cache is keyed
+            // on it, and a new one would force a download just to redraw peaks.
+            let modified = std::fs::metadata(&source)?.modified()?;
+            let copied = std::fs::OpenOptions::new().write(true).open(&partial)?;
+            copied.set_modified(modified)?;
+            copied.sync_all()?;
             if std::fs::metadata(&partial)?.len() != source_len {
                 return Err(std::io::Error::other("audio_archive_size_mismatch"));
             }
@@ -132,6 +140,127 @@ pub fn archive(
         std::io::ErrorKind::Unsupported,
         "audio archiving needs symlinks",
     ))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioAvailability {
+    /// The recording lives in the archive folder.
+    pub archived: bool,
+    /// Its bytes are on this disk; an archived file the cloud provider has
+    /// offloaded is not, and opening it starts a download.
+    pub local: bool,
+}
+
+pub fn availability(session_dir: &Path) -> std::io::Result<AudioAvailability> {
+    let Some(target) = archived_target(session_dir)? else {
+        return Ok(AudioAvailability {
+            archived: false,
+            local: super::exists(session_dir)?,
+        });
+    };
+    let local = match std::fs::metadata(&target) {
+        Ok(metadata) => !is_offloaded(&metadata),
+        // An unreachable archive (folder gone, drive unplugged) is not local.
+        Err(_) => false,
+    };
+    Ok(AudioAvailability {
+        archived: true,
+        local,
+    })
+}
+
+/// Whether the cloud provider keeps only a placeholder for this file.
+#[cfg(target_os = "macos")]
+pub fn is_offloaded(metadata: &std::fs::Metadata) -> bool {
+    use std::os::macos::fs::MetadataExt;
+    // SF_DATALESS from <sys/stat.h>.
+    const SF_DATALESS: u32 = 0x4000_0000;
+    metadata.st_flags() & SF_DATALESS != 0
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn is_offloaded(_metadata: &std::fs::Metadata) -> bool {
+    false
+}
+
+/// Brings an archived recording back onto this disk. Reading the file is what
+/// makes the cloud provider download it, so this blocks until it is local.
+pub fn download(session_dir: &Path) -> std::io::Result<()> {
+    use std::io::Read;
+
+    let path = super::path(session_dir)
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "audio_path_not_found"))?;
+    mark_opened(&path);
+    let mut file = std::fs::File::open(&path)?;
+    let mut buffer = vec![0_u8; 1 << 20];
+    while file.read(&mut buffer)? > 0 {}
+    mark_opened(&path);
+    Ok(())
+}
+
+// Archives the user has just listened to stay on disk for a while, so the
+// offloading pass does not pull a file out from under the player.
+static OPENED: LazyLock<Mutex<HashMap<PathBuf, Instant>>> = LazyLock::new(Default::default);
+
+pub fn mark_opened(path: &Path) {
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    OPENED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(path, Instant::now());
+}
+
+pub fn opened_within(path: &Path, window: Duration) -> bool {
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    OPENED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&path)
+        .is_some_and(|at| at.elapsed() < window)
+}
+
+/// Archived recordings still on this disk that may be offloaded: copied long
+/// enough ago to be uploaded, and not just played. The copy keeps the
+/// recording's modification time, so its age is read from its creation time.
+pub fn archives_to_offload(
+    archive_dir: &Path,
+    upload_grace: Duration,
+    recently_played: Duration,
+) -> Vec<PathBuf> {
+    let Ok(sessions) = std::fs::read_dir(archive_dir) else {
+        return Vec::new();
+    };
+    let mut paths = Vec::new();
+    for session in sessions.flatten() {
+        let Ok(files) = std::fs::read_dir(session.path()) else {
+            continue;
+        };
+        for file in files.flatten() {
+            let path = file.path();
+            let is_audio = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| AUDIO_FORMATS.contains(&name));
+            let Ok(metadata) = file.metadata() else {
+                continue;
+            };
+            let settled = metadata
+                .created()
+                .or_else(|_| metadata.modified())
+                .ok()
+                .and_then(|copied| copied.elapsed().ok())
+                .is_some_and(|age| age >= upload_grace);
+            if is_audio
+                && settled
+                && !is_offloaded(&metadata)
+                && !opened_within(&path, recently_played)
+            {
+                paths.push(path);
+            }
+        }
+    }
+    paths
 }
 
 fn same_content(a: &Path, b: &Path) -> std::io::Result<bool> {
@@ -185,6 +314,71 @@ mod tests {
             archive(&session_dir, &archive_dir, "session-1").unwrap(),
             ArchiveOutcome::AlreadyArchived
         );
+    }
+
+    #[test]
+    fn an_archived_copy_keeps_the_recording_timestamp_and_reports_where_it_lives() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+        let before = std::fs::metadata(session_dir.join("audio.mp3"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert_eq!(
+            availability(&session_dir).unwrap(),
+            AudioAvailability {
+                archived: false,
+                local: true
+            }
+        );
+
+        archive(&session_dir, &temp.path().join("archive"), "session-1").unwrap();
+
+        let after = std::fs::metadata(session_dir.join("audio.mp3"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert_eq!(before, after);
+        assert_eq!(
+            availability(&session_dir).unwrap(),
+            AudioAvailability {
+                archived: true,
+                local: true
+            }
+        );
+        download(&session_dir).unwrap();
+        assert!(opened_within(
+            &temp.path().join("archive/session-1/audio.mp3"),
+            Duration::from_secs(60)
+        ));
+
+        std::fs::remove_dir_all(temp.path().join("archive")).unwrap();
+        assert_eq!(
+            availability(&session_dir).unwrap(),
+            AudioAvailability {
+                archived: true,
+                local: false
+            }
+        );
+    }
+
+    #[test]
+    fn offloads_only_settled_archives_that_were_not_just_played() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+        let archive_dir = temp.path().join("archive");
+        archive(&session_dir, &archive_dir, "session-1").unwrap();
+        let archived = archive_dir.join("session-1").join("audio.mp3");
+        let hour = Duration::from_secs(3600);
+
+        assert!(archives_to_offload(&archive_dir, hour, hour).is_empty());
+        assert_eq!(
+            archives_to_offload(&archive_dir, Duration::ZERO, hour),
+            vec![archived.clone()]
+        );
+
+        mark_opened(&archived);
+        assert!(archives_to_offload(&archive_dir, Duration::ZERO, hour).is_empty());
     }
 
     #[test]

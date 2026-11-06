@@ -89,6 +89,10 @@ interface AudioPlayerContextValue {
   setPlaybackRate: (rate: number) => void;
   deleteRecording: () => Promise<void>;
   isDeletingRecording: boolean;
+  /** [fork] The recording is archived and only in the cloud for now. */
+  audioOffloaded: boolean;
+  isDownloadingAudio: boolean;
+  audioDownloadFailed: boolean;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
@@ -124,6 +128,24 @@ function useAudioExistence(sessionId: string) {
   };
 }
 
+// [fork] Read once per note opening: re-reading while the note stays open
+// could flag a recording that the player already holds as offloaded, and
+// tear the loaded player down.
+function useAudioAvailability(sessionId: string) {
+  return useQuery({
+    queryKey: ["audio", sessionId, "availability"],
+    queryFn: async () => {
+      const result = await fsSyncCommands.audioAvailability(sessionId);
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
 export function useAudioExists(sessionId: string): boolean {
   return useAudioExistence(sessionId).audioExists;
 }
@@ -147,13 +169,42 @@ export function AudioPlayerProvider({
   const audioContextRef = useRef<AudioContext | null>(null);
   const { audioExists: audioExistsValue, audioExistsResolved } =
     useAudioExistence(sessionId);
+  const availability = useAudioAvailability(sessionId);
+  const audioOffloaded = Boolean(
+    availability.data?.archived && !availability.data.local,
+  );
+  // Until it is known, loading could pull an offloaded recording on opening.
+  const availabilityKnown = !availability.isPending;
+  // What the user asked for while the recording was still downloading.
+  const pendingAfterDownloadRef = useRef<
+    { type: "play" } | { type: "seek"; time: number } | null
+  >(null);
+  const downloadMutation = useMutation({
+    mutationFn: async () => {
+      const result = await fsSyncCommands.audioDownload(sessionId);
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["audio", sessionId, "availability"], {
+        archived: true,
+        local: true,
+      });
+    },
+    onError: () => {
+      pendingAfterDownloadRef.current = null;
+    },
+  });
+  const requestDownload = downloadMutation.mutate;
 
   const registerContainer = useCallback((el: HTMLDivElement | null) => {
     setContainer((prev) => (prev === el ? prev : el));
   }, []);
 
   useEffect(() => {
-    if (!container || !url) {
+    // An offloaded recording is fetched on demand, not on opening the note.
+    if (!container || !url || !availabilityKnown || audioOffloaded) {
       return;
     }
 
@@ -267,7 +318,15 @@ export function AudioPlayerProvider({
       url,
       sessionId,
       signal: loadController.signal,
-    }).catch(() => {});
+    })
+      .then(() => {
+        const pending = pendingAfterDownloadRef.current;
+        pendingAfterDownloadRef.current = null;
+        if (loadController.signal.aborted || !pending) return;
+        if (pending.type === "seek") ws.setTime(pending.time);
+        void ws.play();
+      })
+      .catch(() => {});
 
     return () => {
       loadController.abort();
@@ -286,9 +345,14 @@ export function AudioPlayerProvider({
       setWavesurfer(null);
       void audioContext?.close();
     };
-  }, [container, sessionId, url]);
+  }, [container, sessionId, url, availabilityKnown, audioOffloaded]);
 
   const play = useCallback(() => {
+    if (audioOffloaded) {
+      pendingAfterDownloadRef.current = { type: "play" };
+      requestDownload();
+      return;
+    }
     if (!wavesurfer) {
       return;
     }
@@ -307,7 +371,7 @@ export function AudioPlayerProvider({
     }
 
     void wavesurfer.play();
-  }, [wavesurfer]);
+  }, [wavesurfer, audioOffloaded, requestDownload]);
 
   const pause = useCallback(() => {
     if (wavesurfer) {
@@ -364,11 +428,16 @@ export function AudioPlayerProvider({
 
   const seek = useCallback(
     (timeInSeconds: number) => {
+      if (audioOffloaded) {
+        pendingAfterDownloadRef.current = { type: "seek", time: timeInSeconds };
+        requestDownload();
+        return;
+      }
       if (wavesurfer) {
         wavesurfer.setTime(timeInSeconds);
       }
     },
-    [wavesurfer],
+    [wavesurfer, audioOffloaded, requestDownload],
   );
 
   const setPlaybackRate = useCallback(
@@ -419,6 +488,9 @@ export function AudioPlayerProvider({
       setPlaybackRate,
       deleteRecording: deleteRecordingMutation.mutateAsync,
       isDeletingRecording: deleteRecordingMutation.isPending,
+      audioOffloaded,
+      isDownloadingAudio: downloadMutation.isPending,
+      audioDownloadFailed: downloadMutation.isError,
     }),
     [
       registerContainer,
@@ -434,6 +506,9 @@ export function AudioPlayerProvider({
       setPlaybackRate,
       deleteRecordingMutation.mutateAsync,
       deleteRecordingMutation.isPending,
+      audioOffloaded,
+      downloadMutation.isPending,
+      downloadMutation.isError,
     ],
   );
 

@@ -158,6 +158,28 @@ async audioPeaks(sessionId: string) : Promise<Result<AudioPeaks, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * [fork] Whether the recording is on this disk or only in its archive.
+ */
+async audioAvailability(sessionId: string) : Promise<Result<AudioAvailability, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:fs-sync|audio_availability", { sessionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * [fork] Downloads an offloaded archived recording; resolves once it is local.
+ */
+async audioDownload(sessionId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:fs-sync|audio_download", { sessionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async audioCopy(sourceSessionId: string, targetSessionId: string) : Promise<Result<boolean, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("plugin:fs-sync|audio_copy", { sourceSessionId, targetSessionId }) };
@@ -297,6 +319,16 @@ audioImportEvent: "plugin:fs-sync:audio-import-event"
 
 export type AttachmentInfo = { attachmentId: string; path: string; extension: string; modifiedAt: string }
 export type AttachmentSaveResult = { path: string; attachmentId: string }
+export type AudioAvailability = { 
+/**
+ * The recording lives in the archive folder.
+ */
+archived: boolean; 
+/**
+ * Its bytes are on this disk; an archived file the cloud provider has
+ * offloaded is not, and opening it starts a download.
+ */
+local: boolean }
 export type AudioFileMetadata = { filename: string; contentType: string; sizeBytes: number; sha256: string }
 export type AudioImportEvent = { type: "audioImportStarted"; session_id: string } | { type: "audioImportProgress"; session_id: string; percentage: number } | { type: "audioImportCompleted"; session_id: string } | { type: "audioImportFailed"; session_id: string; error: string }
 export type AudioPeaks = { duration: number; channels: number[][] }
