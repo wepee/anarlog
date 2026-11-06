@@ -9,6 +9,7 @@ import type {
 } from "@anlg/plugin-template";
 
 import type { EnhanceImageContext } from "./enhance-images";
+import type { MeetingScreenReference } from "./enhance-screens";
 import { enhanceSuccess, runEnhanceSuccess } from "./enhance-success";
 import { enhanceTransform } from "./enhance-transform";
 import { enhanceWorkflow } from "./enhance-workflow";
@@ -45,6 +46,7 @@ export interface TaskArgsMapTransformed {
   enhance: EnhanceSystem &
     EnhanceUser & {
       imageContext: EnhanceImageContext[];
+      meetingScreens: MeetingScreenReference[];
       lengthPolicy: SummaryLengthPolicy | null;
       dictionaryTerms: string[];
     };

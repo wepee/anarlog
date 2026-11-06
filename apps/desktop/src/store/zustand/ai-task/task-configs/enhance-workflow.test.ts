@@ -52,6 +52,7 @@ it("passes custom formatting to the renderer without adding layout rules", async
       },
     ],
     imageContext: [],
+    meetingScreens: [],
     lengthPolicy: {
       transcript_characters: 636,
       guidance: {
@@ -113,6 +114,7 @@ it("adds length guidance to prompts rendered from a template with sections", asy
       },
     ],
     imageContext: [],
+    meetingScreens: [],
     lengthPolicy: {
       transcript_characters: 10_000,
       guidance: {
@@ -136,4 +138,49 @@ it("adds length guidance to prompts rendered from a template with sections", asy
   expect(request.prompt).toContain("Keep every requested template section");
   expect(request.prompt).not.toMatch(/\d to \d sections/);
   expect(request.maxOutputTokens).toBe(64_000);
+});
+
+it("sends each shared screen right after its label and explains how to embed it", async () => {
+  const args: TaskArgsMapTransformed["enhance"] = {
+    language: "en",
+    formatOverride: "",
+    session: { title: "Launch", startedAt: null, endedAt: null, event: null },
+    participants: [],
+    template: null,
+    preMeetingMemo: "",
+    postMeetingMemo: "",
+    transcripts: [],
+    imageContext: [
+      {
+        base64: "c2xpZGU=",
+        mimeType: "image/jpeg",
+        label:
+          "[S2] Zoom shared screen, appeared at [04:10] in the transcript:",
+      },
+    ],
+    meetingScreens: [
+      { ref: "S2", attachmentId: "slide-b", src: "asset://slide-b.jpg" },
+    ],
+    lengthPolicy: null,
+    dictionaryTerms: [],
+  };
+  for await (const _ of enhanceWorkflow.executeWorkflow!({
+    model: { provider: "openai.responses" } as LanguageModel,
+    args,
+    onProgress: vi.fn(),
+    signal: new AbortController().signal,
+  })) {
+    // drain the stream
+  }
+
+  const [message] = mocks.streamText.mock.calls[0][0].messages;
+  expect(message.content[0].text).toContain("![short caption](screen:S2)");
+  expect(message.content[0].text).not.toContain("Attached note images");
+  expect(message.content.slice(1)).toEqual([
+    {
+      type: "text",
+      text: "[S2] Zoom shared screen, appeared at [04:10] in the transcript:",
+    },
+    { type: "image", image: "c2xpZGU=", mediaType: "image/jpeg" },
+  ]);
 });

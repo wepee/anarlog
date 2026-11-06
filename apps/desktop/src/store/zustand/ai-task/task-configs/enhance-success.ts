@@ -4,6 +4,7 @@ import { commands as localApiCommands } from "@anlg/plugin-local-api";
 import { commands as templateCommands } from "@anlg/plugin-template";
 
 import { createTaskId, type TaskConfig } from ".";
+import { embedMeetingScreens } from "./enhance-screens";
 import { getPersistableGeneratedTitle } from "./title-success";
 
 import { runNoteEnhancedAutomations } from "~/automations/engine";
@@ -142,7 +143,12 @@ export const runEnhanceSuccess = async ({
           currentContentFormat:
             args.pendingAutoEnhance?.expectedContentFormat ??
             note.contentFormat,
-          nextContent: JSON.stringify(md2json(persistableText)),
+          nextContent: JSON.stringify(
+            embedMeetingScreens(
+              md2json(persistableText),
+              transformedArgs.meetingScreens,
+            ),
+          ),
         },
         tagNames,
         ...(shouldPersistGeneratedTitle

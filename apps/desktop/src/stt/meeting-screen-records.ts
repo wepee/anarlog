@@ -1,7 +1,7 @@
 import type { MeetingScreenShareCapture } from "@anlg/plugin-detect";
 import { commands as fsSyncCommands } from "@anlg/plugin-fs-sync";
 
-import { executeTransaction, useLiveQuery } from "~/db";
+import { executeTransaction, liveQueryClient, useLiveQuery } from "~/db";
 import { enqueueDatabaseWrite } from "~/db/write-queue";
 import { catalogLocalNoteAttachment, sha256Hex } from "~/session/attachments";
 import { formatMeetingPlatform } from "~/stt/meeting-chat-records";
@@ -41,6 +41,20 @@ export function useMeetingScreenRecords(
   });
 
   return sessionId ? data : EMPTY_MEETING_SCREEN_RECORDS;
+}
+
+export async function loadMeetingScreenRecords(
+  sessionId: string,
+): Promise<MeetingScreenRecord[]> {
+  if (!sessionId) {
+    return [];
+  }
+
+  const rows = await liveQueryClient.execute<MeetingScreenDocumentRow>(
+    MEETING_SCREEN_RECORDS_SQL,
+    [sessionId],
+  );
+  return rows.flatMap(parseMeetingScreenRow);
 }
 
 export async function persistMeetingScreenCapture({
