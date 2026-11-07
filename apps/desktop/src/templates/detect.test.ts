@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptTemplateProposal, isEvidenceInTranscript } from "./detect";
+import {
+  acceptTemplateProposal,
+  formatTemplateCandidates,
+  isEvidenceInTranscript,
+} from "./detect";
 
 const candidates = [
   { id: "sales", title: "Commercial", description: "", sections: [] },
@@ -63,5 +67,29 @@ describe("acceptTemplateProposal", () => {
 describe("isEvidenceInTranscript", () => {
   it("rejects quotes too short to prove anything", () => {
     expect(isEvidenceInTranscript("oui", transcript)).toBe(false);
+  });
+});
+
+describe("formatTemplateCandidates", () => {
+  it("gives the detector what the user wrote on a custom template", () => {
+    const text = formatTemplateCandidates([
+      {
+        id: "board",
+        title: "Comité de pilotage",
+        description:
+          "Point mensuel avec le client sur le budget et le planning",
+        sections: ["Risques"],
+        sectionDescriptions: [
+          "{% if x %}Risques ouverts et parades{% endif %}",
+        ],
+        targets: ["client", "mensuel"],
+      },
+    ]);
+
+    expect(text).toContain(
+      "when: Point mensuel avec le client sur le budget et le planning",
+    );
+    expect(text).toContain("tags: client, mensuel");
+    expect(text).toContain("sections: Risques (Risques ouverts et parades)");
   });
 });

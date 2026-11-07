@@ -38,6 +38,10 @@ export async function listTemplateCandidates(): Promise<
     title: template.title,
     description: template.description,
     sections: template.sections.map((section) => section.title),
+    sectionDescriptions: template.sections.map(
+      (section) => section.description,
+    ),
+    targets: template.targets ?? [],
   }));
 }
 

@@ -6,6 +6,8 @@ export type CallTemplateCandidate = {
   title: string;
   description: string;
   sections: string[];
+  sectionDescriptions?: string[];
+  targets?: string[];
 };
 
 export type TemplateConfidence = "high" | "medium" | "low";
@@ -91,19 +93,47 @@ function tokenize(text: string): string[] {
     .filter((token) => token.length >= 3);
 }
 
+const SECTION_HINT_MAX_CHARS = 80;
+
+// Everything the user wrote on a template helps recognize the call it is
+// meant for: its description ("when" to use it) first, then its tags and
+// what each section is expected to hold.
 export function formatTemplateCandidates(
   candidates: CallTemplateCandidate[],
 ): string {
   return candidates
-    .map(
-      (candidate) =>
-        `- id: ${candidate.id}\n  title: ${candidate.title}\n  when: ${candidate.description || "(no description)"}\n  sections: ${candidate.sections.join(" · ") || "(none)"}`,
-    )
+    .map((candidate) => {
+      const sections = candidate.sections
+        .map((title, index) => {
+          const hint = cleanSectionHint(candidate.sectionDescriptions?.[index]);
+          return hint ? `${title} (${hint})` : title;
+        })
+        .join(" · ");
+      return [
+        `- id: ${candidate.id}`,
+        `  title: ${candidate.title}`,
+        `  when: ${candidate.description.trim() || "(no description)"}`,
+        ...(candidate.targets?.length
+          ? [`  tags: ${candidate.targets.join(", ")}`]
+          : []),
+        `  sections: ${sections || "(none)"}`,
+      ].join("\n");
+    })
     .join("\n");
 }
 
+function cleanSectionHint(text: string | undefined): string {
+  const cleaned = (text ?? "")
+    .replace(/\{[{%#][\s\S]*?[}%#]\}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.length > SECTION_HINT_MAX_CHARS
+    ? `${cleaned.slice(0, SECTION_HINT_MAX_CHARS - 1)}…`
+    : cleaned;
+}
+
 export const TEMPLATE_RULES = `Choosing the template:
-- Pick the template whose "when" matches the purpose of the call. Return templateId null when none fits.
+- Pick the template whose "when" (the user's own description of when to use it) matches the purpose of the call; tags and sections are secondary hints. Return templateId null when none fits.
 - "high" confidence requires a short verbatim quote (max 15 words) from the transcript that shows the purpose of the call: someone describing a need, presenting a product, reviewing progress, assigning internal tasks, interviewing a candidate...
 - The calendar title and the participants are hints, never evidence: with only them, confidence is at most "medium" and evidence is null.
 - Small talk, greetings, audio checks, waiting for someone, or an internal chat before the guest joins prove nothing.`;

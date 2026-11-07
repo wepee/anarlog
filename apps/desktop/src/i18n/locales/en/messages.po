@@ -1429,10 +1429,6 @@ msgstr "Delete This Event"
 msgid "Deprecated"
 msgstr "Deprecated"
 
-#: src/templates/template-form.tsx
-msgid "Describe the template purpose..."
-msgstr "Describe the template purpose..."
-
 #: src/settings/general/notification.tsx
 msgid "Detect meetings from microphone activity."
 msgstr "Detect meetings from microphone activity."
@@ -4471,6 +4467,10 @@ msgstr "When off, summaries follow the detected meeting language."
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"
 msgstr "When this happens"
+
+#: src/templates/template-form.tsx
+msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
+msgstr "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
 
 #: src/settings/general/meeting-settings.tsx
 msgid "While a meeting is transcribed live, the floating bar suggests the questions to ask, drafts the to-do and keeps a running summary. Sends the new transcript to your configured AI provider about once a minute."

@@ -1429,10 +1429,6 @@ msgstr ""
 msgid "Deprecated"
 msgstr ""
 
-#: src/templates/template-form.tsx
-msgid "Describe the template purpose..."
-msgstr ""
-
 #: src/settings/general/notification.tsx
 msgid "Detect meetings from microphone activity."
 msgstr ""
@@ -4470,6 +4466,10 @@ msgstr ""
 
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"
+msgstr ""
+
+#: src/templates/template-form.tsx
+msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx

@@ -230,7 +230,11 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           template: { ...before.template, title: templateTitle },
           coverageLabels,
           dismissed: before.dismissed,
-          candidates: candidates.map(({ id, title }) => ({ id, title })),
+          candidates: candidates.map(({ id, title, description }) => ({
+            id,
+            title,
+            hasDescription: description.trim().length > 0,
+          })),
           model: describeModel(config.model),
           promptChars: prompt.length,
           prompt,

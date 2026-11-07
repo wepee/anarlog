@@ -313,7 +313,7 @@ export function TemplateForm({
                 <Textarea
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder={t`Describe the template purpose...`}
+                  placeholder={t`When to use this template, e.g. "first call with a prospect". Live Assist uses it to recognize the call.`}
                   className="text-muted-foreground min-h-[24px] resize-none border-0 px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   rows={1}
                 />
