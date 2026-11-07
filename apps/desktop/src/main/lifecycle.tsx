@@ -11,6 +11,7 @@ import { DictationLifecycle } from "~/dictation/lifecycle";
 import { takePendingWelcomeSession } from "~/onboarding/welcome-note";
 import { useSearchEngine } from "~/search/contexts/engine";
 import { initEnhancerService } from "~/services/enhancer";
+import { resolveAutoTemplateId } from "~/services/enhancer/auto-template";
 import { useConfigValue } from "~/shared/config";
 import { useDesktopTabLifecycle } from "~/shared/desktop-tab-lifecycle";
 import { folderIdForNewNote, useSidebarNotes } from "~/sidebar/note-filter";
@@ -20,6 +21,7 @@ import { LiveCaptureRecovery } from "~/stt/live-capture-recovery";
 import { RecordingImportWorker } from "~/stt/recording-import";
 import { ScheduledMeetingAutoStart } from "~/stt/scheduled-auto-start";
 import { MainListenerControlBridge } from "~/stt/window-control";
+import { ensureCallTemplates } from "~/templates/call-templates";
 
 export function useClassicMainLifecycle() {
   const openNew = useTabs((state) => state.openNew);
@@ -126,7 +128,14 @@ function EnhancerInit() {
       getModel: () => modelRef.current,
       getLLMConn: () => llmConnRef.current,
       getSelectedTemplateId: () => templateIdRef.current || undefined,
+      resolveAutoTemplateId: (sessionId) =>
+        resolveAutoTemplateId({
+          sessionId,
+          model: modelRef.current,
+          defaultTemplateId: templateIdRef.current || undefined,
+        }),
     });
+    void ensureCallTemplates();
 
     return () => service.dispose();
   }, [aiTaskStore]);

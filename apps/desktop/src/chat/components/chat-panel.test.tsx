@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -69,12 +69,6 @@ vi.mock("./use-session-tab", () => ({
   useSessionTab: () => ({ currentSessionId: "session-1" }),
 }));
 
-vi.mock("~/session/components/live-assist", () => ({
-  LiveAssistPanel: ({ sessionId }: { sessionId: string }) => (
-    <div data-testid="live-assist-panel" data-session-id={sessionId} />
-  ),
-}));
-
 vi.mock("./use-summary-quick-actions", () => ({
   useHasEditableSummary: () => false,
 }));
@@ -121,8 +115,6 @@ vi.mock("~/stt/contexts", () => ({
 
 import { ChatPanelFrame, ChatSessionHost } from "./chat-panel";
 
-import { useLiveAssistPanelTab } from "~/store/zustand/live-assist/panel-tab";
-
 function TestChatPanel({
   layout = "floating",
 }: {
@@ -149,7 +141,6 @@ describe("Chat panel", () => {
     mocks.requestedLiveTranscription = null;
     mocks.liveTranscriptionActive = null;
     mocks.toolbarControls.mockClear();
-    useLiveAssistPanelTab.setState({ activeTab: "chat" });
   });
 
   it("passes batch-only recording state to the chat session", () => {
@@ -215,27 +206,11 @@ describe("Chat panel", () => {
     expect(mocks.toolbarControls).not.toHaveBeenCalled();
   });
 
-  it("shows the Chat/Live Assist switcher only in the right panel with a session", () => {
-    const { rerender } = render(<TestChatPanel layout="right-panel" />);
-    expect(screen.getByRole("button", { name: "Live Assist" })).toBeTruthy();
-
-    rerender(<TestChatPanel layout="floating" />);
-    expect(screen.queryByRole("button", { name: "Live Assist" })).toBeNull();
-  });
-
-  it("switches to the Live Assist panel and back without losing the chat", () => {
+  it("never shows a Live Assist switcher in the main window", () => {
+    mocks.sessionMode = "active";
     render(<TestChatPanel layout="right-panel" />);
 
-    expect(screen.queryByTestId("live-assist-panel")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Live Assist" }));
-    expect(screen.getByTestId("live-assist-panel").dataset.sessionId).toBe(
-      "session-1",
-    );
-    expect(screen.queryByTestId("chat-body")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Chat" }));
-    expect(screen.queryByTestId("live-assist-panel")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Live Assist" })).toBeNull();
     expect(screen.getByTestId("chat-body")).toBeTruthy();
   });
 });

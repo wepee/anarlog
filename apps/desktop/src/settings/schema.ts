@@ -282,6 +282,11 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "live_assist_enabled"],
     default: false as boolean,
   },
+  call_templates_seeded: {
+    type: "boolean",
+    path: ["general", "call_templates_seeded"],
+    default: false as boolean,
+  },
   capture_shared_screens: {
     type: "boolean",
     path: ["general", "capture_shared_screens"],

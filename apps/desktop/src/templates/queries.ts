@@ -174,42 +174,62 @@ export async function getTemplateById(
   return mapTemplateRows([row])[0] ?? null;
 }
 
+export async function insertUserTemplate(
+  template: UserTemplateDraft,
+): Promise<{ id: string; sectionCount: number; targetCount: number }> {
+  const id = crypto.randomUUID();
+  const targets = assertCanonicalTemplateTargets(
+    template.targets,
+    `create template ${template.title || id} targets`,
+  );
+  const sections = assertCanonicalTemplateSections(
+    template.sections,
+    `create template ${template.title || id} sections`,
+  );
+
+  const values: Omit<NewTemplateRow, "createdAt" | "updatedAt"> = {
+    id,
+    title: template.title,
+    description: template.description,
+    pinned: false,
+    category: template.category,
+    iconJson: template.icon ?? DEFAULT_TEMPLATE_ICON,
+    targetsJson: targets ?? null,
+    sectionsJson: sections,
+  };
+
+  await db.insert(templates).values({
+    ...values,
+    createdAt: sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
+    updatedAt: sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
+  });
+  return {
+    id,
+    sectionCount: sections.length,
+    targetCount: targets?.length ?? 0,
+  };
+}
+
+export async function listUserTemplates(): Promise<UserTemplate[]> {
+  const rows = await db
+    .select(templateRowSelection)
+    .from(templates)
+    .orderBy(templates.id);
+  return mapTemplateRows(rows as TemplateRow[]);
+}
+
 export function useCreateTemplate(
   entryPoint: "templates" | "session_note" = "templates",
 ) {
   const { mutateAsync } = useMutation({
     mutationFn: async (template: UserTemplateDraft) => {
-      const id = crypto.randomUUID();
-      const targets = assertCanonicalTemplateTargets(
-        template.targets,
-        `create template ${template.title || id} targets`,
-      );
-      const sections = assertCanonicalTemplateSections(
-        template.sections,
-        `create template ${template.title || id} sections`,
-      );
-
-      const values: Omit<NewTemplateRow, "createdAt" | "updatedAt"> = {
-        id,
-        title: template.title,
-        description: template.description,
-        pinned: false,
-        category: template.category,
-        iconJson: template.icon ?? DEFAULT_TEMPLATE_ICON,
-        targetsJson: targets ?? null,
-        sectionsJson: sections,
-      };
-
-      await db.insert(templates).values({
-        ...values,
-        createdAt: sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
-        updatedAt: sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
-      });
+      const { id, sectionCount, targetCount } =
+        await insertUserTemplate(template);
 
       trackAnalyticsEvent("template_created", {
         entry_point: entryPoint,
-        section_count: sections.length,
-        target_count: targets?.length ?? 0,
+        section_count: sectionCount,
+        target_count: targetCount,
       });
       return id;
     },
