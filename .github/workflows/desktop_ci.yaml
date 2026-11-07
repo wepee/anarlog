@@ -52,6 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           submodules: recursive
       - uses: ./.github/actions/pnpm_install
       - run: pnpm -F ui build
@@ -77,6 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           submodules: recursive
           fetch-depth: 0
       - uses: ./.github/actions/pnpm_install
@@ -203,6 +205,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           submodules: recursive
           fetch-depth: 0
       - uses: ./.github/actions/rust_install
@@ -439,6 +442,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           submodules: recursive
           fetch-depth: 0
       - uses: ./.github/actions/install_desktop_deps
@@ -635,6 +639,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           submodules: recursive
       - uses: ./.github/actions/pnpm_install
       - run: pnpm -F desktop i18n:check
@@ -648,6 +653,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           submodules: recursive
           fetch-depth: 0
       - run: swift build --package-path plugins/windows/swift-lib
