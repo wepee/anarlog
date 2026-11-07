@@ -175,18 +175,6 @@ export function AssistPanel({
           >
             {labels.templateFooter}
           </p>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setMenuOpen(false);
-              onAction({ action: "exportLog" });
-            }}
-            className="rounded-xl px-2.5 py-1.5 text-left text-[12px] font-medium"
-            style={{ color: muted, borderTop: `0.5px solid ${hairline}` }}
-          >
-            {labels.saveLog}
-          </button>
         </div>
       ) : null}
     </div>

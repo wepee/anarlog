@@ -1137,8 +1137,8 @@ msgstr "Copiado"
 #: src/main/windows-title-bar.tsx
 #: src/session/components/note-input/transcript/renderer/selection-menu.tsx
 #: src/settings/ai/llm/subscriptions/connect.tsx
+#: src/settings/developers/live-assist-log.tsx
 #: src/settings/developers/webhooks.tsx
-#: src/settings/general/meeting-settings.tsx
 msgid "Copy"
 msgstr ""
 
@@ -1664,7 +1664,7 @@ msgstr ""
 msgid "Everything is already here."
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
+#: src/settings/developers/live-assist-log.tsx
 msgid "Everything Live Assist did since BlackMushi started: prompts, model answers and template choices. It includes excerpts of your calls and only leaves your computer if you share it."
 msgstr ""
 
@@ -2227,15 +2227,15 @@ msgstr ""
 msgid "Live Assist"
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
+#: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log"
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
+#: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log copied."
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
+#: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log saved to Downloads."
 msgstr ""
 
@@ -3349,8 +3349,8 @@ msgstr "Comando derecho"
 msgid "Runs after the recording finishes, not during the meeting."
 msgstr ""
 
+#: src/settings/developers/live-assist-log.tsx
 #: src/settings/dictionary/index.tsx
-#: src/settings/general/meeting-settings.tsx
 #: src/templates/auto-form.tsx
 msgid "Save"
 msgstr "Guardar"
@@ -3377,10 +3377,6 @@ msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Save slides and screens others share in meetings. Requires Screen Recording."
-msgstr ""
-
-#: src/meeting-float/assist.ts
-msgid "Save the Live Assist log"
 msgstr ""
 
 #: src/settings/general/e2ee-setup.tsx

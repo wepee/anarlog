@@ -25,7 +25,6 @@ export type FloatingAssist = {
     emptyQuestions: string;
     emptyTodo: string;
     emptySummary: string;
-    saveLog: string;
   };
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
@@ -53,8 +52,7 @@ export type FloatingAssist = {
 export type FloatingAssistAction =
   | { action: "dismissQuestion"; id: string }
   | { action: "selectTemplate"; id: string | null }
-  | { action: "seenQuestions" }
-  | { action: "exportLog" };
+  | { action: "seenQuestions" };
 
 const SELF_OWNERS = new Set(["you", "vous", "moi", "me"]);
 
@@ -116,7 +114,6 @@ export function buildFloatingAssist(
       emptyQuestions: t`Questions to ask will show up once the conversation gets going.`,
       emptyTodo: t`No action items yet.`,
       emptySummary: t`The summary shows up after the first minute of conversation.`,
-      saveLog: t`Save the Live Assist log`,
     },
     template: {
       id: template.id,

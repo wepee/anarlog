@@ -44,11 +44,7 @@ import {
 import { getDictationPanelState } from "~/dictation/panel";
 import { useDictationStatus } from "~/dictation/state";
 import { setManualTemplateChoice } from "~/services/enhancer/auto-template";
-import {
-  describeError,
-  liveAssistLog,
-  saveLiveAssistJournal,
-} from "~/session/live-assist/journal";
+import { liveAssistLog } from "~/session/live-assist/journal";
 import {
   getStoredSettingValues,
   setSettingValue,
@@ -318,12 +314,6 @@ function FloatingMeetingWindowSync({
           { action: payload.action, id: payload.id ?? null },
           payload.sessionId,
         );
-        if (payload.action === "exportLog") {
-          void saveLiveAssistJournal().catch((error) => {
-            liveAssistLog("journal.save_failed", describeError(error));
-          });
-          return;
-        }
         const store = useLiveAssistStore.getState();
         if (!store.sessions[payload.sessionId]) {
           liveAssistLog(

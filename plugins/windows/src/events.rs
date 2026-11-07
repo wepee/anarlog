@@ -265,7 +265,6 @@ pub enum AssistPanelAction {
     DismissQuestion,
     SelectTemplate,
     SeenQuestions,
-    ExportLog,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]

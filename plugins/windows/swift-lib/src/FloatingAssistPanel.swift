@@ -136,10 +136,6 @@ struct FloatingAssistPanelView<Live: View>: View {
       }
       Divider()
       Text(assist.labels.templateFooter)
-      Divider()
-      Button(assist.labels.saveLog) {
-        onAction("exportLog", nil)
-      }
     } label: {
       HStack(spacing: 4) {
         Text(assist.template.title)
