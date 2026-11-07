@@ -147,30 +147,31 @@ export function MeetingSettingsView({
       />
       {liveAssistEnabled.value && (
         <SettingSwitchRow
-          title={<Trans>Live Assist web research</Trans>}
-          description={
-            <Trans>
-              Looks up companies, products or rules mentioned in the call to
-              suggest better questions. Only the name is searched, through your
-              AI provider's web search (Anthropic, OpenAI or Google).
-            </Trans>
-          }
-          checked={liveAssistWebResearch.value}
-          onChange={liveAssistWebResearch.onChange}
-        />
-      )}
-      {liveAssistEnabled.value && (
-        <SettingSwitchRow
           title={<Trans>Suggested answers</Trans>}
           description={
             <Trans>
               When someone asks you a question during the call, the floating bar
-              suggests an answer from the call, your notes, your Obsidian vault
-              and the web.
+              suggests a short answer, using the call, your past meetings with
+              the same people and your Obsidian notes about the project. You can
+              always ask your own questions in the Answers tab.
             </Trans>
           }
           checked={liveAssistAutoAnswers.value}
           onChange={liveAssistAutoAnswers.onChange}
+        />
+      )}
+      {liveAssistEnabled.value && (
+        <SettingSwitchRow
+          title={<Trans>Web search for answers</Trans>}
+          description={
+            <Trans>
+              Lets the model search the web when a question needs a recent or
+              precise fact, through your AI provider's web search (Anthropic,
+              OpenAI or Google). Each search is billed by your provider.
+            </Trans>
+          }
+          checked={liveAssistWebResearch.value}
+          onChange={liveAssistWebResearch.onChange}
         />
       )}
       {liveAssistEnabled.value && <ObsidianVaultRow />}
@@ -203,8 +204,9 @@ function ObsidianVaultRow() {
           <span className="break-all">{path}</span>
         ) : (
           <Trans>
-            Pick your vault folder so suggested answers can use your Obsidian
-            notes. They are read on your computer only.
+            Pick your vault folder. When a call starts, the notes about its
+            project are found on your computer and sent with each question to
+            your AI provider, so answers know the context.
           </Trans>
         )
       }

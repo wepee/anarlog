@@ -37,7 +37,6 @@ function output(partial: Partial<LiveAssistOutput> = {}): LiveAssistOutput {
     todos: [],
     coverage: [],
     questions: [],
-    research: [],
     ...partial,
   };
 }
@@ -100,7 +99,6 @@ describe("mergeLiveAssistOutput", () => {
           text: "Qui décide ?",
           why: "",
           isNew: false,
-          sourceUrl: null,
         },
       ],
     };
@@ -112,19 +110,16 @@ describe("mergeLiveAssistOutput", () => {
             id: "q1",
             text: "Qui décide ?",
             why: "Personne n'a été nommé.",
-            sourceUrl: null,
           },
           {
             id: null,
             text: "Quel budget ?",
             why: "Aucun chiffre.",
-            sourceUrl: "https://invented.example/page",
           },
           {
             id: null,
             text: "On en reparle ?",
             why: "Écartée.",
-            sourceUrl: null,
           },
         ],
       }),
@@ -137,14 +132,12 @@ describe("mergeLiveAssistOutput", () => {
         text: "Qui décide ?",
         why: "Personne n'a été nommé.",
         isNew: false,
-        sourceUrl: null,
       },
       {
         id: "n1",
         text: "Quel budget ?",
         why: "Aucun chiffre.",
         isNew: true,
-        sourceUrl: null,
       },
     ]);
   });
@@ -207,5 +200,27 @@ describe("detectIncomingQuestions", () => {
       "Et vous facturez combien pour un audit complet ?",
     ]);
     expect(result.lastEndMs).toBe(9_500);
+  });
+
+  it("joins a question split across one speaker's segments and waits for unfinished ones", () => {
+    const first = segment("a", 1_000, 2_000, "D'accord. Et pour la mise en");
+    const second = segment(
+      "b",
+      2_000,
+      3_000,
+      "production, vous comptez combien de temps ?",
+    );
+    const pending = {
+      ...segment("c", 4_000, 5_000, "Et le budget ?"),
+      key: { channel: "RemoteParty", speaker_index: 1, speaker_human_id: null },
+      words: [{ is_final: false }],
+    } as unknown as LiveTranscriptSegment;
+
+    const result = detectIncomingQuestions([pending, second, first], 0);
+
+    expect(result.questions.map((question) => question.text)).toEqual([
+      "Et pour la mise en production, vous comptez combien de temps ?",
+    ]);
+    expect(result.lastEndMs).toBe(3_000);
   });
 });

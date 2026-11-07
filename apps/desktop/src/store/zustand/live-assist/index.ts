@@ -6,7 +6,6 @@ import {
   type LiveAssistTemplate,
 } from "~/session/insights/live-assist";
 import type { LiveAnswerSource } from "~/session/live-assist/answers";
-import type { LiveAssistResearch } from "~/session/live-assist/research";
 
 export type LiveAssistTemplateOption = { id: string; title: string };
 
@@ -26,7 +25,6 @@ const MAX_ANSWERS = 20;
 export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
   answers: LiveAssistAnswer[];
-  research: LiveAssistResearch[];
   snapshot: LiveAssistSnapshot;
   template: LiveAssistTemplate;
   dismissed: string[];
@@ -37,7 +35,6 @@ export type LiveAssistSessionState = {
 const EMPTY_SESSION: LiveAssistSessionState = {
   templates: [],
   answers: [],
-  research: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
   template: { id: null, source: "auto" },
   dismissed: [],
@@ -58,7 +55,6 @@ type LiveAssistActions = {
     sessionId: string,
     templates: LiveAssistTemplateOption[],
   ) => void;
-  addResearch: (sessionId: string, research: LiveAssistResearch) => void;
   queueAnswer: (
     sessionId: string,
     answer: Pick<LiveAssistAnswer, "id" | "question" | "origin">,
@@ -142,11 +138,6 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
               }
             : session,
         ),
-      addResearch: (sessionId, research) =>
-        updateSession(sessionId, (session) => ({
-          ...session,
-          research: [...session.research, research],
-        })),
       applyUpdate: (sessionId, { snapshot, template, updatedAtMs }) =>
         updateSession(sessionId, (session) => ({
           ...session,

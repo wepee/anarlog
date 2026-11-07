@@ -26,7 +26,6 @@ export type LiveAssistQuestion = {
   text: string;
   why: string;
   isNew: boolean;
-  sourceUrl: string | null;
 };
 
 export type LiveAssistTodo = {
@@ -113,11 +112,9 @@ export const liveAssistOutputSchema = z.object({
         id: idSchema,
         text: z.string(),
         why: z.string(),
-        sourceUrl: z.string().nullable(),
       }),
     )
     .max(LIVE_ASSIST_MAX_QUESTIONS),
-  research: z.array(z.string()).max(1),
 });
 
 export type LiveAssistOutput = z.infer<typeof liveAssistOutputSchema>;
@@ -131,8 +128,6 @@ Fields:
 - todos: actions to do after the call that someone stated or clearly agreed to. owner: the name as said ("You" for the user), null when nobody took it. due: the deadline as said, null when none. Never invent an owner or a date.
 - coverage: one entry per point to cover listed in the input, in the same order and with the same label: "covered" when the transcript gives what the summary needs for it, "partial" when it is vague, "missing" otherwise. evidence: a few words of what was said, or null.
 - questions: at most ${LIVE_ASSIST_MAX_QUESTIONS} questions the user could ask now to get what the summary still lacks: missing or partial points to cover, todos without owner or deadline, a participant's question left unanswered, a vague figure or claim. Each question cites what was said and comes with "why": what the answer unlocks, max 18 words. Never generic ("any questions?"). Drop a question as soon as it has been asked, even reworded or by someone else, or answered. Never propose a question listed as dismissed, even reworded. Best question first.
-- sourceUrl: when a question relies on a research result, the url of that result's source exactly as given; otherwise null.
-- research: at most one name to look up on the web, only when web research is on: a company, product, technology or regulation mentioned in the call that would help to ask a better question. Give the name only (max 6 words), never a sentence or anything personal from the call, never something already researched. Usually [].
 - Keep the id of an item that is still the same item; use id null for a new one.
 
 ${TEMPLATE_RULES}
@@ -240,8 +235,6 @@ export function buildLiveAssistPrompt({
   dismissed,
   snapshot,
   transcript,
-  research,
-  researchEnabled,
 }: {
   language: string;
   title: string | null;
@@ -253,8 +246,6 @@ export function buildLiveAssistPrompt({
   dismissed: string[];
   snapshot: LiveAssistSnapshot;
   transcript: string;
-  research: string;
-  researchEnabled: boolean;
 }): string {
   const state = {
     recent: snapshot.recent,
@@ -286,10 +277,6 @@ export function buildLiveAssistPrompt({
       ? dismissed.map((text) => `- ${text}`).join("\n")
       : "(none)",
     "",
-    `Web research: ${researchEnabled ? "on" : "off"}`,
-    "Research results:",
-    research,
-    "",
     "Current state:",
     JSON.stringify(state),
     "",
@@ -318,14 +305,11 @@ export function mergeLiveAssistOutput(
   {
     dismissed,
     newId,
-    knownSourceUrls = [],
   }: {
     dismissed: string[];
     newId: () => string;
-    knownSourceUrls?: string[];
   },
 ): LiveAssistSnapshot {
-  const sourceUrls = new Set(knownSourceUrls);
   const dismissedSet = new Set(dismissed.map(normalizeText));
   const previousQuestions = new Map(
     previous.questions.map((question) => [question.id, question]),
@@ -348,10 +332,6 @@ export function mergeLiveAssistOutput(
       text,
       why: cleanText(question.why),
       isNew: existing ? existing.isNew : true,
-      sourceUrl:
-        question.sourceUrl && sourceUrls.has(question.sourceUrl)
-          ? question.sourceUrl
-          : null,
     });
     if (questions.length >= LIVE_ASSIST_MAX_QUESTIONS) {
       break;
@@ -463,41 +443,73 @@ export function getCoverageLabels(
 
 const QUESTION_MIN_WORDS = 4;
 
-// Questions the other side asked since the last scan: a finished sentence
-// ending with "?", from anyone but the user, long enough to be a real
-// question. Cheap and local, so answers can start without waiting for the
-// next Live Assist update.
+const MAX_QUESTIONS_PER_TURN = 3;
+
+function speakerKey(key: SegmentKey): string {
+  return `${key.channel}:${key.speaker_index ?? ""}:${key.speaker_human_id ?? ""}`;
+}
+
+// Questions the other side asked since the last scan, one per speaking
+// turn: consecutive finished segments from the same person form a turn, and
+// all its questions ("you have a budget? and for when?") are answered
+// together. Only turns from anyone but the user count, and a sentence needs a
+// few words to be a real question. Cheap and local, so answers can start as
+// soon as a turn ends, without waiting for the next Live Assist update.
 export function detectIncomingQuestions(
   segments: LiveTranscriptSegment[],
   scannedEndMs: number,
 ): { questions: Array<{ text: string; endMs: number }>; lastEndMs: number } {
-  const questions: Array<{ text: string; endMs: number }> = [];
-  let lastEndMs = scannedEndMs;
-
   const fresh = segments
-    .filter((segment) => segment.end_ms > scannedEndMs)
+    .filter((segment) => segment.end_ms > scannedEndMs && segment.text.trim())
     .slice()
     .sort((a, b) => a.start_ms - b.start_ms);
+
+  const finished: LiveTranscriptSegment[] = [];
   for (const segment of fresh) {
     const isFinal =
       segment.words.length === 0 ||
       segment.words.every((word) => word.is_final);
     if (!isFinal) {
-      continue;
+      break;
     }
-    lastEndMs = Math.max(lastEndMs, segment.end_ms);
-    if (segment.key.channel === "DirectMic") {
-      continue;
-    }
-    for (const match of segment.text.matchAll(/[^.!?]*\?/g)) {
-      const text = match[0].trim();
-      if (countWords(text) >= QUESTION_MIN_WORDS) {
-        questions.push({ text, endMs: segment.end_ms });
-      }
+    finished.push(segment);
+  }
+
+  const turns: LiveTranscriptSegment[][] = [];
+  for (const segment of finished) {
+    const turn = turns[turns.length - 1];
+    if (turn && speakerKey(turn[0]!.key) === speakerKey(segment.key)) {
+      turn.push(segment);
+    } else {
+      turns.push([segment]);
     }
   }
 
-  return { questions, lastEndMs };
+  const questions: Array<{ text: string; endMs: number }> = [];
+  for (const turn of turns) {
+    if (turn[0]!.key.channel === "DirectMic") {
+      continue;
+    }
+    // A question often spans two segments of the same turn.
+    const text = turn.map((segment) => segment.text.trim()).join(" ");
+    const asked = [...text.matchAll(/[^.!?]*\?/g)]
+      .map((match) => match[0].trim())
+      .filter((question) => countWords(question) >= QUESTION_MIN_WORDS);
+    if (asked.length > 0) {
+      questions.push({
+        text: asked.slice(-MAX_QUESTIONS_PER_TURN).join(" "),
+        endMs: turn[turn.length - 1]!.end_ms,
+      });
+    }
+  }
+
+  return {
+    questions,
+    lastEndMs: finished.reduce(
+      (max, segment) => Math.max(max, segment.end_ms),
+      scannedEndMs,
+    ),
+  };
 }
 
 export function summarizeSnapshotForAnswers(

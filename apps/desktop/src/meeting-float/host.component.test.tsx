@@ -248,7 +248,6 @@ describe("FloatingMeetingWindowHost", () => {
             text: "Qui décide ?",
             why: "",
             isNew: true,
-            sourceUrl: null,
           },
         ],
       },

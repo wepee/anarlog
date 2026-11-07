@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { createLiveAssistEngine } from "./engine";
 
-import { useLanguageModel } from "~/ai/hooks";
+import { useLiveModel } from "~/ai/hooks";
 import { useConfigValue } from "~/shared/config";
 import { useLatestRef } from "~/shared/hooks/useLatestRef";
 
@@ -11,17 +11,20 @@ export function LiveAssistHost() {
   const language = useConfigValue("ai_language") || "en";
   const spokenLanguages = useConfigValue("spoken_languages");
   const useMainLanguage = useConfigValue("summary_use_main_language");
-  const researchEnabled = useConfigValue("live_assist_web_research");
+  const webSearch = useConfigValue("live_assist_web_research");
   const autoAnswers = useConfigValue("live_assist_auto_answers");
   const obsidianPath = useConfigValue("obsidian_vault_path");
-  const model = useLanguageModel("chat");
+  const live = useLiveModel();
+  const model = live?.model ?? null;
   const config = useLatestRef({
     enabled,
     model,
+    modelId: live?.modelId ?? "",
+    providerId: live?.providerId ?? "",
     language,
     spokenLanguages,
     useMainLanguage,
-    researchEnabled,
+    webSearch,
     autoAnswers,
     obsidianPath,
   });

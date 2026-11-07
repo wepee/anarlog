@@ -1,6 +1,5 @@
 import { t } from "@lingui/core/macro";
 
-import { getSourceLabel } from "~/session/live-assist/research";
 import type { LiveAssistSessionState } from "~/store/zustand/live-assist";
 
 // What the floating panel shows for Live Assist. It travels as a JSON string
@@ -40,7 +39,6 @@ export type FloatingAssist = {
     text: string;
     why: string;
     isNew: boolean;
-    source: { label: string; url: string } | null;
   }>;
   coverage: Array<{
     label: string;
@@ -66,11 +64,7 @@ export type FloatingAssist = {
     origin: "auto" | "asked";
     status: "queued" | "answering" | "ready" | "error";
     answer: string;
-    sources: Array<{
-      kind: "note" | "obsidian" | "web";
-      label: string;
-      url: string | null;
-    }>;
+    sources: Array<{ kind: "web"; label: string; url: string }>;
     isNew: boolean;
   }>;
   newAnswers: number;
@@ -123,6 +117,9 @@ export function buildFloatingAssist(
   ].filter((group) => group.items.length > 0);
 
   const lastTopic = snapshot.topics[snapshot.topics.length - 1];
+  const visibleAnswers = session.answers.filter(
+    (answer) => answer.origin === "asked" || answer.answer.length > 0,
+  );
 
   return {
     labels: {
@@ -161,17 +158,12 @@ export function buildFloatingAssist(
       { id: null, title: autoTitle },
       ...templates.map(({ id, title }) => ({ id, title })),
     ],
-    questions: snapshot.questions.map(
-      ({ id, text, why, isNew, sourceUrl }) => ({
-        id,
-        text,
-        why,
-        isNew,
-        source: sourceUrl
-          ? { label: getSourceLabel(sourceUrl), url: sourceUrl }
-          : null,
-      }),
-    ),
+    questions: snapshot.questions.map(({ id, text, why, isNew }) => ({
+      id,
+      text,
+      why,
+      isNew,
+    })),
     coverage: snapshot.coverage,
     todoGroups,
     recent: snapshot.recent,
@@ -184,7 +176,9 @@ export function buildFloatingAssist(
     })),
     newQuestions: snapshot.questions.filter((question) => question.isNew)
       .length,
-    answers: session.answers.map(
+    // An answer to a detected question shows up once its text starts: most
+    // detected questions are small talk the model declines to answer.
+    answers: visibleAnswers.map(
       ({ id, question, origin, status, answer, sources, isNew }) => ({
         id,
         question,
@@ -195,7 +189,7 @@ export function buildFloatingAssist(
         isNew,
       }),
     ),
-    newAnswers: session.answers.filter(
+    newAnswers: visibleAnswers.filter(
       (answer) => answer.isNew && answer.status === "ready",
     ).length,
   };

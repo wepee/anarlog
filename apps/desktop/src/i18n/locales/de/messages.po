@@ -2215,6 +2215,10 @@ msgstr ""
 msgid "Less"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Lets the model search the web when a question needs a recent or precise fact, through your AI provider's web search (Anthropic, OpenAI or Google). Each search is billed by your provider."
+msgstr ""
+
 #: src/settings/appearance/theme.tsx
 msgid "Light"
 msgstr ""
@@ -2262,10 +2266,6 @@ msgstr ""
 
 #: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log saved to Downloads."
-msgstr ""
-
-#: src/settings/general/meeting-settings.tsx
-msgid "Live Assist web research"
 msgstr ""
 
 #: src/settings/dictation.tsx
@@ -2322,10 +2322,6 @@ msgstr ""
 
 #: src/sidebar/timeline/item.tsx
 msgid "Locked note"
-msgstr ""
-
-#: src/settings/general/meeting-settings.tsx
-msgid "Looks up companies, products or rules mentioned in the call to suggest better questions. Only the name is searched, through your AI provider's web search (Anthropic, OpenAI or Google)."
 msgstr ""
 
 #: src/settings/ai/llm/select.tsx
@@ -2518,6 +2514,10 @@ msgstr ""
 
 #: src/contexts/notifications.tsx
 msgid "Model downloaded"
+msgstr ""
+
+#: src/settings/ai/llm/select.tsx
+msgid "Model for live calls"
 msgstr ""
 
 #: src/session/components/note-input/enhanced/streaming.tsx
@@ -3050,7 +3050,7 @@ msgid "Phone"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "Pick your vault folder so suggested answers can use your Obsidian notes. They are read on your computer only."
+msgid "Pick your vault folder. When a call starts, the notes about its project are found on your computer and sent with each question to your AI provider, so answers know the context."
 msgstr ""
 
 #: src/contacts/contact-page-header.tsx
@@ -3334,6 +3334,7 @@ msgid "Requires BlackMushi Pro"
 msgstr ""
 
 #: src/calendar/components/apple/permission.tsx
+#: src/settings/ai/llm/select.tsx
 #: src/settings/ai/shared/index.tsx
 msgid "Reset"
 msgstr ""
@@ -4420,6 +4421,10 @@ msgstr ""
 msgid "Use your microphone to capture your voice"
 msgstr ""
 
+#: src/settings/ai/llm/select.tsx
+msgid "Used by Live Assist and live answers, which must reply within seconds. Summaries keep the model above. By default, the provider's fast model when it has one."
+msgstr ""
+
 #: src/settings/general/spoken-languages.tsx
 msgid "Used for transcription and automatic summary language detection."
 msgstr ""
@@ -4467,6 +4472,10 @@ msgstr ""
 
 #: src/settings/appearance/app-icon.tsx
 msgid "Walnut"
+msgstr ""
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Web search for answers"
 msgstr ""
 
 #: src/settings/developers/webhooks.tsx
@@ -4519,7 +4528,7 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests an answer from the call, your notes, your Obsidian vault and the web."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and your Obsidian notes about the project. You can always ask your own questions in the Answers tab."
 msgstr ""
 
 #: src/settings/automations/workflow-builder.tsx

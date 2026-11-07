@@ -78,17 +78,11 @@ struct FloatingAssistPayload: Codable, Equatable {
     let title: String
   }
 
-  struct Source: Codable, Equatable {
-    let label: String
-    let url: String
-  }
-
   struct Question: Codable, Equatable, Identifiable {
     let id: String
     let text: String
     let why: String
     let isNew: Bool
-    let source: Source?
   }
 
   struct Coverage: Codable, Equatable {
@@ -98,9 +92,8 @@ struct FloatingAssistPayload: Codable, Equatable {
   }
 
   struct AnswerSource: Codable, Equatable {
-    let kind: String
     let label: String
-    let url: String?
+    let url: String
   }
 
   struct Answer: Codable, Equatable, Identifiable {

@@ -15,7 +15,7 @@ import systemPromptTemplate from "./past-note-key-facts.system.md.jinja?raw";
 import userPromptTemplate from "./past-note-key-facts.user.md.jinja?raw";
 
 import { useLanguageModel } from "~/ai/hooks";
-import { executeTransaction, useLiveQuery } from "~/db";
+import { executeTransaction, liveQueryClient, useLiveQuery } from "~/db";
 import { enqueueDatabaseWrite } from "~/db/write-queue";
 import { extractPlainText } from "~/search/contexts/engine/utils";
 import { getSessionEvent } from "~/session/utils";
@@ -218,12 +218,7 @@ export function usePastSessionNotes(
   };
 }
 
-function usePastSessionNotesData(enabled: boolean): PastSessionNotesData {
-  const { data: sessions = EMPTY_SESSIONS } = useLiveQuery<
-    PastSessionRow,
-    Record<string, PastSessionRow>
-  >({
-    sql: `
+const PAST_SESSIONS_SQL = `
       SELECT
         id,
         owner_user_id AS user_id,
@@ -233,19 +228,9 @@ function usePastSessionNotesData(enabled: boolean): PastSessionNotesData {
       FROM sessions
       WHERE deleted_at IS NULL AND locked = 0
       ORDER BY created_at, id
-    `,
-    enabled,
-    mapRows: (rows) =>
-      Object.fromEntries(rows.map((row) => [row.id, row])) as Record<
-        string,
-        PastSessionRow
-      >,
-  });
-  const { data: participants = EMPTY_PARTICIPANTS } = useLiveQuery<
-    PastParticipantRow,
-    PastParticipantRow[]
-  >({
-    sql: `
+    `;
+
+const PAST_PARTICIPANTS_SQL = `
       SELECT
         participant.session_id,
         participant.human_id,
@@ -261,15 +246,9 @@ function usePastSessionNotesData(enabled: boolean): PastSessionNotesData {
         ON human.id = participant.human_id AND human.deleted_at IS NULL
       WHERE participant.deleted_at IS NULL
       ORDER BY participant.session_id, participant.created_at, participant.id
-    `,
-    enabled,
-    mapRows: (rows) => rows,
-  });
-  const { data: enhancedNotes = EMPTY_ENHANCED_NOTES } = useLiveQuery<
-    PastEnhancedNoteRow,
-    PastEnhancedNoteRow[]
-  >({
-    sql: `
+    `;
+
+const PAST_ENHANCED_NOTES_SQL = `
       SELECT
         session_id,
         body AS content,
@@ -280,15 +259,9 @@ function usePastSessionNotesData(enabled: boolean): PastSessionNotesData {
           SELECT id FROM sessions WHERE deleted_at IS NULL AND locked = 0
         )
       ORDER BY session_id, sort_order, created_at, id
-    `,
-    enabled,
-    mapRows: (rows) => rows,
-  });
-  const { data: keyFacts = EMPTY_KEY_FACTS } = useLiveQuery<
-    PastKeyFactsRow,
-    Record<string, PastKeyFactsRow>
-  >({
-    sql: `
+    `;
+
+const PAST_KEY_FACTS_SQL = `
       SELECT
         session_id,
         created_by AS user_id,
@@ -302,13 +275,74 @@ function usePastSessionNotesData(enabled: boolean): PastSessionNotesData {
           SELECT id FROM sessions WHERE deleted_at IS NULL AND locked = 0
         )
       ORDER BY updated_at, id
-    `,
+    `;
+
+function mapPastSessions(
+  rows: PastSessionRow[],
+): Record<string, PastSessionRow> {
+  return Object.fromEntries(rows.map((row) => [row.id, row])) as Record<
+    string,
+    PastSessionRow
+  >;
+}
+
+function mapPastKeyFacts(
+  rows: PastKeyFactsRow[],
+): Record<string, PastKeyFactsRow> {
+  const result: Record<string, PastKeyFactsRow> = {};
+  for (const row of rows) result[row.session_id] = row;
+  return result;
+}
+
+// Same data as the hook below, read once: for code outside React (Live
+// Assist builds a project brief when a call starts).
+export async function loadPastSessionNotesData(): Promise<PastSessionNotesData> {
+  const [sessions, participants, enhancedNotes, keyFacts] = await Promise.all([
+    liveQueryClient.execute<PastSessionRow>(PAST_SESSIONS_SQL),
+    liveQueryClient.execute<PastParticipantRow>(PAST_PARTICIPANTS_SQL),
+    liveQueryClient.execute<PastEnhancedNoteRow>(PAST_ENHANCED_NOTES_SQL),
+    liveQueryClient.execute<PastKeyFactsRow>(PAST_KEY_FACTS_SQL),
+  ]);
+  return {
+    sessions: mapPastSessions(sessions),
+    participants,
+    enhancedNotes,
+    keyFacts: mapPastKeyFacts(keyFacts),
+  };
+}
+
+function usePastSessionNotesData(enabled: boolean): PastSessionNotesData {
+  const { data: sessions = EMPTY_SESSIONS } = useLiveQuery<
+    PastSessionRow,
+    Record<string, PastSessionRow>
+  >({
+    sql: PAST_SESSIONS_SQL,
     enabled,
-    mapRows: (rows) => {
-      const result: Record<string, PastKeyFactsRow> = {};
-      for (const row of rows) result[row.session_id] = row;
-      return result;
-    },
+    mapRows: mapPastSessions,
+  });
+  const { data: participants = EMPTY_PARTICIPANTS } = useLiveQuery<
+    PastParticipantRow,
+    PastParticipantRow[]
+  >({
+    sql: PAST_PARTICIPANTS_SQL,
+    enabled,
+    mapRows: (rows) => rows,
+  });
+  const { data: enhancedNotes = EMPTY_ENHANCED_NOTES } = useLiveQuery<
+    PastEnhancedNoteRow,
+    PastEnhancedNoteRow[]
+  >({
+    sql: PAST_ENHANCED_NOTES_SQL,
+    enabled,
+    mapRows: (rows) => rows,
+  });
+  const { data: keyFacts = EMPTY_KEY_FACTS } = useLiveQuery<
+    PastKeyFactsRow,
+    Record<string, PastKeyFactsRow>
+  >({
+    sql: PAST_KEY_FACTS_SQL,
+    enabled,
+    mapRows: mapPastKeyFacts,
   });
 
   return { sessions, participants, enhancedNotes, keyFacts };

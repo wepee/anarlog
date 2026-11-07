@@ -2215,6 +2215,10 @@ msgstr ""
 msgid "Less"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Lets the model search the web when a question needs a recent or precise fact, through your AI provider's web search (Anthropic, OpenAI or Google). Each search is billed by your provider."
+msgstr "Le modèle peut chercher sur le web quand une question demande un fait récent ou précis, via la recherche web de votre fournisseur d'IA (Anthropic, OpenAI ou Google). Chaque recherche est facturée par votre fournisseur."
+
 #: src/settings/appearance/theme.tsx
 msgid "Light"
 msgstr ""
@@ -2263,10 +2267,6 @@ msgstr "Journal du Live Assist copié."
 #: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log saved to Downloads."
 msgstr "Journal du Live Assist enregistré dans Téléchargements."
-
-#: src/settings/general/meeting-settings.tsx
-msgid "Live Assist web research"
-msgstr "Recherche web du Live Assist"
 
 #: src/settings/dictation.tsx
 msgid "Live transcript preview"
@@ -2323,10 +2323,6 @@ msgstr ""
 #: src/sidebar/timeline/item.tsx
 msgid "Locked note"
 msgstr ""
-
-#: src/settings/general/meeting-settings.tsx
-msgid "Looks up companies, products or rules mentioned in the call to suggest better questions. Only the name is searched, through your AI provider's web search (Anthropic, OpenAI or Google)."
-msgstr "Recherche les sociétés, produits ou réglementations cités pendant l'appel pour proposer de meilleures questions. Seul le nom est recherché, via la recherche web de votre fournisseur d'IA (Anthropic, OpenAI ou Google)."
 
 #: src/settings/ai/llm/select.tsx
 msgid "Low"
@@ -2519,6 +2515,10 @@ msgstr ""
 #: src/contexts/notifications.tsx
 msgid "Model downloaded"
 msgstr ""
+
+#: src/settings/ai/llm/select.tsx
+msgid "Model for live calls"
+msgstr "Modèle pour les appels en direct"
 
 #: src/session/components/note-input/enhanced/streaming.tsx
 msgid "Model is thinking..."
@@ -3050,8 +3050,8 @@ msgid "Phone"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "Pick your vault folder so suggested answers can use your Obsidian notes. They are read on your computer only."
-msgstr "Choisissez le dossier de votre coffre pour que les réponses suggérées s'appuient sur vos notes Obsidian. Elles sont lues uniquement sur votre ordinateur."
+msgid "Pick your vault folder. When a call starts, the notes about its project are found on your computer and sent with each question to your AI provider, so answers know the context."
+msgstr "Choisissez le dossier de votre coffre. Au début d'un appel, les notes sur son projet sont retrouvées sur votre ordinateur et envoyées avec chaque question à votre fournisseur d'IA, pour que les réponses connaissent le contexte."
 
 #: src/contacts/contact-page-header.tsx
 msgid "Pin"
@@ -3334,6 +3334,7 @@ msgid "Requires BlackMushi Pro"
 msgstr ""
 
 #: src/calendar/components/apple/permission.tsx
+#: src/settings/ai/llm/select.tsx
 #: src/settings/ai/shared/index.tsx
 msgid "Reset"
 msgstr ""
@@ -4420,6 +4421,10 @@ msgstr ""
 msgid "Use your microphone to capture your voice"
 msgstr ""
 
+#: src/settings/ai/llm/select.tsx
+msgid "Used by Live Assist and live answers, which must reply within seconds. Summaries keep the model above. By default, the provider's fast model when it has one."
+msgstr "Utilisé par Live Assist et les réponses en direct, qui doivent répondre en quelques secondes. Les résumés gardent le modèle ci-dessus. Par défaut, le modèle rapide du fournisseur s'il en a un."
+
 #: src/settings/general/spoken-languages.tsx
 msgid "Used for transcription and automatic summary language detection."
 msgstr ""
@@ -4468,6 +4473,10 @@ msgstr ""
 #: src/settings/appearance/app-icon.tsx
 msgid "Walnut"
 msgstr ""
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Web search for answers"
+msgstr "Recherche web pour les réponses"
 
 #: src/settings/developers/webhooks.tsx
 msgid "Webhooks"
@@ -4519,8 +4528,8 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests an answer from the call, your notes, your Obsidian vault and the web."
-msgstr "Quand on vous pose une question pendant l'appel, la barre flottante suggère une réponse tirée de l'appel, de vos notes, de votre coffre Obsidian et du web."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and your Obsidian notes about the project. You can always ask your own questions in the Answers tab."
+msgstr "Quand on vous pose une question pendant l'appel, la barre flottante propose une réponse courte, à partir de l'appel, de vos réunions passées avec les mêmes personnes et de vos notes Obsidian sur le projet. Vous pouvez toujours poser vos propres questions dans l'onglet Réponses."
 
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"

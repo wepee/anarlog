@@ -264,14 +264,6 @@ struct FloatingAssistPanelView<Live: View>: View {
             .foregroundStyle(secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
-        if let source = question.source, let url = URL(string: source.url) {
-          Link(destination: url) {
-            Text("↗ \(source.label)")
-              .font(.system(size: 11, design: .monospaced))
-          }
-          .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
-          .help(source.url)
-        }
       }
       Spacer(minLength: 0)
       Button {
@@ -367,31 +359,23 @@ struct FloatingAssistPanelView<Live: View>: View {
         .fixedSize(horizontal: false, vertical: true)
       }
       Text(
-        answer.status == "ready"
+        answer.status == "ready" || !answer.answer.isEmpty
           ? answer.answer
           : answer.status == "error" ? assist.labels.noAnswer : assist.labels.answering
       )
       .font(.system(size: 14, weight: .medium))
       .fixedSize(horizontal: false, vertical: true)
       ForEach(Array(answer.sources.enumerated()), id: \.offset) { _, source in
-        if let urlString = source.url, let url = URL(string: urlString) {
+        if let url = URL(string: source.url) {
           Link(destination: url) {
             Text("↗ \(source.label)").font(.system(size: 11, design: .monospaced))
           }
           .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
-        } else {
-          Text(sourceMarker(source))
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
+          .help(source.url)
         }
       }
     }
     .padding(.vertical, 10)
-  }
-
-  private func sourceMarker(_ source: FloatingAssistPayload.AnswerSource) -> String {
-    let marker = source.kind == "obsidian" ? "◆" : "■"
-    return "\(marker) \(source.label)"
   }
 
   @ViewBuilder

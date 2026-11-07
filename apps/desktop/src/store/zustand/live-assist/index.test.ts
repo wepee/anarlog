@@ -9,7 +9,6 @@ const question = (id: string, text: string) => ({
   text,
   why: "why",
   isNew: true,
-  sourceUrl: null,
 });
 
 describe("live assist store", () => {

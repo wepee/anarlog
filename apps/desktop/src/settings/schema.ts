@@ -282,6 +282,16 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "live_assist_enabled"],
     default: true as boolean,
   },
+  live_llm_provider: {
+    type: "string",
+    path: ["ai", "live_llm_provider"],
+    default: "" as string,
+  },
+  live_llm_model: {
+    type: "string",
+    path: ["ai", "live_llm_model"],
+    default: "" as string,
+  },
   live_assist_web_research: {
     type: "boolean",
     path: ["general", "live_assist_web_research"],

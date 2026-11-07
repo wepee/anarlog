@@ -1,20 +1,13 @@
 import { type LanguageModel, Output, streamText } from "ai";
 
-import { generateLiveAnswer, buildLiveAnswerPrompt } from "./answers";
+import { buildLiveAnswerPrompt, streamLiveAnswer } from "./answers";
 import { describeError, describeModel, liveAssistLog } from "./journal";
 import {
-  type KnowledgeSnippet,
-  loadObsidianVault,
-  searchMarkdownFiles,
-  searchPastNotes,
-} from "./knowledge";
-import {
-  formatResearchForPrompt,
-  getWebSearchTools,
-  LIVE_ASSIST_MAX_RESEARCH_PER_CALL,
-  normalizeResearchQuery,
-  runLiveAssistResearch,
-} from "./research";
+  buildProjectContext,
+  EMPTY_PROJECT_CONTEXT,
+  type ProjectContext,
+} from "./project-context";
+import { getWebSearchTools } from "./research";
 
 import { listTemplateCandidates } from "~/services/enhancer/auto-template";
 import { resolveSummaryLanguage } from "~/services/enhancer/summary-language";
@@ -42,19 +35,26 @@ import {
 const TICK_MS = 5_000;
 const GENERATION_TIMEOUT_MS = 45_000;
 const MAX_OUTPUT_TOKENS = 3_000;
-const MAX_AUTO_ANSWERS_PER_CALL = 30;
+const MAX_AUTO_ANSWERS_PER_CALL = 60;
 const ANSWER_CONTEXT_MS = 3 * 60_000;
+// A turn is considered finished once the transcript has been quiet this long.
+const QUESTION_QUIET_MS = 1_200;
+const ANSWER_RENDER_INTERVAL_MS = 120;
 
 type EngineConfig = {
   enabled: boolean;
   model: LanguageModel | null;
+  modelId: string;
+  providerId: string;
   language: string;
   spokenLanguages: string[];
   useMainLanguage: boolean;
-  researchEnabled: boolean;
+  webSearch: boolean;
   autoAnswers: boolean;
   obsidianPath: string;
 };
+
+type CallContext = { title: string | null; participants: string[] };
 
 type RunningSession = {
   sessionId: string;
@@ -64,24 +64,27 @@ type RunningSession = {
   running: boolean;
   updates: number;
   lastSkipReason: string | null;
-  researched: Set<string>;
+  controller: AbortController | null;
+  context: Promise<CallContext> | null;
+  project: Promise<ProjectContext> | null;
   questionsScannedEndMs: number;
   seenQuestions: Set<string>;
   autoAnswers: number;
   answering: boolean;
-  controller: AbortController | null;
-  context: Promise<{ title: string | null; participants: string[] }> | null;
 };
 
 // Runs Live Assist for whichever session is recording with live
-// transcription, independently of which note (if any) is open: one model call
-// per update, at most every 45 seconds and only once 80 new words came in.
-// Everything lives in memory and is dropped when the recording stops. Every
-// step is written to the Live Assist journal (see ./journal.ts).
+// transcription, independently of which note (if any) is open. Two loops:
+// the Live Assist update (one model call at most every 45 seconds once 80
+// new words came in) and live answers (as soon as a participant's turn ends
+// with a question, or when the user asks one). Everything lives in memory
+// and is dropped when the recording stops; every step goes to the Live
+// Assist journal (see ./journal.ts).
 export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   let current: RunningSession | null = null;
   let disposed = false;
   let lastInactiveReason: string | null = null;
+  let questionTimer: ReturnType<typeof setTimeout> | null = null;
 
   liveAssistLog("engine.created");
 
@@ -142,22 +145,24 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       liveAssistLog(
         "session.started",
         {
-          model: describeModel(config.model),
+          model: { ...describeModel(config.model), id: config.modelId },
           mainLanguage: config.language,
           additionalLanguages: config.spokenLanguages,
           useMainLanguage: config.useMainLanguage,
-          webResearch: config.researchEnabled
+          webSearch: config.webSearch
             ? getWebSearchTools(config.model)
               ? "on"
               : "unsupported_by_provider"
             : "off",
+          autoAnswers: config.autoAnswers,
+          obsidianVault: config.obsidianPath || null,
           minIntervalMs: LIVE_ASSIST_MIN_INTERVAL_MS,
           minNewWords: LIVE_ASSIST_MIN_NEW_WORDS,
         },
         activeSessionId,
       );
       void refreshTemplates(activeSessionId);
-      current = {
+      const session: RunningSession = {
         sessionId: activeSessionId,
         processedEndMs: 0,
         lastRunAtMs: null,
@@ -165,15 +170,55 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         running: false,
         updates: 0,
         lastSkipReason: null,
-        researched: new Set(),
+        controller: null,
+        context: null,
+        project: null,
         questionsScannedEndMs: 0,
         seenQuestions: new Set(),
         autoAnswers: 0,
         answering: false,
-        controller: null,
-        context: null,
       };
+      current = session;
+      // The project brief is ready, or on its way, before the first question.
+      session.context = loadCallContext(activeSessionId);
+      session.project = loadProject(session, config);
     }
+  };
+
+  const loadProject = async (
+    session: RunningSession,
+    config: EngineConfig,
+  ): Promise<ProjectContext> => {
+    const startedAt = Date.now();
+    const context = await (session.context ??
+      loadCallContext(session.sessionId));
+    const project = await buildProjectContext({
+      sessionId: session.sessionId,
+      title: context.title,
+      participants: context.participants,
+      obsidianPath: config.obsidianPath,
+      onError: (source, error) =>
+        liveAssistLog(
+          "project.source_failed",
+          { source, error: describeError(error) },
+          session.sessionId,
+        ),
+    }).catch((error) => {
+      liveAssistLog("project.failed", describeError(error), session.sessionId);
+      return EMPTY_PROJECT_CONTEXT;
+    });
+    liveAssistLog(
+      "project.loaded",
+      {
+        durationMs: Date.now() - startedAt,
+        chars: project.text.length,
+        pastMeetings: project.pastMeetings,
+        obsidianNotes: project.obsidianNotes,
+        text: project.text,
+      },
+      session.sessionId,
+    );
+    return project;
   };
 
   const tick = async () => {
@@ -185,8 +230,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     }
 
     const segments = listenerStore.getState().liveSegments;
-    scanQuestions(session, segments, config);
-    void processAnswers(session);
     const window = buildLiveAssistWindow(segments, session.processedEndMs);
     const nowMs = Date.now();
     if (
@@ -250,10 +293,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         candidates,
         language,
       );
-      const researchEnabled =
-        config.researchEnabled &&
-        Boolean(getWebSearchTools(config.model)) &&
-        session.researched.size < LIVE_ASSIST_MAX_RESEARCH_PER_CALL;
       const prompt = buildLiveAssistPrompt({
         language,
         title: context.title,
@@ -265,8 +304,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         dismissed: before.dismissed,
         snapshot: before.snapshot,
         transcript: window.text,
-        research: formatResearchForPrompt(before.research),
-        researchEnabled,
       });
 
       liveAssistLog(
@@ -275,7 +312,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           update: updateNumber,
           forced: wasForced,
           language,
-          researchEnabled,
           newWords: window.newWords,
           windowChars: window.text.length,
           processedUntilMs: session.processedEndMs,
@@ -287,7 +323,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
             title,
             hasDescription: description.trim().length > 0,
           })),
-          model: describeModel(config.model),
+          model: { ...describeModel(config.model), id: config.modelId },
           promptChars: prompt.length,
           prompt,
         },
@@ -325,9 +361,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       const snapshot = mergeLiveAssistOutput(latest.snapshot, output, {
         dismissed: latest.dismissed,
         newId: () => crypto.randomUUID(),
-        knownSourceUrls: latest.research.flatMap((item) =>
-          item.sources.map((source) => source.url),
-        ),
       });
       const keptIds = new Set(
         snapshot.questions.map((question) => question.id),
@@ -375,11 +408,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         sessionId,
       );
 
-      const requested = output.research[0];
-      if (requested) {
-        void research(session, requested, language);
-      }
-
       // New template, new points to cover: evaluate them right away.
       if (decision.template.id !== before.template.id) {
         session.forced = true;
@@ -419,79 +447,14 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     }
   };
 
-  const research = async (
-    session: RunningSession,
-    requested: string,
-    language: string,
-  ) => {
+  const scanQuestions = () => {
+    const session = current;
     const config = getConfig();
-    const { sessionId } = session;
-    const query = normalizeResearchQuery(requested);
-    const tools = getWebSearchTools(config.model);
-    const skipReason = !config.researchEnabled
-      ? "setting_disabled"
-      : !config.model || !tools
-        ? "provider_without_web_search"
-        : !query
-          ? "query_refused_not_a_name"
-          : session.researched.has(query.toLowerCase())
-            ? "already_researched"
-            : session.researched.size >= LIVE_ASSIST_MAX_RESEARCH_PER_CALL
-              ? "limit_reached"
-              : null;
-    if (skipReason || !query || !tools || !config.model) {
-      liveAssistLog(
-        "research.skipped",
-        { requested, reason: skipReason },
-        sessionId,
-      );
+    if (!session) {
       return;
     }
-
-    session.researched.add(query.toLowerCase());
-    const startedAt = Date.now();
-    liveAssistLog(
-      "research.started",
-      { query, count: session.researched.size },
-      sessionId,
-    );
-    try {
-      const result = await runLiveAssistResearch({
-        model: config.model,
-        tools,
-        query,
-        language,
-        signal: session.controller?.signal,
-      });
-      if (current !== session) {
-        return;
-      }
-      useLiveAssistStore.getState().addResearch(sessionId, result);
-      liveAssistLog(
-        "research.done",
-        { ...result, durationMs: Date.now() - startedAt },
-        sessionId,
-      );
-    } catch (error) {
-      liveAssistLog(
-        "research.failed",
-        {
-          query,
-          durationMs: Date.now() - startedAt,
-          error: describeError(error),
-        },
-        sessionId,
-      );
-    }
-  };
-
-  const scanQuestions = (
-    session: RunningSession,
-    segments: ReturnType<typeof listenerStore.getState>["liveSegments"],
-    config: EngineConfig,
-  ) => {
     const { questions, lastEndMs } = detectIncomingQuestions(
-      segments,
+      listenerStore.getState().liveSegments,
       session.questionsScannedEndMs,
     );
     session.questionsScannedEndMs = lastEndMs;
@@ -520,10 +483,15 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       });
       liveAssistLog(
         "answer.question_detected",
-        { question: question.text, atMs: question.endMs },
+        {
+          question: question.text,
+          turnEndedAtMs: question.endMs,
+          detectedAfterTurnEndMs: Date.now(),
+        },
         session.sessionId,
       );
     }
+    void processAnswers(session);
   };
 
   const processAnswers = async (session: RunningSession) => {
@@ -532,14 +500,13 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       return;
     }
     const { sessionId } = session;
-    const queued = getLiveAssistSession(sessionId)
+    const next = getLiveAssistSession(sessionId)
       .answers.filter((answer) => answer.status === "queued")
       .sort(
         (a, b) =>
           (a.origin === "asked" ? 0 : 1) - (b.origin === "asked" ? 0 : 1) ||
           a.createdAtMs - b.createdAtMs,
-      );
-    const next = queued[0];
+      )[0];
     if (!next) {
       return;
     }
@@ -550,6 +517,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     const startedAt = Date.now();
     try {
       session.context ??= loadCallContext(sessionId);
+      session.project ??= loadProject(session, config);
       const segments = listenerStore.getState().liveSegments;
       const lastEndMs = segments.reduce(
         (max, segment) => Math.max(max, segment.end_ms),
@@ -559,41 +527,24 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         segments,
         lastEndMs - ANSWER_CONTEXT_MS + 120_000,
       ).text;
-      const [context, language] = await Promise.all([
+      const [context, project, language] = await Promise.all([
         session.context,
+        session.project,
         resolveCallLanguage(config, transcript),
       ]);
-
-      const snippets: KnowledgeSnippet[] = [];
-      try {
-        snippets.push(...(await searchPastNotes(next.question, sessionId)));
-      } catch (error) {
-        liveAssistLog("answer.notes_failed", describeError(error), sessionId);
-      }
-      if (config.obsidianPath) {
-        try {
-          const files = await loadObsidianVault(config.obsidianPath);
-          snippets.push(...searchMarkdownFiles(files, next.question));
-        } catch (error) {
-          liveAssistLog(
-            "answer.obsidian_failed",
-            describeError(error),
-            sessionId,
-          );
-        }
-      }
-      const webTools = config.researchEnabled
+      const webTools = config.webSearch
         ? getWebSearchTools(config.model)
         : null;
-      const latest = getLiveAssistSession(sessionId);
       const prompt = buildLiveAnswerPrompt({
         question: next.question,
         origin: next.origin,
         language,
         callTitle: context.title,
-        callState: summarizeSnapshotForAnswers(latest.snapshot),
+        callState: summarizeSnapshotForAnswers(
+          getLiveAssistSession(sessionId).snapshot,
+        ),
         transcript,
-        snippets,
+        projectContext: project.text,
       });
       liveAssistLog(
         "answer.started",
@@ -602,27 +553,38 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           origin: next.origin,
           question: next.question,
           language,
+          model: config.modelId,
           web: Boolean(webTools),
-          snippets: snippets.map(({ tag, kind, title }) => ({
-            tag,
-            kind,
-            title,
-          })),
-          prompt,
+          projectContextChars: project.text.length,
+          waitedInQueueMs: startedAt - next.createdAtMs,
+          promptChars: prompt.length,
         },
         sessionId,
       );
 
-      const result = await generateLiveAnswer({
+      let lastRenderAt = 0;
+      const result = await streamLiveAnswer({
         model: config.model,
+        providerId: config.providerId,
+        modelId: config.modelId,
         prompt,
-        snippets,
         webTools,
+        onText: (text) => {
+          const now = Date.now();
+          if (
+            current !== session ||
+            now - lastRenderAt < ANSWER_RENDER_INTERVAL_MS
+          ) {
+            return;
+          }
+          lastRenderAt = now;
+          store.updateAnswer(sessionId, next.id, { answer: text });
+        },
       });
       if (current !== session) {
         return;
       }
-      if (result.status === "skipped") {
+      if (result.skipped) {
         if (next.origin === "auto") {
           store.removeAnswer(sessionId, next.id);
         } else {
@@ -631,7 +593,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       } else {
         store.updateAnswer(sessionId, next.id, {
           status: "ready",
-          answer: result.answer,
+          answer: result.text,
           sources: result.sources,
         });
       }
@@ -639,9 +601,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         "answer.done",
         {
           id: next.id,
-          status: result.status,
+          skipped: result.skipped,
+          firstTextMs: result.firstTextMs,
           durationMs: Date.now() - startedAt,
-          rawText: result.rawText,
+          text: result.text,
           sources: result.sources,
         },
         sessionId,
@@ -677,24 +640,31 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     ) {
       sync();
     }
+    if (state.liveSegments !== previous.liveSegments && current) {
+      if (questionTimer) clearTimeout(questionTimer);
+      questionTimer = setTimeout(() => {
+        questionTimer = null;
+        scanQuestions();
+      }, QUESTION_QUIET_MS);
+    }
   });
   const unsubscribeStore = useLiveAssistStore.subscribe((state, previous) => {
-    const sessionId = current?.sessionId;
-    if (!sessionId) {
+    const session = current;
+    if (!session) {
       return;
     }
+    const { sessionId } = session;
     const answers = state.sessions[sessionId]?.answers;
     if (
-      current &&
       answers !== previous.sessions[sessionId]?.answers &&
       answers?.some((answer) => answer.status === "queued")
     ) {
-      void processAnswers(current);
+      void processAnswers(session);
     }
     const next = state.sessions[sessionId]?.template;
     const before = previous.sessions[sessionId]?.template;
-    if (next?.source === "manual" && next !== before && current) {
-      current.forced = true;
+    if (next?.source === "manual" && next !== before) {
+      session.forced = true;
       liveAssistLog(
         "update.rerun_scheduled",
         { reason: "template_picked_by_hand", templateId: next.id },
@@ -709,6 +679,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     dispose: () => {
       disposed = true;
       clearInterval(interval);
+      if (questionTimer) clearTimeout(questionTimer);
       unsubscribeListener();
       unsubscribeStore();
       stop("engine_disposed");
@@ -745,7 +716,7 @@ async function refreshTemplates(sessionId: string) {
   );
 }
 
-async function loadCallContext(sessionId: string) {
+async function loadCallContext(sessionId: string): Promise<CallContext> {
   const snapshot = await loadSessionContentSnapshot(sessionId).catch(
     (error) => {
       liveAssistLog("context.load_failed", describeError(error), sessionId);

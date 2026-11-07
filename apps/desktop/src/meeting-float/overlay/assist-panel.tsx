@@ -263,7 +263,7 @@ function AnswersTab({
                 {answer.question}
               </p>
               <p className="text-[14px] leading-[1.42] font-medium">
-                {answer.status === "ready"
+                {answer.status === "ready" || answer.answer
                   ? answer.answer
                   : answer.status === "error"
                     ? labels.noAnswer
@@ -275,11 +275,7 @@ function AnswersTab({
                   style={{ color: "rgb(168, 212, 255)" }}
                 >
                   {answer.sources
-                    .map((source) =>
-                      source.kind === "web"
-                        ? `↗ ${source.label}`
-                        : `${source.kind === "obsidian" ? "◆" : "■"} ${source.label}`,
-                    )
+                    .map((source) => `↗ ${source.label}`)
                     .join("  ")}
                 </p>
               ) : null}
@@ -361,15 +357,6 @@ function QuestionsTab({
                   style={{ color: muted }}
                 >
                   {question.why}
-                </p>
-              ) : null}
-              {question.source ? (
-                <p
-                  className="font-mono text-[11px]"
-                  style={{ color: "rgb(168, 212, 255)" }}
-                  title={question.source.url}
-                >
-                  ↗ {question.source.label}
                 </p>
               ) : null}
               <button

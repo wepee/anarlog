@@ -90,6 +90,61 @@ export const useLanguageModel = (task?: CharTask): LanguageModelV3 | null => {
   }, [conn, task]);
 };
 
+// What runs during a call (Live Assist, live answers) has to answer within
+// seconds, so it can use its own model while summaries keep the main one.
+// Without a choice, the provider's fast model is used when it has one.
+const FAST_LIVE_MODELS: Partial<Record<string, string>> = {
+  anthropic: "claude-haiku-5-5",
+  claude: "claude-haiku-5-5",
+};
+
+export function resolveLiveModelId({
+  providerId,
+  mainModelId,
+  liveProviderId,
+  liveModelId,
+}: {
+  providerId: string;
+  mainModelId: string;
+  liveProviderId: string | undefined;
+  liveModelId: string | undefined;
+}): string {
+  if (liveModelId && liveProviderId === providerId) {
+    return liveModelId;
+  }
+  return FAST_LIVE_MODELS[providerId] ?? mainModelId;
+}
+
+export const useLiveModel = (): {
+  model: LanguageModelV3;
+  modelId: string;
+  providerId: string;
+} | null => {
+  const { conn } = useLLMConnection();
+  const { live_llm_provider, live_llm_model } = useConfigValues([
+    "live_llm_provider",
+    "live_llm_model",
+  ] as const);
+  return useMemo(() => {
+    if (!conn) return null;
+    const modelId = resolveLiveModelId({
+      providerId: conn.providerId,
+      mainModelId: conn.modelId,
+      liveProviderId: live_llm_provider,
+      liveModelId: live_llm_model,
+    });
+    const liveConn =
+      modelId === conn.modelId
+        ? conn
+        : { ...conn, modelId, reasoningEffort: "default" as const };
+    return {
+      model: createLanguageModel(liveConn, "chat"),
+      modelId,
+      providerId: liveConn.providerId,
+    };
+  }, [conn, live_llm_provider, live_llm_model]);
+};
+
 export const useLLMConnection = (): LLMConnectionResult => {
   const settingsReady = useSettingsReady();
 
