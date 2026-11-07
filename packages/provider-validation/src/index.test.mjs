@@ -285,6 +285,23 @@ for (const [provider, path, header, value, payload] of [
   });
 }
 
+test("Anthropic accepts the probe sent with the desktop webview origin", async () => {
+  await verifyProviderCredentials(
+    {
+      ...credential,
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com/v1",
+    },
+    async (_url, init) => {
+      assert.equal(
+        init.headers["anthropic-dangerous-direct-browser-access"],
+        "true",
+      );
+      return Response.json({ data: [] });
+    },
+  );
+});
+
 test("a negative Cohere validity result is rejected despite HTTP 200", async () => {
   await assert.rejects(
     verifyProviderCredentials({ ...credential, provider: "cohere" }, async () =>
