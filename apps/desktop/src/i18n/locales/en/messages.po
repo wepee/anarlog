@@ -398,6 +398,10 @@ msgstr "App"
 msgid "App icon"
 msgstr "App icon"
 
+#: src/settings/general/main-language.tsx
+msgid "App language"
+msgstr "App language"
+
 #: src/settings/appearance/index.tsx
 #: src/sidebar/settings-nav-groups.ts
 msgid "Appearance"
@@ -2148,6 +2152,10 @@ msgstr "Language & transcription"
 msgid "Language model needed"
 msgstr "Language model needed"
 
+#: src/settings/general/main-language.tsx
+msgid "Language of BlackMushi's menus and buttons. Transcription and AI answers keep the main language below."
+msgstr "Language of BlackMushi's menus and buttons. Transcription and AI answers keep the main language below."
+
 #: src/meeting-float/assist.ts
 msgid "Last 2 min"
 msgstr "Last 2 min"
@@ -2239,6 +2247,10 @@ msgstr "Live Assist log copied."
 msgid "Live Assist log saved to Downloads."
 msgstr "Live Assist log saved to Downloads."
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Live Assist web research"
+msgstr "Live Assist web research"
+
 #: src/settings/dictation.tsx
 msgid "Live transcript preview"
 msgstr "Live transcript preview"
@@ -2294,6 +2306,10 @@ msgstr "Lock Note"
 #: src/sidebar/timeline/item.tsx
 msgid "Locked note"
 msgstr "Locked note"
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Looks up companies, products or rules mentioned in the call to suggest better questions. Only the name is searched, through your AI provider's web search (Anthropic, OpenAI or Google)."
+msgstr "Looks up companies, products or rules mentioned in the call to suggest better questions. Only the name is searched, through your AI provider's web search (Anthropic, OpenAI or Google)."
 
 #: src/settings/ai/llm/select.tsx
 msgid "Low"
@@ -3348,6 +3364,10 @@ msgstr "Right Command"
 #: src/settings/ai/stt/select.tsx
 msgid "Runs after the recording finishes, not during the meeting."
 msgstr "Runs after the recording finishes, not during the meeting."
+
+#: src/settings/general/main-language.tsx
+msgid "Same as main language"
+msgstr "Same as main language"
 
 #: src/settings/developers/live-assist-log.tsx
 #: src/settings/dictionary/index.tsx

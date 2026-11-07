@@ -398,6 +398,10 @@ msgstr "Application"
 msgid "App icon"
 msgstr ""
 
+#: src/settings/general/main-language.tsx
+msgid "App language"
+msgstr "Langue de l'app"
+
 #: src/settings/appearance/index.tsx
 #: src/sidebar/settings-nav-groups.ts
 msgid "Appearance"
@@ -491,11 +495,11 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "auto"
-msgstr ""
+msgstr "auto"
 
 #: src/meeting-float/assist.ts
 msgid "Auto"
-msgstr ""
+msgstr "Auto"
 
 #: src/templates/auto-form.tsx
 msgid "Auto summary format"
@@ -1140,7 +1144,7 @@ msgstr ""
 #: src/settings/developers/live-assist-log.tsx
 #: src/settings/developers/webhooks.tsx
 msgid "Copy"
-msgstr ""
+msgstr "Copier"
 
 #: src/settings/developers/cli.tsx
 msgid "Copy config"
@@ -1357,7 +1361,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Decisions"
-msgstr ""
+msgstr "Décisions"
 
 #: src/edit/tab-content.tsx
 msgid "Decline"
@@ -1484,7 +1488,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Dismiss"
-msgstr ""
+msgstr "Écarter"
 
 #: src/main/windows-title-bar.tsx
 #: src/settings/imports/index.tsx
@@ -1550,7 +1554,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "due"
-msgstr ""
+msgstr "pour"
 
 #: src/templates/details.tsx
 #: src/templates/template-form.tsx
@@ -1666,7 +1670,7 @@ msgstr ""
 
 #: src/settings/developers/live-assist-log.tsx
 msgid "Everything Live Assist did since BlackMushi started: prompts, model answers and template choices. It includes excerpts of your calls and only leaves your computer if you share it."
-msgstr ""
+msgstr "Tout ce que le Live Assist a fait depuis le lancement de BlackMushi : prompts, réponses du modèle et choix de modèle. Contient des extraits de vos appels et ne quitte votre ordinateur que si vous le partagez."
 
 #: src/templates/auto-format-examples-dialog.tsx
 msgid "Example summary"
@@ -1806,7 +1810,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "For the summary"
-msgstr ""
+msgstr "Pour le résumé"
 
 #: src/settings/general/audio-settings.tsx
 msgid "Forever"
@@ -2148,9 +2152,13 @@ msgstr ""
 msgid "Language model needed"
 msgstr ""
 
+#: src/settings/general/main-language.tsx
+msgid "Language of BlackMushi's menus and buttons. Transcription and AI answers keep the main language below."
+msgstr "Langue des menus et boutons de BlackMushi. La transcription et les réponses de l'IA gardent la langue principale ci-dessous."
+
 #: src/meeting-float/assist.ts
 msgid "Last 2 min"
-msgstr ""
+msgstr "2 dernières min"
 
 #. placeholder {0}: webhook.last_delivery_status
 #: src/settings/developers/webhooks.tsx
@@ -2221,7 +2229,7 @@ msgstr ""
 #: src/meeting-float/assist.ts
 #: src/settings/ai/stt/select.tsx
 msgid "Live"
-msgstr ""
+msgstr "Direct"
 
 #: src/settings/general/meeting-settings.tsx
 msgid "Live Assist"
@@ -2229,15 +2237,19 @@ msgstr ""
 
 #: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log"
-msgstr ""
+msgstr "Journal du Live Assist"
 
 #: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log copied."
-msgstr ""
+msgstr "Journal du Live Assist copié."
 
 #: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log saved to Downloads."
-msgstr ""
+msgstr "Journal du Live Assist enregistré dans Téléchargements."
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Live Assist web research"
+msgstr "Recherche web du Live Assist"
 
 #: src/settings/dictation.tsx
 msgid "Live transcript preview"
@@ -2294,6 +2306,10 @@ msgstr ""
 #: src/sidebar/timeline/item.tsx
 msgid "Locked note"
 msgstr ""
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Looks up companies, products or rules mentioned in the call to suggest better questions. Only the name is searched, through your AI provider's web search (Anthropic, OpenAI or Google)."
+msgstr "Recherche les sociétés, produits ou réglementations cités pendant l'appel pour proposer de meilleures questions. Seul le nom est recherché, via la recherche web de votre fournisseur d'IA (Anthropic, OpenAI ou Google)."
 
 #: src/settings/ai/llm/select.tsx
 msgid "Low"
@@ -2362,7 +2378,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Me"
-msgstr ""
+msgstr "Moi"
 
 #. placeholder {0}: number.format(stats.timedConversations)
 #: src/settings/stats/insights.tsx
@@ -2577,7 +2593,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "No action items yet."
-msgstr ""
+msgstr "Pas encore d'action."
 
 #: src/imports/screen.tsx
 #: src/settings/general/notification.tsx
@@ -2687,7 +2703,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "No owner"
-msgstr ""
+msgstr "Sans responsable"
 
 #: src/session/components/note-input/transcript/renderer/speaker-assign.tsx
 msgid "No people"
@@ -3075,11 +3091,11 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Questions"
-msgstr ""
+msgstr "Questions"
 
 #: src/meeting-float/assist.ts
 msgid "Questions to ask will show up once the conversation gets going."
-msgstr ""
+msgstr "Les questions à poser apparaîtront quand la conversation sera lancée."
 
 #: src/session/components/note-input/transcript/screens/empty.tsx
 msgid "Re-transcribe"
@@ -3349,11 +3365,15 @@ msgstr ""
 msgid "Runs after the recording finishes, not during the meeting."
 msgstr ""
 
+#: src/settings/general/main-language.tsx
+msgid "Same as main language"
+msgstr "Comme la langue principale"
+
 #: src/settings/developers/live-assist-log.tsx
 #: src/settings/dictionary/index.tsx
 #: src/templates/auto-form.tsx
 msgid "Save"
-msgstr ""
+msgstr "Enregistrer"
 
 #: src/settings/automations/index.tsx
 msgid "Save & enable"
@@ -3725,7 +3745,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Since the start"
-msgstr ""
+msgstr "Depuis le début"
 
 #: src/settings/appearance/app-icon.tsx
 msgid "Sketch"
@@ -3961,7 +3981,7 @@ msgstr ""
 #: src/meeting-float/assist.ts
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Summary"
-msgstr ""
+msgstr "Résumé"
 
 #: src/settings/general/notification.tsx
 msgid "Summary complete"
@@ -3986,7 +4006,7 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Summary template"
-msgstr ""
+msgstr "Modèle de résumé"
 
 #: src/settings/general/week-start.tsx
 msgid "Sunday"
@@ -4068,11 +4088,11 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "The summary after the call will use this template."
-msgstr ""
+msgstr "Le résumé de fin d'appel utilisera ce modèle."
 
 #: src/meeting-float/assist.ts
 msgid "The summary shows up after the first minute of conversation."
-msgstr ""
+msgstr "Le résumé apparaît après la première minute de conversation."
 
 #: src/sidebar/toast/registry.tsx
 msgid "The update download failed"
@@ -4134,11 +4154,11 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "to clarify"
-msgstr ""
+msgstr "à préciser"
 
 #: src/meeting-float/assist.ts
 msgid "To-do"
-msgstr ""
+msgstr "To-do"
 
 #: src/sidebar/timeline/utils/index.ts
 msgid "Today"
@@ -4466,11 +4486,11 @@ msgstr ""
 
 #: src/templates/template-form.tsx
 msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
-msgstr ""
+msgstr "Quand utiliser ce modèle, par ex. « premier appel avec un prospect ». Le Live Assist s'en sert pour reconnaître l'appel."
 
 #: src/settings/general/meeting-settings.tsx
 msgid "While a meeting is transcribed live, the floating bar suggests the questions to ask, drafts the to-do and keeps a running summary. Sends the new transcript to your configured AI provider about once a minute."
-msgstr ""
+msgstr "Pendant une réunion transcrite en direct, la barre flottante suggère les questions à poser, prépare la to-do et tient un résumé à jour. Envoie le nouveau transcript à votre fournisseur d'IA environ une fois par minute."
 
 #: src/settings/ai/stt/local-file-model.tsx
 msgid "whisper.cpp models"

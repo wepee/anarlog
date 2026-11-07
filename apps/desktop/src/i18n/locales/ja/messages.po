@@ -398,6 +398,10 @@ msgstr "アプリ"
 msgid "App icon"
 msgstr ""
 
+#: src/settings/general/main-language.tsx
+msgid "App language"
+msgstr ""
+
 #: src/settings/appearance/index.tsx
 #: src/sidebar/settings-nav-groups.ts
 msgid "Appearance"
@@ -2148,6 +2152,10 @@ msgstr ""
 msgid "Language model needed"
 msgstr ""
 
+#: src/settings/general/main-language.tsx
+msgid "Language of BlackMushi's menus and buttons. Transcription and AI answers keep the main language below."
+msgstr ""
+
 #: src/meeting-float/assist.ts
 msgid "Last 2 min"
 msgstr ""
@@ -2239,6 +2247,10 @@ msgstr ""
 msgid "Live Assist log saved to Downloads."
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Live Assist web research"
+msgstr ""
+
 #: src/settings/dictation.tsx
 msgid "Live transcript preview"
 msgstr ""
@@ -2293,6 +2305,10 @@ msgstr ""
 
 #: src/sidebar/timeline/item.tsx
 msgid "Locked note"
+msgstr ""
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Looks up companies, products or rules mentioned in the call to suggest better questions. Only the name is searched, through your AI provider's web search (Anthropic, OpenAI or Google)."
 msgstr ""
 
 #: src/settings/ai/llm/select.tsx
@@ -3347,6 +3363,10 @@ msgstr ""
 #: src/settings/ai/shared/index.tsx
 #: src/settings/ai/stt/select.tsx
 msgid "Runs after the recording finishes, not during the meeting."
+msgstr ""
+
+#: src/settings/general/main-language.tsx
+msgid "Same as main language"
 msgstr ""
 
 #: src/settings/developers/live-assist-log.tsx
