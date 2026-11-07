@@ -17,6 +17,7 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost,
   captureMeetingChat,
   liveAssistEnabled,
+  liveAssistWebResearch,
   captureSharedScreens,
 }: {
   autoJoinScheduledMeetings: SettingItem;
@@ -27,6 +28,7 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost: SettingItem;
   captureMeetingChat: SettingItem;
   liveAssistEnabled: SettingItem;
+  liveAssistWebResearch: SettingItem;
   captureSharedScreens: SettingItem;
 }) {
   const currentPlatform = platform();
@@ -134,6 +136,20 @@ export function MeetingSettingsView({
         checked={liveAssistEnabled.value}
         onChange={liveAssistEnabled.onChange}
       />
+      {liveAssistEnabled.value && (
+        <SettingSwitchRow
+          title={<Trans>Live Assist web research</Trans>}
+          description={
+            <Trans>
+              Looks up companies, products or rules mentioned in the call to
+              suggest better questions. Only the name is searched, through your
+              AI provider's web search (Anthropic, OpenAI or Google).
+            </Trans>
+          }
+          checked={liveAssistWebResearch.value}
+          onChange={liveAssistWebResearch.onChange}
+        />
+      )}
     </div>
   );
 }

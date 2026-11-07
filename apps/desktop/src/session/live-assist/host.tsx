@@ -9,8 +9,18 @@ import { useLatestRef } from "~/shared/hooks/useLatestRef";
 export function LiveAssistHost() {
   const enabled = useConfigValue("live_assist_enabled");
   const language = useConfigValue("ai_language") || "en";
+  const spokenLanguages = useConfigValue("spoken_languages");
+  const useMainLanguage = useConfigValue("summary_use_main_language");
+  const researchEnabled = useConfigValue("live_assist_web_research");
   const model = useLanguageModel("chat");
-  const config = useLatestRef({ enabled, model, language });
+  const config = useLatestRef({
+    enabled,
+    model,
+    language,
+    spokenLanguages,
+    useMainLanguage,
+    researchEnabled,
+  });
   const engineRef = useRef<ReturnType<typeof createLiveAssistEngine> | null>(
     null,
   );

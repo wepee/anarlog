@@ -280,7 +280,12 @@ export const SETTING_DEFINITIONS = {
   live_assist_enabled: {
     type: "boolean",
     path: ["general", "live_assist_enabled"],
-    default: false as boolean,
+    default: true as boolean,
+  },
+  live_assist_web_research: {
+    type: "boolean",
+    path: ["general", "live_assist_web_research"],
+    default: true as boolean,
   },
   call_templates_seeded: {
     type: "boolean",

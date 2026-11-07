@@ -242,7 +242,15 @@ describe("FloatingMeetingWindowHost", () => {
     useLiveAssistStore.getState().applyUpdate("session-1", {
       snapshot: {
         ...EMPTY_LIVE_ASSIST_SNAPSHOT,
-        questions: [{ id: "q1", text: "Qui décide ?", why: "", isNew: true }],
+        questions: [
+          {
+            id: "q1",
+            text: "Qui décide ?",
+            why: "",
+            isNew: true,
+            sourceUrl: null,
+          },
+        ],
       },
       template: { id: null, source: "auto" },
       updatedAtMs: 1,

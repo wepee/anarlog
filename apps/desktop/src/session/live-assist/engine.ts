@@ -1,8 +1,16 @@
 import { type LanguageModel, Output, streamText } from "ai";
 
 import { describeError, describeModel, liveAssistLog } from "./journal";
+import {
+  formatResearchForPrompt,
+  getWebSearchTools,
+  LIVE_ASSIST_MAX_RESEARCH_PER_CALL,
+  normalizeResearchQuery,
+  runLiveAssistResearch,
+} from "./research";
 
 import { listTemplateCandidates } from "~/services/enhancer/auto-template";
+import { resolveSummaryLanguage } from "~/services/enhancer/summary-language";
 import { loadSessionContentSnapshot } from "~/session/content-queries";
 import {
   buildLiveAssistPrompt,
@@ -30,6 +38,9 @@ type EngineConfig = {
   enabled: boolean;
   model: LanguageModel | null;
   language: string;
+  spokenLanguages: string[];
+  useMainLanguage: boolean;
+  researchEnabled: boolean;
 };
 
 type RunningSession = {
@@ -40,6 +51,7 @@ type RunningSession = {
   running: boolean;
   updates: number;
   lastSkipReason: string | null;
+  researched: Set<string>;
   controller: AbortController | null;
   context: Promise<{ title: string | null; participants: string[] }> | null;
 };
@@ -114,7 +126,14 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         "session.started",
         {
           model: describeModel(config.model),
-          language: config.language,
+          mainLanguage: config.language,
+          additionalLanguages: config.spokenLanguages,
+          useMainLanguage: config.useMainLanguage,
+          webResearch: config.researchEnabled
+            ? getWebSearchTools(config.model)
+              ? "on"
+              : "unsupported_by_provider"
+            : "off",
           minIntervalMs: LIVE_ASSIST_MIN_INTERVAL_MS,
           minNewWords: LIVE_ASSIST_MIN_NEW_WORDS,
         },
@@ -129,6 +148,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         running: false,
         updates: 0,
         lastSkipReason: null,
+        researched: new Set(),
         controller: null,
         context: null,
       };
@@ -201,13 +221,18 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       const templateTitle =
         candidates.find((candidate) => candidate.id === before.template.id)
           ?.title ?? "Auto";
+      const language = await resolveCallLanguage(config, window.text);
       const coverageLabels = getCoverageLabels(
         before.template,
         candidates,
-        config.language,
+        language,
       );
+      const researchEnabled =
+        config.researchEnabled &&
+        Boolean(getWebSearchTools(config.model)) &&
+        session.researched.size < LIVE_ASSIST_MAX_RESEARCH_PER_CALL;
       const prompt = buildLiveAssistPrompt({
-        language: config.language,
+        language,
         title: context.title,
         participants: context.participants,
         template: before.template,
@@ -217,6 +242,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         dismissed: before.dismissed,
         snapshot: before.snapshot,
         transcript: window.text,
+        research: formatResearchForPrompt(before.research),
+        researchEnabled,
       });
 
       liveAssistLog(
@@ -224,6 +251,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         {
           update: updateNumber,
           forced: wasForced,
+          language,
+          researchEnabled,
           newWords: window.newWords,
           windowChars: window.text.length,
           processedUntilMs: session.processedEndMs,
@@ -273,6 +302,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       const snapshot = mergeLiveAssistOutput(latest.snapshot, output, {
         dismissed: latest.dismissed,
         newId: () => crypto.randomUUID(),
+        knownSourceUrls: latest.research.flatMap((item) =>
+          item.sources.map((source) => source.url),
+        ),
       });
       const keptIds = new Set(
         snapshot.questions.map((question) => question.id),
@@ -320,6 +352,11 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         sessionId,
       );
 
+      const requested = output.research[0];
+      if (requested) {
+        void research(session, requested, language);
+      }
+
       // New template, new points to cover: evaluate them right away.
       if (decision.template.id !== before.template.id) {
         session.forced = true;
@@ -356,6 +393,72 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     } finally {
       session.running = false;
       session.controller = null;
+    }
+  };
+
+  const research = async (
+    session: RunningSession,
+    requested: string,
+    language: string,
+  ) => {
+    const config = getConfig();
+    const { sessionId } = session;
+    const query = normalizeResearchQuery(requested);
+    const tools = getWebSearchTools(config.model);
+    const skipReason = !config.researchEnabled
+      ? "setting_disabled"
+      : !config.model || !tools
+        ? "provider_without_web_search"
+        : !query
+          ? "query_refused_not_a_name"
+          : session.researched.has(query.toLowerCase())
+            ? "already_researched"
+            : session.researched.size >= LIVE_ASSIST_MAX_RESEARCH_PER_CALL
+              ? "limit_reached"
+              : null;
+    if (skipReason || !query || !tools || !config.model) {
+      liveAssistLog(
+        "research.skipped",
+        { requested, reason: skipReason },
+        sessionId,
+      );
+      return;
+    }
+
+    session.researched.add(query.toLowerCase());
+    const startedAt = Date.now();
+    liveAssistLog(
+      "research.started",
+      { query, count: session.researched.size },
+      sessionId,
+    );
+    try {
+      const result = await runLiveAssistResearch({
+        model: config.model,
+        tools,
+        query,
+        language,
+        signal: session.controller?.signal,
+      });
+      if (current !== session) {
+        return;
+      }
+      useLiveAssistStore.getState().addResearch(sessionId, result);
+      liveAssistLog(
+        "research.done",
+        { ...result, durationMs: Date.now() - startedAt },
+        sessionId,
+      );
+    } catch (error) {
+      liveAssistLog(
+        "research.failed",
+        {
+          query,
+          durationMs: Date.now() - startedAt,
+          error: describeError(error),
+        },
+        sessionId,
+      );
     }
   };
 
@@ -399,6 +502,23 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       liveAssistLog("engine.disposed");
     },
   };
+}
+
+// Live Assist writes in the language the call is held in, picked among the
+// main and additional languages like the summary does.
+async function resolveCallLanguage(
+  config: EngineConfig,
+  text: string,
+): Promise<string> {
+  const language = await resolveSummaryLanguage(
+    {
+      ai_language: config.language,
+      spoken_languages: JSON.stringify(config.spokenLanguages),
+      summary_use_main_language: config.useMainLanguage,
+    },
+    [text],
+  ).catch(() => null);
+  return language ?? config.language;
 }
 
 async function refreshTemplates(sessionId: string) {

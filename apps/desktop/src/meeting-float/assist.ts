@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
 
+import { getSourceLabel } from "~/session/live-assist/research";
 import type { LiveAssistSessionState } from "~/store/zustand/live-assist";
 
 // What the floating panel shows for Live Assist. It travels as a JSON string
@@ -28,7 +29,13 @@ export type FloatingAssist = {
   };
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
-  questions: Array<{ id: string; text: string; why: string; isNew: boolean }>;
+  questions: Array<{
+    id: string;
+    text: string;
+    why: string;
+    isNew: boolean;
+    source: { label: string; url: string } | null;
+  }>;
   coverage: Array<{
     label: string;
     status: "covered" | "partial" | "missing";
@@ -126,12 +133,17 @@ export function buildFloatingAssist(
       { id: null, title: autoTitle },
       ...templates.map(({ id, title }) => ({ id, title })),
     ],
-    questions: snapshot.questions.map(({ id, text, why, isNew }) => ({
-      id,
-      text,
-      why,
-      isNew,
-    })),
+    questions: snapshot.questions.map(
+      ({ id, text, why, isNew, sourceUrl }) => ({
+        id,
+        text,
+        why,
+        isNew,
+        source: sourceUrl
+          ? { label: getSourceLabel(sourceUrl), url: sourceUrl }
+          : null,
+      }),
+    ),
     coverage: snapshot.coverage,
     todoGroups,
     recent: snapshot.recent,

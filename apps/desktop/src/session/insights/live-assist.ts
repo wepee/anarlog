@@ -26,6 +26,7 @@ export type LiveAssistQuestion = {
   text: string;
   why: string;
   isNew: boolean;
+  sourceUrl: string | null;
 };
 
 export type LiveAssistTodo = {
@@ -107,8 +108,16 @@ export const liveAssistOutputSchema = z.object({
     )
     .max(10),
   questions: z
-    .array(z.object({ id: idSchema, text: z.string(), why: z.string() }))
+    .array(
+      z.object({
+        id: idSchema,
+        text: z.string(),
+        why: z.string(),
+        sourceUrl: z.string().nullable(),
+      }),
+    )
     .max(LIVE_ASSIST_MAX_QUESTIONS),
+  research: z.array(z.string()).max(1),
 });
 
 export type LiveAssistOutput = z.infer<typeof liveAssistOutputSchema>;
@@ -122,6 +131,8 @@ Fields:
 - todos: actions to do after the call that someone stated or clearly agreed to. owner: the name as said ("You" for the user), null when nobody took it. due: the deadline as said, null when none. Never invent an owner or a date.
 - coverage: one entry per point to cover listed in the input, in the same order and with the same label: "covered" when the transcript gives what the summary needs for it, "partial" when it is vague, "missing" otherwise. evidence: a few words of what was said, or null.
 - questions: at most ${LIVE_ASSIST_MAX_QUESTIONS} questions the user could ask now to get what the summary still lacks: missing or partial points to cover, todos without owner or deadline, a participant's question left unanswered, a vague figure or claim. Each question cites what was said and comes with "why": what the answer unlocks, max 18 words. Never generic ("any questions?"). Drop a question as soon as it has been asked, even reworded or by someone else, or answered. Never propose a question listed as dismissed, even reworded. Best question first.
+- sourceUrl: when a question relies on a research result, the url of that result's source exactly as given; otherwise null.
+- research: at most one name to look up on the web, only when web research is on: a company, product, technology or regulation mentioned in the call that would help to ask a better question. Give the name only (max 6 words), never a sentence or anything personal from the call, never something already researched. Usually [].
 - Keep the id of an item that is still the same item; use id null for a new one.
 
 ${TEMPLATE_RULES}
@@ -229,6 +240,8 @@ export function buildLiveAssistPrompt({
   dismissed,
   snapshot,
   transcript,
+  research,
+  researchEnabled,
 }: {
   language: string;
   title: string | null;
@@ -240,6 +253,8 @@ export function buildLiveAssistPrompt({
   dismissed: string[];
   snapshot: LiveAssistSnapshot;
   transcript: string;
+  research: string;
+  researchEnabled: boolean;
 }): string {
   const state = {
     recent: snapshot.recent,
@@ -271,6 +286,10 @@ export function buildLiveAssistPrompt({
       ? dismissed.map((text) => `- ${text}`).join("\n")
       : "(none)",
     "",
+    `Web research: ${researchEnabled ? "on" : "off"}`,
+    "Research results:",
+    research,
+    "",
     "Current state:",
     JSON.stringify(state),
     "",
@@ -299,11 +318,14 @@ export function mergeLiveAssistOutput(
   {
     dismissed,
     newId,
+    knownSourceUrls = [],
   }: {
     dismissed: string[];
     newId: () => string;
+    knownSourceUrls?: string[];
   },
 ): LiveAssistSnapshot {
+  const sourceUrls = new Set(knownSourceUrls);
   const dismissedSet = new Set(dismissed.map(normalizeText));
   const previousQuestions = new Map(
     previous.questions.map((question) => [question.id, question]),
@@ -326,6 +348,10 @@ export function mergeLiveAssistOutput(
       text,
       why: cleanText(question.why),
       isNew: existing ? existing.isNew : true,
+      sourceUrl:
+        question.sourceUrl && sourceUrls.has(question.sourceUrl)
+          ? question.sourceUrl
+          : null,
     });
     if (questions.length >= LIVE_ASSIST_MAX_QUESTIONS) {
       break;

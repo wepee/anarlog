@@ -253,6 +253,15 @@ function QuestionsTab({
                   {question.why}
                 </p>
               ) : null}
+              {question.source ? (
+                <p
+                  className="font-mono text-[11px]"
+                  style={{ color: "rgb(168, 212, 255)" }}
+                  title={question.source.url}
+                >
+                  ↗ {question.source.label}
+                </p>
+              ) : null}
               <button
                 type="button"
                 aria-label={assist.labels.dismiss}

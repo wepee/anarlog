@@ -38,6 +38,7 @@ function renderMeetingSettings({
         meetingDisclosureAutoPost={meetingDisclosureAutoPost}
         captureMeetingChat={captureMeetingChat}
         liveAssistEnabled={liveAssistEnabled}
+        liveAssistWebResearch={setting(true)}
         captureSharedScreens={captureSharedScreens}
       />,
     ),

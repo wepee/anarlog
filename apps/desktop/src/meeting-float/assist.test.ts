@@ -8,6 +8,7 @@ describe("buildFloatingAssist", () => {
   it("groups action items by owner and flags the ones to clarify", () => {
     const assist = buildFloatingAssist({
       templates: [{ id: "sales", title: "Commercial" }],
+      research: [],
       snapshot: {
         ...EMPTY_LIVE_ASSIST_SNAPSHOT,
         todos: [

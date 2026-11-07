@@ -36,6 +36,7 @@ function output(partial: Partial<LiveAssistOutput> = {}): LiveAssistOutput {
     todos: [],
     coverage: [],
     questions: [],
+    research: [],
     ...partial,
   };
 }
@@ -88,19 +89,42 @@ describe("shouldRunLiveAssistUpdate", () => {
 });
 
 describe("mergeLiveAssistOutput", () => {
-  it("keeps ids and the new flag of questions that are still there", () => {
+  it("keeps ids and the new flag of questions, and drops sources it was never given", () => {
     let next = 0;
     const previous = {
       ...EMPTY_LIVE_ASSIST_SNAPSHOT,
-      questions: [{ id: "q1", text: "Qui décide ?", why: "", isNew: false }],
+      questions: [
+        {
+          id: "q1",
+          text: "Qui décide ?",
+          why: "",
+          isNew: false,
+          sourceUrl: null,
+        },
+      ],
     };
     const merged = mergeLiveAssistOutput(
       previous,
       output({
         questions: [
-          { id: "q1", text: "Qui décide ?", why: "Personne n'a été nommé." },
-          { id: null, text: "Quel budget ?", why: "Aucun chiffre." },
-          { id: null, text: "On en reparle ?", why: "Écartée." },
+          {
+            id: "q1",
+            text: "Qui décide ?",
+            why: "Personne n'a été nommé.",
+            sourceUrl: null,
+          },
+          {
+            id: null,
+            text: "Quel budget ?",
+            why: "Aucun chiffre.",
+            sourceUrl: "https://invented.example/page",
+          },
+          {
+            id: null,
+            text: "On en reparle ?",
+            why: "Écartée.",
+            sourceUrl: null,
+          },
         ],
       }),
       { dismissed: ["On en reparle ?"], newId: () => `n${(next += 1)}` },
@@ -112,8 +136,15 @@ describe("mergeLiveAssistOutput", () => {
         text: "Qui décide ?",
         why: "Personne n'a été nommé.",
         isNew: false,
+        sourceUrl: null,
       },
-      { id: "n1", text: "Quel budget ?", why: "Aucun chiffre.", isNew: true },
+      {
+        id: "n1",
+        text: "Quel budget ?",
+        why: "Aucun chiffre.",
+        isNew: true,
+        sourceUrl: null,
+      },
     ]);
   });
 });

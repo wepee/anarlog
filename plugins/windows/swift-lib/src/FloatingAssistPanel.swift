@@ -252,6 +252,14 @@ struct FloatingAssistPanelView<Live: View>: View {
             .foregroundStyle(secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
+        if let source = question.source, let url = URL(string: source.url) {
+          Link(destination: url) {
+            Text("↗ \(source.label)")
+              .font(.system(size: 11, design: .monospaced))
+          }
+          .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
+          .help(source.url)
+        }
       }
       Spacer(minLength: 0)
       Button {
