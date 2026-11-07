@@ -249,6 +249,24 @@ pub struct FloatingBarDictationAction {
     pub action: DictationPanelAction,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct FloatingBarAssistAction {
+    pub session_id: String,
+    pub action: AssistPanelAction,
+    /// The question to dismiss, or the template to select (null for Auto).
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum AssistPanelAction {
+    DismissQuestion,
+    SelectTemplate,
+    SeenQuestions,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum DictationPanelAction {

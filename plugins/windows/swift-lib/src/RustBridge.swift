@@ -9,6 +9,9 @@ private func rustOnFloatingBarOpenMain()
 @_silgen_name("rust_on_floating_bar_settings_change")
 private func rustOnFloatingBarSettingsChange(_ settingsPtr: UnsafePointer<CChar>)
 
+@_silgen_name("rust_on_floating_bar_assist_action")
+private func rustOnFloatingBarAssistAction(_ payload: UnsafePointer<CChar>)
+
 @_silgen_name("rust_on_floating_bar_dictation_action")
 func rust_on_floating_bar_dictation_action(_ payload: UnsafePointer<CChar>)
 
@@ -19,6 +22,24 @@ enum RustBridge {
 
   static func openMainWindow() {
     rustOnFloatingBarOpenMain()
+  }
+
+  static func assistAction(sessionId: String, action: String, id: String?) {
+    let payload: [String: Any] = [
+      "sessionId": sessionId,
+      "action": action,
+      "id": id ?? NSNull(),
+    ]
+    guard
+      let data = try? JSONSerialization.data(withJSONObject: payload),
+      let json = String(data: data, encoding: .utf8)
+    else {
+      return
+    }
+
+    json.withCString { payloadPtr in
+      rustOnFloatingBarAssistAction(payloadPtr)
+    }
   }
 
   static func floatingBarSettingsChanged(_ payload: FloatingOverlaySettingsChangePayload) {

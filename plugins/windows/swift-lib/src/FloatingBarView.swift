@@ -16,6 +16,9 @@ enum FloatingBarLayout {
   static let expandedWidth: CGFloat = 360
   static let expandedHeight: CGFloat = 430
   static let expandedCornerRadius: CGFloat = 21
+  static let assistExpandedWidth: CGFloat = 384
+  static let assistExpandedHeight: CGFloat = 548
+  static let assistCornerRadius: CGFloat = 28
   static let expandedPadding: CGFloat = 12
   static let waveformWidth: CGFloat = 26
   static let waveformHeight: CGFloat = 20
@@ -40,14 +43,18 @@ enum FloatingBarLayout {
       + compactHorizontalPadding * 2
   }
 
-  static func containerSize(isExpanded: Bool, showsExpand: Bool)
+  static func containerSize(isExpanded: Bool, showsExpand: Bool, hasAssist: Bool = false)
     -> NSSize
   {
-    NSSize(
+    let expanded =
+      hasAssist
+      ? NSSize(width: assistExpandedWidth, height: assistExpandedHeight)
+      : NSSize(width: expandedWidth, height: expandedHeight)
+    return NSSize(
       width: (isExpanded
-        ? expandedWidth : compactWidth(showsExpand: showsExpand)) + inset
+        ? expanded.width : compactWidth(showsExpand: showsExpand)) + inset
         * 2,
-      height: (isExpanded ? expandedHeight : compactHeight) + hoverHandleReservedHeight + inset * 2)
+      height: (isExpanded ? expanded.height : compactHeight) + hoverHandleReservedHeight + inset * 2)
   }
 
 }
@@ -74,9 +81,12 @@ struct FloatingBarView: View {
   var body: some View {
     let showsHoverHandle = isBarHovered && !model.isExpanded
     let width = containerSize.width - FloatingBarLayout.inset * 2
+    let showsAssist = model.isExpanded && model.assist != nil && model.dictation == nil
     let radius =
-      model.isExpanded
-      ? FloatingBarLayout.expandedCornerRadius : FloatingBarLayout.compactCornerRadius
+      showsAssist
+      ? FloatingBarLayout.assistCornerRadius
+      : model.isExpanded
+        ? FloatingBarLayout.expandedCornerRadius : FloatingBarLayout.compactCornerRadius
     let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
     ZStack(alignment: .bottom) {
       if showsHoverHandle {
@@ -112,7 +122,14 @@ struct FloatingBarView: View {
       height: bodyHeight + (showsHoverHandle ? FloatingBarLayout.hoverHandleReservedHeight : 0),
       alignment: .bottom
     )
-    .background(shape.fill(isBarHovered && !model.isExpanded ? envelopeSurfaceColor : surfaceColor))
+    .modifier(
+      FloatingBarSurface(
+        shape: shape,
+        fill: isBarHovered && !model.isExpanded ? envelopeSurfaceColor : surfaceColor,
+        usesGlass: showsAssist,
+        glassTint: surfaceColor.opacity(0.35)
+      )
+    )
     .overlay(shape.strokeBorder(outerStrokeColor, lineWidth: 0.5))
     .overlay(
       RoundedRectangle(
@@ -130,7 +147,29 @@ struct FloatingBarView: View {
     .animation(.easeOut(duration: 0.12), value: isBarHovered)
   }
 
+  @ViewBuilder
   private var expandedPanel: some View {
+    if let assist = model.assist, model.dictation == nil {
+      FloatingAssistPanelView(
+        assist: assist,
+        primary: primaryContentColor,
+        secondary: secondaryContentColor,
+        isDark: model.colorScheme == .dark,
+        onAction: assistAction
+      ) {
+        transcriptPanel
+      }
+    } else {
+      transcriptPanel
+    }
+  }
+
+  private func assistAction(_ action: String, _ id: String?) {
+    guard let sessionId = model.sessionId else { return }
+    RustBridge.assistAction(sessionId: sessionId, action: action, id: id)
+  }
+
+  private var transcriptPanel: some View {
     VStack(spacing: 12) {
       ScrollViewReader { proxy in
         ZStack(alignment: .bottom) {
@@ -298,7 +337,8 @@ struct FloatingBarView: View {
     model.placement?.frame.size
       ?? FloatingBarLayout.containerSize(
         isExpanded: model.isExpanded,
-        showsExpand: model.liveCaptionToggleVisible
+        showsExpand: model.liveCaptionToggleVisible,
+        hasAssist: model.assist != nil
       )
   }
 

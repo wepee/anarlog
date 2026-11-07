@@ -12,4 +12,6 @@ final class FloatingBarViewModel: ObservableObject {
   @Published var transcriptBubbles: [FloatingTranscriptBubblePayload] = []
   @Published var transcriptNotice: String?
   @Published var placement: FloatingControlPlacement.Layout?
+  @Published var sessionId: String?
+  @Published var assist: FloatingAssistPayload?
 }

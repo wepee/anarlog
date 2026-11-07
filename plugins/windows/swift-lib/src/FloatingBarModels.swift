@@ -48,4 +48,74 @@ struct FloatingBarStatePayload: Codable {
   let liveCaptionToggleVisible: Bool
   let transcriptBubbles: [FloatingTranscriptBubblePayload]?
   var transcriptNotice: String? = nil
+  var sessionId: String? = nil
+  var assistJson: String? = nil
+
+  var assist: FloatingAssistPayload? {
+    guard dictation == nil, let data = assistJson?.data(using: .utf8) else { return nil }
+    return try? JSONDecoder().decode(FloatingAssistPayload.self, from: data)
+  }
+}
+
+// Mirrors `FloatingAssist` in apps/desktop/src/meeting-float/assist.ts.
+struct FloatingAssistPayload: Codable, Equatable {
+  struct Labels: Codable, Equatable {
+    let questions, todo, summary, live: String
+    let lastMinutes, sinceStart, toCover, decisions: String
+    let due, toClarify, dismiss, templateMenu, templateFooter, auto: String
+    let emptyQuestions, emptyTodo, emptySummary: String
+  }
+
+  struct Template: Codable, Equatable {
+    let id: String?
+    let title: String
+    let auto: Bool
+  }
+
+  struct TemplateOption: Codable, Equatable {
+    let id: String?
+    let title: String
+  }
+
+  struct Question: Codable, Equatable, Identifiable {
+    let id: String
+    let text: String
+    let why: String
+    let isNew: Bool
+  }
+
+  struct Coverage: Codable, Equatable {
+    let label: String
+    let status: String
+    let evidence: String?
+  }
+
+  struct TodoItem: Codable, Equatable {
+    let text: String
+    let due: String?
+    let needsDetail: Bool
+  }
+
+  struct TodoGroup: Codable, Equatable {
+    let owner: String
+    let items: [TodoItem]
+  }
+
+  struct Topic: Codable, Equatable {
+    let start: String?
+    let title: String
+    let live: Bool
+    let bullets: [String]
+  }
+
+  let labels: Labels
+  let template: Template
+  let templates: [TemplateOption]
+  let questions: [Question]
+  let coverage: [Coverage]
+  let todoGroups: [TodoGroup]
+  let recent: String
+  let decisions: [String]
+  let topics: [Topic]
+  let newQuestions: Int
 }

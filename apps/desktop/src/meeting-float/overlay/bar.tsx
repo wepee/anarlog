@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   FloatingBarState,
@@ -14,6 +14,8 @@ import {
 import { DancingSticks } from "@anlg/ui/components/ui/dancing-sticks";
 import { cn } from "@anlg/utils";
 
+import type { FloatingAssist, FloatingAssistAction } from "../assist";
+import { AssistPanel } from "./assist-panel";
 import { DictationTranscript } from "./dictation";
 import {
   FLOATING_BAR_COMPACT_GAP,
@@ -24,6 +26,7 @@ import {
   FLOATING_BAR_COMPACT_STOP_WIDTH,
   FLOATING_BAR_COMPACT_RADIUS,
   FLOATING_BAR_CONTROL_RADIUS,
+  FLOATING_BAR_ASSIST_RADIUS,
   FLOATING_BAR_EXPANDED_RADIUS,
   FLOATING_BAR_HOVER_HANDLE_HEIGHT,
   FLOATING_BAR_HOVER_HANDLE_TOP_PADDING,
@@ -36,14 +39,24 @@ export function FloatingBarOverlay({
   state,
   onStop,
   onToggleExpanded,
+  onAssistAction,
 }: {
   state: FloatingBarState;
   onStop: () => void;
   onToggleExpanded: (expanded: boolean) => void;
+  onAssistAction?: (action: FloatingAssistAction) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const isExpanded =
     state.liveCaptionToggleVisible && !state.liveCaptionMinimized;
+  const assist = useMemo(
+    () => (state.dictation ? null : parseFloatingAssist(state.assistJson)),
+    [state.assistJson, state.dictation],
+  );
+  const handleAssistAction = useCallback(
+    (action: FloatingAssistAction) => onAssistAction?.(action),
+    [onAssistAction],
+  );
   const showsHoverHandle = hovered && !isExpanded;
   const colors = barColors(state);
   const controlsWidth = compactControlsWidth(state.liveCaptionToggleVisible);
@@ -75,11 +88,20 @@ export function FloatingBarOverlay({
             FLOATING_BAR_INSET +
             (showsHoverHandle ? 0 : FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT),
           borderRadius: isExpanded
-            ? FLOATING_BAR_EXPANDED_RADIUS
+            ? assist
+              ? FLOATING_BAR_ASSIST_RADIUS
+              : FLOATING_BAR_EXPANDED_RADIUS
             : FLOATING_BAR_COMPACT_RADIUS,
           background:
-            hovered && !isExpanded ? colors.envelopeSurface : colors.surface,
-          boxShadow: `inset 0 0 0 0.5px ${colors.outerStroke}`,
+            hovered && !isExpanded
+              ? colors.envelopeSurface
+              : isExpanded && assist
+                ? colors.glassSurface
+                : colors.surface,
+          boxShadow:
+            isExpanded && assist
+              ? colors.glassEdge
+              : `inset 0 0 0 0.5px ${colors.outerStroke}`,
         }}
       >
         {showsHoverHandle && <HoverHandle color={colors.handle} />}
@@ -99,13 +121,32 @@ export function FloatingBarOverlay({
                 bottom: expandsUpward ? FLOATING_BAR_COMPACT_HEIGHT : 0,
               }}
             >
-              <TranscriptList
-                key={state.dictation?.sessionId ?? "meeting"}
-                dictation={state.dictation}
-                bubbles={state.transcriptBubbles ?? []}
-                colorScheme={state.colorScheme}
-                notice={state.transcriptNotice ?? null}
-              />
+              {assist ? (
+                <div className="h-full" style={{ color: colors.content }}>
+                  <AssistPanel
+                    assist={assist}
+                    dark={state.colorScheme === "dark"}
+                    onAction={handleAssistAction}
+                    live={
+                      <TranscriptList
+                        key="meeting"
+                        dictation={null}
+                        bubbles={state.transcriptBubbles ?? []}
+                        colorScheme={state.colorScheme}
+                        notice={state.transcriptNotice ?? null}
+                      />
+                    }
+                  />
+                </div>
+              ) : (
+                <TranscriptList
+                  key={state.dictation?.sessionId ?? "meeting"}
+                  dictation={state.dictation}
+                  bubbles={state.transcriptBubbles ?? []}
+                  colorScheme={state.colorScheme}
+                  notice={state.transcriptNotice ?? null}
+                />
+              )}
             </div>
           )}
           <div
@@ -416,8 +457,23 @@ function HoverHandle({ color }: { color: string }) {
   );
 }
 
+function parseFloatingAssist(
+  json: string | null | undefined,
+): FloatingAssist | null {
+  if (!json) {
+    return null;
+  }
+  try {
+    return JSON.parse(json) as FloatingAssist;
+  } catch {
+    return null;
+  }
+}
+
 type BarColors = {
   surface: string;
+  glassSurface: string;
+  glassEdge: string;
   envelopeSurface: string;
   content: string;
   handle: string;
@@ -434,6 +490,13 @@ function barColors(state: FloatingBarState): BarColors {
 
   return {
     surface: `rgba(${surfaceRgb}, ${opacity * 0.82})`,
+    // A webview cannot blur what lies behind its window, so the Live Assist
+    // panel imitates the Liquid Glass edge with a lighter tint and specular
+    // highlights; macOS gets the real material in the native panel.
+    glassSurface: `linear-gradient(180deg, rgba(255, 255, 255, ${dark ? 0.12 : 0.35}), rgba(255, 255, 255, 0.02) 40%), rgba(${surfaceRgb}, ${opacity * 0.7})`,
+    glassEdge: dark
+      ? "inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.08)"
+      : "inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 0.5px rgba(31, 28, 26, 0.14)",
     envelopeSurface: `rgba(${surfaceRgb}, ${Math.min(opacity * 1.08, 0.95)})`,
     content,
     handle: dark ? "rgba(255, 255, 255, 0.48)" : "rgba(31, 28, 26, 0.36)",

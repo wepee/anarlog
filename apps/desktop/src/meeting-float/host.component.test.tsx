@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => ({
   dictationAction: null as
     | null
     | ((event: { payload: { sessionId: string; action: string } }) => void),
+  assistAction: null as
+    | null
+    | ((event: {
+        payload: { sessionId: string; action: string; id?: string | null };
+      }) => void),
   meetingStop: null as null | (() => void),
   settings: {
     current: {
@@ -68,6 +73,12 @@ vi.mock("@anlg/plugin-windows", () => ({
         return vi.fn();
       }),
     },
+    floatingBarAssistAction: {
+      listen: vi.fn(async (callback) => {
+        mocks.assistAction = callback;
+        return vi.fn();
+      }),
+    },
     floatingBarDictationAction: {
       listen: vi.fn(async (callback) => {
         mocks.dictationAction = callback;
@@ -109,12 +120,18 @@ vi.mock("~/store/zustand/listener/instance", () => ({
 import { FloatingMeetingWindowHost } from "./host";
 
 import { useDictationStatus } from "~/dictation/state";
+import { EMPTY_LIVE_ASSIST_SNAPSHOT } from "~/session/insights/live-assist";
+import {
+  getLiveAssistSession,
+  useLiveAssistStore,
+} from "~/store/zustand/live-assist";
 
 describe("FloatingMeetingWindowHost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.meetingStop = null;
     mocks.dictationAction = null;
+    mocks.assistAction = null;
     mocks.enabled = true;
     mocks.listenerState.live.status = "active";
     useDictationStatus.setState(useDictationStatus.getInitialState());
@@ -218,6 +235,39 @@ describe("FloatingMeetingWindowHost", () => {
       useDictationStatus.setState({ phase: "idle" });
     });
     await waitFor(() => expect(mocks.floatingBarHide).toHaveBeenCalledOnce());
+  });
+
+  it("applies a question dismissed from the floating panel", async () => {
+    useLiveAssistStore.setState({ sessions: {} });
+    useLiveAssistStore.getState().applyUpdate("session-1", {
+      snapshot: {
+        ...EMPTY_LIVE_ASSIST_SNAPSHOT,
+        questions: [{ id: "q1", text: "Qui décide ?", why: "", isNew: true }],
+      },
+      template: { id: null, source: "auto" },
+      updatedAtMs: 1,
+    });
+    render(<FloatingMeetingWindowHost />);
+    await waitFor(() => expect(mocks.assistAction).not.toBeNull());
+
+    act(() => {
+      mocks.assistAction!({
+        payload: {
+          sessionId: "session-1",
+          action: "dismissQuestion",
+          id: "q1",
+        },
+      });
+    });
+
+    expect(getLiveAssistSession("session-1").snapshot.questions).toEqual([]);
+    await waitFor(() =>
+      expect(mocks.floatingBarUpdate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          assistJson: expect.stringContaining('"questions":[]'),
+        }),
+      ),
+    );
   });
 
   it("gives an active meeting ownership of the panel", async () => {

@@ -175,10 +175,6 @@ msgstr "Accessibility"
 msgid "Action"
 msgstr "Action"
 
-#: src/session/components/live-assist/card.tsx
-msgid "Action Items"
-msgstr "Action Items"
-
 #: src/settings/stats/index.tsx
 msgid "Active days"
 msgstr "Active days"
@@ -493,6 +489,14 @@ msgstr "Authenticating…"
 msgid "Authorize access in your browser, then return to BlackMushi."
 msgstr "Authorize access in your browser, then return to BlackMushi."
 
+#: src/meeting-float/assist.ts
+msgid "auto"
+msgstr "auto"
+
+#: src/meeting-float/assist.ts
+msgid "Auto"
+msgstr "Auto"
+
 #: src/templates/auto-form.tsx
 msgid "Auto summary format"
 msgstr "Auto summary format"
@@ -749,10 +753,6 @@ msgstr "Capture shared screens in Memos"
 msgid "Capture your first conversation. Every collection starts somewhere."
 msgstr "Capture your first conversation. Every collection starts somewhere."
 
-#: src/session/components/live-assist/card.tsx
-msgid "Catch Up"
-msgstr "Catch Up"
-
 #: src/calendar/components/event-chip.tsx
 msgid "Change auto-add folder"
 msgstr "Change auto-add folder"
@@ -769,10 +769,6 @@ msgstr "Change speaker"
 #: src/session/components/note-input/transcript/renderer/selection-menu.tsx
 msgid "Change speaker from here"
 msgstr "Change speaker from here"
-
-#: src/chat/components/chat-panel.tsx
-msgid "Chat"
-msgstr "Chat"
 
 #: src/chat/components/toolbar-controls.tsx
 msgid "Chat history"
@@ -1210,14 +1206,6 @@ msgstr "Could not export. Check the export location in Settings and try again."
 msgid "Could not generate meeting insights. Try again."
 msgstr "Could not generate meeting insights. Try again."
 
-#: src/session/components/live-assist/card.tsx
-msgid "Could not generate this suggestion."
-msgstr "Could not generate this suggestion."
-
-#: src/session/components/live-assist/card.tsx
-msgid "Could not insert into notes. Try again."
-msgstr "Could not insert into notes. Try again."
-
 #: src/automations/actions.ts
 msgid "Could not remove the automation"
 msgstr "Could not remove the automation"
@@ -1366,6 +1354,10 @@ msgstr "Date and time are required"
 msgid "Date range"
 msgstr "Date range"
 
+#: src/meeting-float/assist.ts
+msgid "Decisions"
+msgstr "Decisions"
+
 #: src/edit/tab-content.tsx
 msgid "Decline"
 msgstr "Decline"
@@ -1493,7 +1485,7 @@ msgstr "Disable all notifications"
 msgid "Disconnect"
 msgstr "Disconnect"
 
-#: src/session/components/live-assist/card.tsx
+#: src/meeting-float/assist.ts
 msgid "Dismiss"
 msgstr "Dismiss"
 
@@ -1558,6 +1550,10 @@ msgstr "Draft a follow-up email to the participants"
 #: src/chat/components/body/empty.tsx
 msgid "Draft follow-up email."
 msgstr "Draft follow-up email."
+
+#: src/meeting-float/assist.ts
+msgid "due"
+msgstr "due"
 
 #: src/templates/details.tsx
 #: src/templates/template-form.tsx
@@ -1799,10 +1795,6 @@ msgstr "Folder: {currentPath}"
 msgid "Folders"
 msgstr "Folders"
 
-#: src/session/components/live-assist/card.tsx
-msgid "Follow Up"
-msgstr "Follow Up"
-
 #: src/templates/template-icon-picker.tsx
 msgid "Food & Drink"
 msgstr "Food & Drink"
@@ -1810,6 +1802,10 @@ msgstr "Food & Drink"
 #: src/settings/general/notification.tsx
 msgid "For enabled notifications"
 msgstr "For enabled notifications"
+
+#: src/meeting-float/assist.ts
+msgid "For the summary"
+msgstr "For the summary"
 
 #: src/settings/general/audio-settings.tsx
 msgid "Forever"
@@ -1844,10 +1840,6 @@ msgstr "Generating title..."
 #: src/session/components/note-input/transcript/screens/empty.tsx
 msgid "Generating transcript..."
 msgstr "Generating transcript..."
-
-#: src/session/components/live-assist/card.tsx
-msgid "Generating…"
-msgstr "Generating…"
 
 #: src/session/components/note-input/enhanced/config-error.tsx
 msgid "Get Pro"
@@ -2089,10 +2081,6 @@ msgstr "Insert above"
 msgid "Insert below"
 msgstr "Insert below"
 
-#: src/session/components/live-assist/card.tsx
-msgid "Insert into notes"
-msgstr "Insert into notes"
-
 #: src/sidebar/settings-nav-groups.ts
 msgid "Insights"
 msgstr "Insights"
@@ -2158,6 +2146,10 @@ msgstr "Language & transcription"
 #: src/sidebar/toast/registry.tsx
 msgid "Language model needed"
 msgstr "Language model needed"
+
+#: src/meeting-float/assist.ts
+msgid "Last 2 min"
+msgstr "Last 2 min"
 
 #. placeholder {0}: webhook.last_delivery_status
 #: src/settings/developers/webhooks.tsx
@@ -2225,11 +2217,11 @@ msgstr "Listening…"
 msgid "Little steps worth keeping. Collect them at your own pace."
 msgstr "Little steps worth keeping. Collect them at your own pace."
 
+#: src/meeting-float/assist.ts
 #: src/settings/ai/stt/select.tsx
 msgid "Live"
 msgstr "Live"
 
-#: src/chat/components/chat-panel.tsx
 #: src/settings/general/meeting-settings.tsx
 msgid "Live Assist"
 msgstr "Live Assist"
@@ -2354,6 +2346,10 @@ msgstr "MCP configuration copied"
 #: src/settings/developers/cli.tsx
 msgid "MCP server"
 msgstr "MCP server"
+
+#: src/meeting-float/assist.ts
+msgid "Me"
+msgstr "Me"
 
 #. placeholder {0}: number.format(stats.timedConversations)
 #: src/settings/stats/insights.tsx
@@ -2566,6 +2562,10 @@ msgstr "next week"
 msgid "No"
 msgstr "No"
 
+#: src/meeting-float/assist.ts
+msgid "No action items yet."
+msgstr "No action items yet."
+
 #: src/imports/screen.tsx
 #: src/settings/general/notification.tsx
 msgid "No apps found."
@@ -2671,6 +2671,10 @@ msgstr "No models available."
 #: src/settings/ai/shared/model-combobox.tsx
 msgid "No models ready to use."
 msgstr "No models ready to use."
+
+#: src/meeting-float/assist.ts
+msgid "No owner"
+msgstr "No owner"
 
 #: src/session/components/note-input/transcript/renderer/speaker-assign.tsx
 msgid "No people"
@@ -3055,6 +3059,14 @@ msgstr "Production"
 #: src/settings/general/e2ee-setup.tsx
 msgid "Protect cloud sync"
 msgstr "Protect cloud sync"
+
+#: src/meeting-float/assist.ts
+msgid "Questions"
+msgstr "Questions"
+
+#: src/meeting-float/assist.ts
+msgid "Questions to ask will show up once the conversation gets going."
+msgstr "Questions to ask will show up once the conversation gets going."
 
 #: src/session/components/note-input/transcript/screens/empty.tsx
 msgid "Re-transcribe"
@@ -3566,10 +3578,6 @@ msgstr "Shared screens"
 msgid "Shared summary"
 msgstr "Shared summary"
 
-#: src/settings/general/meeting-settings.tsx
-msgid "Show AI suggestions (catch-up, action items, follow-up questions) in a side panel while a meeting is being transcribed live. Sends transcript excerpts to your configured AI provider every minute."
-msgstr "Show AI suggestions (catch-up, action items, follow-up questions) in a side panel while a meeting is being transcribed live. Sends transcript excerpts to your configured AI provider every minute."
-
 #: src/sidebar/timeline/item.tsx
 msgid "Show All Recurring Events"
 msgstr "Show All Recurring Events"
@@ -3700,6 +3708,10 @@ msgstr "Sign in with your Claude account. After you authorize, copy the code and
 #: src/settings/developers/webhooks.tsx
 msgid "Signing secret copied"
 msgstr "Signing secret copied"
+
+#: src/meeting-float/assist.ts
+msgid "Since the start"
+msgstr "Since the start"
 
 #: src/settings/appearance/app-icon.tsx
 msgid "Sketch"
@@ -3932,6 +3944,7 @@ msgstr "Suggested templates"
 
 #: src/contacts/details.tsx
 #: src/edit/tab-content.tsx
+#: src/meeting-float/assist.ts
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Summary"
 msgstr "Summary"
@@ -3957,9 +3970,9 @@ msgstr "Summary generation failed"
 msgid "Summary ready"
 msgstr "Summary ready"
 
-#: src/session/components/live-assist/card.tsx
-msgid "Summary So Far"
-msgstr "Summary So Far"
+#: src/meeting-float/assist.ts
+msgid "Summary template"
+msgstr "Summary template"
 
 #: src/settings/general/week-start.tsx
 msgid "Sunday"
@@ -4039,6 +4052,14 @@ msgstr "Test runs are not available yet."
 msgid "The page you're looking for doesn't exist."
 msgstr "The page you're looking for doesn't exist."
 
+#: src/meeting-float/assist.ts
+msgid "The summary after the call will use this template."
+msgstr "The summary after the call will use this template."
+
+#: src/meeting-float/assist.ts
+msgid "The summary shows up after the first minute of conversation."
+msgstr "The summary shows up after the first minute of conversation."
+
 #: src/sidebar/toast/registry.tsx
 msgid "The update download failed"
 msgstr "The update download failed"
@@ -4096,6 +4117,14 @@ msgstr "Tip: Add teammate names, acronyms, company jargon, and product terms."
 #: src/session/components/note-input/enhanced/streaming.tsx
 msgid "Tip: The BlackMushi team loves our users!"
 msgstr "Tip: The BlackMushi team loves our users!"
+
+#: src/meeting-float/assist.ts
+msgid "to clarify"
+msgstr "to clarify"
+
+#: src/meeting-float/assist.ts
+msgid "To-do"
+msgstr "To-do"
 
 #: src/sidebar/timeline/utils/index.ts
 msgid "Today"
@@ -4420,6 +4449,10 @@ msgstr "When off, summaries follow the detected meeting language."
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"
 msgstr "When this happens"
+
+#: src/settings/general/meeting-settings.tsx
+msgid "While a meeting is transcribed live, the floating bar suggests the questions to ask, drafts the to-do and keeps a running summary. Sends the new transcript to your configured AI provider about once a minute."
+msgstr "While a meeting is transcribed live, the floating bar suggests the questions to ask, drafts the to-do and keeps a running summary. Sends the new transcript to your configured AI provider about once a minute."
 
 #: src/settings/ai/stt/local-file-model.tsx
 msgid "whisper.cpp models"

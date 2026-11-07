@@ -6,7 +6,10 @@ import {
   type LiveAssistTemplate,
 } from "~/session/insights/live-assist";
 
+export type LiveAssistTemplateOption = { id: string; title: string };
+
 export type LiveAssistSessionState = {
+  templates: LiveAssistTemplateOption[];
   snapshot: LiveAssistSnapshot;
   template: LiveAssistTemplate;
   dismissed: string[];
@@ -15,6 +18,7 @@ export type LiveAssistSessionState = {
 };
 
 const EMPTY_SESSION: LiveAssistSessionState = {
+  templates: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
   template: { id: null, source: "auto" },
   dismissed: [],
@@ -30,6 +34,10 @@ type LiveAssistActions = {
   setStatus: (
     sessionId: string,
     status: LiveAssistSessionState["status"],
+  ) => void;
+  setTemplates: (
+    sessionId: string,
+    templates: LiveAssistTemplateOption[],
   ) => void;
   applyUpdate: (
     sessionId: string,
@@ -62,6 +70,8 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
       sessions: {},
       setStatus: (sessionId, status) =>
         updateSession(sessionId, (session) => ({ ...session, status })),
+      setTemplates: (sessionId, templates) =>
+        updateSession(sessionId, (session) => ({ ...session, templates })),
       applyUpdate: (sessionId, { snapshot, template, updatedAtMs }) =>
         updateSession(sessionId, (session) => ({
           ...session,

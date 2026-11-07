@@ -70,6 +70,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       stop();
     }
     if (activeSessionId && !current) {
+      void refreshTemplates(activeSessionId);
       current = {
         sessionId: activeSessionId,
         processedEndMs: 0,
@@ -120,6 +121,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         session.context,
         listTemplateCandidates(),
       ]);
+      useLiveAssistStore.getState().setTemplates(
+        sessionId,
+        candidates.map(({ id, title }) => ({ id, title })),
+      );
       const before = getLiveAssistSession(sessionId);
       const templateTitle =
         candidates.find((candidate) => candidate.id === before.template.id)
@@ -220,6 +225,14 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       stop();
     },
   };
+}
+
+async function refreshTemplates(sessionId: string) {
+  const candidates = await listTemplateCandidates().catch(() => []);
+  useLiveAssistStore.getState().setTemplates(
+    sessionId,
+    candidates.map(({ id, title }) => ({ id, title })),
+  );
 }
 
 async function loadCallContext(sessionId: string) {

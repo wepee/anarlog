@@ -125,9 +125,10 @@ export function MeetingSettingsView({
         title={<Trans>Live Assist</Trans>}
         description={
           <Trans>
-            Show AI suggestions (catch-up, action items, follow-up questions) in
-            a side panel while a meeting is being transcribed live. Sends
-            transcript excerpts to your configured AI provider every minute.
+            While a meeting is transcribed live, the floating bar suggests the
+            questions to ask, drafts the to-do and keeps a running summary.
+            Sends the new transcript to your configured AI provider about once a
+            minute.
           </Trans>
         }
         checked={liveAssistEnabled.value}
