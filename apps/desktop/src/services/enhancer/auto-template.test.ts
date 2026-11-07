@@ -17,6 +17,10 @@ vi.mock("~/templates/queries", () => ({
     { id: "sales", title: "Commercial", description: "", sections: [] },
   ]),
 }));
+vi.mock("~/session/live-assist/journal", () => ({
+  liveAssistLog: vi.fn(),
+  describeError: (error: unknown) => error,
+}));
 vi.mock("~/templates/detect", () => ({
   detectCallTemplate: mocks.detectCallTemplate,
 }));
@@ -34,7 +38,7 @@ describe("resolveAutoTemplateId", () => {
   });
 
   it("keeps a template picked by hand during the call", async () => {
-    mocks.detectCallTemplate.mockResolvedValue("sales");
+    mocks.detectCallTemplate.mockResolvedValue({ templateId: "sales" });
     setManualTemplateChoice("manual-session", null);
 
     await expect(
@@ -48,7 +52,7 @@ describe("resolveAutoTemplateId", () => {
   });
 
   it("falls back to the default template without a proven detection", async () => {
-    mocks.detectCallTemplate.mockResolvedValue(null);
+    mocks.detectCallTemplate.mockResolvedValue({ templateId: null });
 
     await expect(
       resolveAutoTemplateId({

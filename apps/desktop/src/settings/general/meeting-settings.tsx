@@ -1,7 +1,15 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { useMutation } from "@tanstack/react-query";
 import { platform } from "@tauri-apps/plugin-os";
 
-import { SettingSwitchRow } from "~/settings/setting-row";
+import { Button } from "@anlg/ui/components/ui/button";
+import { toast } from "@anlg/ui/components/ui/toast";
+
+import {
+  copyLiveAssistJournal,
+  saveLiveAssistJournal,
+} from "~/session/live-assist/journal";
+import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
 
 interface SettingItem {
   value: boolean;
@@ -134,6 +142,58 @@ export function MeetingSettingsView({
         checked={liveAssistEnabled.value}
         onChange={liveAssistEnabled.onChange}
       />
+      {liveAssistEnabled.value && <LiveAssistJournalRow />}
     </div>
+  );
+}
+
+function LiveAssistJournalRow() {
+  const { t } = useLingui();
+  const copy = useMutation({
+    mutationFn: copyLiveAssistJournal,
+    onSuccess: () => toast.success(t`Live Assist log copied.`),
+    onError: (error) => toast.error(error.message),
+  });
+  const save = useMutation({
+    mutationFn: saveLiveAssistJournal,
+    onSuccess: () => toast.success(t`Live Assist log saved to Downloads.`),
+    onError: (error) => toast.error(error.message),
+  });
+
+  return (
+    <SettingRow
+      title={<Trans>Live Assist log</Trans>}
+      description={
+        <Trans>
+          Everything Live Assist did since BlackMushi started: prompts, model
+          answers and template choices. It includes excerpts of your calls and
+          only leaves your computer if you share it.
+        </Trans>
+      }
+      controlWidth="content"
+    >
+      {() => (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={copy.isPending}
+            onClick={() => copy.mutate()}
+          >
+            <Trans>Copy</Trans>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={save.isPending}
+            onClick={() => save.mutate()}
+          >
+            <Trans>Save</Trans>
+          </Button>
+        </div>
+      )}
+    </SettingRow>
   );
 }

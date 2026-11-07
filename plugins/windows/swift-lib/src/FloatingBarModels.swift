@@ -64,6 +64,7 @@ struct FloatingAssistPayload: Codable, Equatable {
     let lastMinutes, sinceStart, toCover, decisions: String
     let due, toClarify, dismiss, templateMenu, templateFooter, auto: String
     let emptyQuestions, emptyTodo, emptySummary: String
+    let saveLog: String
   }
 
   struct Template: Codable, Equatable {

@@ -6,8 +6,8 @@ import type {
 } from "@anlg/plugin-transcription";
 
 import {
-  acceptTemplateProposal,
   type CallTemplateCandidate,
+  explainTemplateProposal,
   formatTemplateCandidates,
   TEMPLATE_RULES,
   templateProposalSchema,
@@ -385,18 +385,34 @@ export function nextLiveAssistTemplate(
   candidates: CallTemplateCandidate[],
   transcript: string,
 ): LiveAssistTemplate {
+  return decideLiveAssistTemplate(current, output, candidates, transcript)
+    .template;
+}
+
+export function decideLiveAssistTemplate(
+  current: LiveAssistTemplate,
+  output: LiveAssistOutput,
+  candidates: CallTemplateCandidate[],
+  transcript: string,
+): { template: LiveAssistTemplate; reason: string } {
   if (current.source === "manual") {
-    return current;
+    return { template: current, reason: "kept_manual_choice" };
   }
-  const accepted = acceptTemplateProposal(
+  const decision = explainTemplateProposal(
     output.template,
     candidates,
     transcript,
   );
-  if (!accepted || accepted === current.id) {
-    return current;
+  if (!decision.templateId) {
+    return { template: current, reason: decision.reason };
   }
-  return { id: accepted, source: "auto" };
+  if (decision.templateId === current.id) {
+    return { template: current, reason: "confirmed_current" };
+  }
+  return {
+    template: { id: decision.templateId, source: "auto" },
+    reason: "switched",
+  };
 }
 
 export function getAutoCoverageLabels(language: string): string[] {

@@ -2,6 +2,7 @@ import type { TemplateSection } from "@anlg/store";
 
 import { insertUserTemplate, listUserTemplates } from "./queries";
 
+import { liveAssistLog } from "~/session/live-assist/journal";
 import { getStoredSettingValues, setSettingValue } from "~/settings/queries";
 
 type CallTemplateDefinition = {
@@ -273,6 +274,9 @@ export function ensureCallTemplates(): Promise<void> {
   seeding ??= seedCallTemplates().catch((error) => {
     seeding = null;
     console.error("[templates] failed to add call templates", error);
+    liveAssistLog("templates.seed_failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
   });
   return seeding;
 }
@@ -283,6 +287,8 @@ async function seedCallTemplates() {
     return;
   }
 
+  const added: string[] = [];
+  const skipped: string[] = [];
   const existingTitles = new Set(
     (await listUserTemplates()).map((template) =>
       template.title.trim().toLowerCase(),
@@ -290,6 +296,7 @@ async function seedCallTemplates() {
   );
   for (const definition of getCallTemplateDefinitions(values.ai_language)) {
     if (existingTitles.has(definition.title.toLowerCase())) {
+      skipped.push(definition.title);
       continue;
     }
     await insertUserTemplate({
@@ -299,7 +306,13 @@ async function seedCallTemplates() {
       targets: undefined,
       sections: definition.sections,
     });
+    added.push(definition.title);
   }
 
   await setSettingValue("call_templates_seeded", true);
+  liveAssistLog("templates.seeded", {
+    language: values.ai_language ?? null,
+    added,
+    skippedExisting: skipped,
+  });
 }

@@ -1,6 +1,7 @@
 import type { LanguageModel } from "ai";
 
 import { hydrateSessionContext } from "~/chat/context/session-context-hydrator";
+import { describeError, liveAssistLog } from "~/session/live-assist/journal";
 import {
   type CallTemplateCandidate,
   detectCallTemplate,
@@ -19,6 +20,7 @@ export function setManualTemplateChoice(
 ) {
   manualChoices.set(sessionId, templateId);
   detections.delete(sessionId);
+  liveAssistLog("template.manual_choice", { templateId }, sessionId);
 }
 
 export function getManualTemplateChoice(
@@ -55,9 +57,19 @@ export async function resolveAutoTemplateId({
 }): Promise<string | undefined> {
   const manual = manualChoices.get(sessionId);
   if (manual !== undefined) {
+    liveAssistLog(
+      "summary.template_resolved",
+      { source: "manual", templateId: manual },
+      sessionId,
+    );
     return manual ?? undefined;
   }
   if (!model) {
+    liveAssistLog(
+      "summary.template_resolved",
+      { source: "default", reason: "no_model", templateId: defaultTemplateId },
+      sessionId,
+    );
     return defaultTemplateId;
   }
 
@@ -65,12 +77,25 @@ export async function resolveAutoTemplateId({
   if (!detection) {
     detection = detectForSession(sessionId, model).catch((error) => {
       console.error("[enhancer] template detection failed", error);
+      liveAssistLog(
+        "summary.detection_failed",
+        describeError(error),
+        sessionId,
+      );
       return null;
     });
     detections.set(sessionId, detection);
   }
 
-  return (await detection) ?? defaultTemplateId;
+  const detected = await detection;
+  liveAssistLog(
+    "summary.template_resolved",
+    detected
+      ? { source: "detected", templateId: detected }
+      : { source: "default", templateId: defaultTemplateId },
+    sessionId,
+  );
+  return detected ?? defaultTemplateId;
 }
 
 async function detectForSession(
@@ -85,13 +110,30 @@ async function detectForSession(
     .map((segment) => `${segment.speaker}: ${segment.text}`.trim())
     .join("\n");
 
-  return detectCallTemplate({
+  const title = context?.event?.name ?? context?.title ?? null;
+  const startedAt = Date.now();
+  const result = await detectCallTemplate({
     model,
-    title: context?.event?.name ?? context?.title ?? null,
+    title,
     participants: (context?.participants ?? []).map(
       (participant) => participant.name,
     ),
     transcript,
     candidates,
   });
+  liveAssistLog(
+    "summary.detection",
+    {
+      durationMs: Date.now() - startedAt,
+      title,
+      transcriptChars: transcript.length,
+      sampledChars: result.sampledChars,
+      candidates: candidates.map(({ id, title }) => ({ id, title })),
+      proposal: result.proposal,
+      outcome: result.reason,
+      templateId: result.templateId,
+    },
+    sessionId,
+  );
+  return result.templateId;
 }

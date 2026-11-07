@@ -383,7 +383,8 @@ export type AppWindow =
 export type AssistPanelAction =
   | "dismissQuestion"
   | "selectTemplate"
-  | "seenQuestions";
+  | "seenQuestions"
+  | "exportLog";
 export type ChangelogState = { previous: string | null; current: string };
 export type ContactsSelection =
   | { type: "person"; id: string }

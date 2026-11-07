@@ -37,16 +37,37 @@ export function acceptTemplateProposal(
   candidates: CallTemplateCandidate[],
   transcript: string,
 ): string | null {
-  if (!proposal || proposal.confidence !== "high" || !proposal.templateId) {
-    return null;
+  return explainTemplateProposal(proposal, candidates, transcript).templateId;
+}
+
+export type TemplateDecision = {
+  templateId: string | null;
+  reason:
+    | "accepted"
+    | "no_proposal"
+    | "not_high_confidence"
+    | "unknown_template"
+    | "evidence_not_in_transcript";
+};
+
+export function explainTemplateProposal(
+  proposal: TemplateProposal | null | undefined,
+  candidates: CallTemplateCandidate[],
+  transcript: string,
+): TemplateDecision {
+  if (!proposal || !proposal.templateId) {
+    return { templateId: null, reason: "no_proposal" };
+  }
+  if (proposal.confidence !== "high") {
+    return { templateId: null, reason: "not_high_confidence" };
   }
   if (!candidates.some((candidate) => candidate.id === proposal.templateId)) {
-    return null;
+    return { templateId: null, reason: "unknown_template" };
   }
   if (!isEvidenceInTranscript(proposal.evidence, transcript)) {
-    return null;
+    return { templateId: null, reason: "evidence_not_in_transcript" };
   }
-  return proposal.templateId;
+  return { templateId: proposal.templateId, reason: "accepted" };
 }
 
 export function isEvidenceInTranscript(
@@ -108,9 +129,16 @@ export async function detectCallTemplate({
   transcript: string;
   candidates: CallTemplateCandidate[];
   signal?: AbortSignal;
-}): Promise<string | null> {
+}): Promise<
+  TemplateDecision & { proposal: TemplateProposal | null; sampledChars: number }
+> {
   if (candidates.length === 0 || !transcript.trim()) {
-    return null;
+    return {
+      templateId: null,
+      reason: "no_proposal",
+      proposal: null,
+      sampledChars: 0,
+    };
   }
 
   const sampled = sampleTranscript(transcript);
@@ -134,5 +162,10 @@ export async function detectCallTemplate({
     timeout: { totalMs: DETECTION_TIMEOUT_MS },
   });
 
-  return acceptTemplateProposal(result.output, candidates, sampled);
+  const proposal = result.output ?? null;
+  return {
+    ...explainTemplateProposal(proposal, candidates, sampled),
+    proposal,
+    sampledChars: sampled.length,
+  };
 }

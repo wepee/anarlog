@@ -45,6 +45,11 @@ import { getDictationPanelState } from "~/dictation/panel";
 import { useDictationStatus } from "~/dictation/state";
 import { setManualTemplateChoice } from "~/services/enhancer/auto-template";
 import {
+  describeError,
+  liveAssistLog,
+  saveLiveAssistJournal,
+} from "~/session/live-assist/journal";
+import {
   getStoredSettingValues,
   setSettingValue,
   useSetSettingValues,
@@ -308,8 +313,26 @@ function FloatingMeetingWindowSync({
     windowsEvents.floatingBarAssistAction
       .listen(({ payload }) => {
         if (cancelled) return;
+        liveAssistLog(
+          "panel.action",
+          { action: payload.action, id: payload.id ?? null },
+          payload.sessionId,
+        );
+        if (payload.action === "exportLog") {
+          void saveLiveAssistJournal().catch((error) => {
+            liveAssistLog("journal.save_failed", describeError(error));
+          });
+          return;
+        }
         const store = useLiveAssistStore.getState();
-        if (!store.sessions[payload.sessionId]) return;
+        if (!store.sessions[payload.sessionId]) {
+          liveAssistLog(
+            "panel.action_ignored",
+            { reason: "no_live_assist_session" },
+            payload.sessionId,
+          );
+          return;
+        }
         if (payload.action === "dismissQuestion" && payload.id) {
           store.dismissQuestion(payload.sessionId, payload.id);
         } else if (payload.action === "selectTemplate") {
@@ -440,12 +463,40 @@ function getCurrentFloatingRouteState(
   });
 }
 
+let lastLoggedAssistJson: string | null = null;
+
 function getFloatingAssistJson(state: ListenerState): string | null {
   const sessionId = state.live.sessionId;
   const session = sessionId
     ? useLiveAssistStore.getState().sessions[sessionId]
     : undefined;
-  return session ? JSON.stringify(buildFloatingAssist(session)) : null;
+  if (!session) {
+    return null;
+  }
+  const assist = buildFloatingAssist(session);
+  const json = JSON.stringify(assist);
+  if (json !== lastLoggedAssistJson) {
+    lastLoggedAssistJson = json;
+    liveAssistLog(
+      "panel.content_sent",
+      {
+        bytes: json.length,
+        template: assist.template,
+        questions: assist.questions.length,
+        newQuestions: assist.newQuestions,
+        todoGroups: assist.todoGroups.map((group) => ({
+          owner: group.owner,
+          items: group.items.length,
+        })),
+        coverage: assist.coverage.map(
+          ({ label, status }) => `${label}: ${status}`,
+        ),
+        topics: assist.topics.length,
+      },
+      sessionId ?? undefined,
+    );
+  }
+  return json;
 }
 
 export function haveFloatingRouteInputsChanged(

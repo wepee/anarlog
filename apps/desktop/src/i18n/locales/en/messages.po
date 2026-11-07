@@ -1138,6 +1138,7 @@ msgstr "Copied"
 #: src/session/components/note-input/transcript/renderer/selection-menu.tsx
 #: src/settings/ai/llm/subscriptions/connect.tsx
 #: src/settings/developers/webhooks.tsx
+#: src/settings/general/meeting-settings.tsx
 msgid "Copy"
 msgstr "Copy"
 
@@ -1666,6 +1667,10 @@ msgstr "Every conversation adds to your story."
 #: src/imports/screen.tsx
 msgid "Everything is already here."
 msgstr "Everything is already here."
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Everything Live Assist did since BlackMushi started: prompts, model answers and template choices. It includes excerpts of your calls and only leaves your computer if you share it."
+msgstr "Everything Live Assist did since BlackMushi started: prompts, model answers and template choices. It includes excerpts of your calls and only leaves your computer if you share it."
 
 #: src/templates/auto-format-examples-dialog.tsx
 msgid "Example summary"
@@ -2225,6 +2230,18 @@ msgstr "Live"
 #: src/settings/general/meeting-settings.tsx
 msgid "Live Assist"
 msgstr "Live Assist"
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Live Assist log"
+msgstr "Live Assist log"
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Live Assist log copied."
+msgstr "Live Assist log copied."
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Live Assist log saved to Downloads."
+msgstr "Live Assist log saved to Downloads."
 
 #: src/settings/dictation.tsx
 msgid "Live transcript preview"
@@ -3337,6 +3354,7 @@ msgid "Runs after the recording finishes, not during the meeting."
 msgstr "Runs after the recording finishes, not during the meeting."
 
 #: src/settings/dictionary/index.tsx
+#: src/settings/general/meeting-settings.tsx
 #: src/templates/auto-form.tsx
 msgid "Save"
 msgstr "Save"
@@ -3364,6 +3382,10 @@ msgstr "Save PDF, text, Markdown, and Org exports to this folder."
 #: src/settings/general/meeting-settings.tsx
 msgid "Save slides and screens others share in meetings. Requires Screen Recording."
 msgstr "Save slides and screens others share in meetings. Requires Screen Recording."
+
+#: src/meeting-float/assist.ts
+msgid "Save the Live Assist log"
+msgstr "Save the Live Assist log"
 
 #: src/settings/general/e2ee-setup.tsx
 msgid "Save this key in a password manager. New devices can usually be approved from another device; this key is your fallback and will not be shown again."
