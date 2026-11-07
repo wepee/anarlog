@@ -31,6 +31,7 @@ struct FloatingBarSurface: ViewModifier {
 
 private enum FloatingAssistTab: Hashable {
   case questions
+  case answers
   case todo
   case summary
   case live
@@ -70,6 +71,7 @@ struct FloatingAssistPanelView<Live: View>: View {
 
   @State private var tab: FloatingAssistTab = .questions
   @State private var period: FloatingAssistPeriod = .recent
+  @State private var draft = ""
 
   private let amber = Color(red: 1, green: 0.82, blue: 0.48)
   private let green = Color(red: 0.55, green: 0.88, blue: 0.67)
@@ -83,6 +85,11 @@ struct FloatingAssistPanelView<Live: View>: View {
       Group {
         switch tab {
         case .questions: scrolling { questionsTab }
+        case .answers:
+          VStack(spacing: 8) {
+            askField
+            scrolling { answersTab }
+          }
         case .todo: scrolling { todoTab }
         case .summary: scrolling { summaryTab }
         case .live: live()
@@ -93,12 +100,16 @@ struct FloatingAssistPanelView<Live: View>: View {
     .foregroundStyle(primary)
     .onAppear(perform: markSeenIfNeeded)
     .onChange(of: assist.newQuestions) { _, _ in markSeenIfNeeded() }
+    .onChange(of: assist.newAnswers) { _, _ in markSeenIfNeeded() }
     .onChange(of: tab) { _, _ in markSeenIfNeeded() }
   }
 
   private func markSeenIfNeeded() {
     if tab == .questions, assist.newQuestions > 0 {
       onAction("seenQuestions", nil)
+    }
+    if tab == .answers, assist.newAnswers > 0 {
+      onAction("seenAnswers", nil)
     }
   }
 
@@ -110,6 +121,7 @@ struct FloatingAssistPanelView<Live: View>: View {
       }
       HStack(spacing: 2) {
         tabButton(.questions, assist.labels.questions, count: assist.newQuestions)
+        tabButton(.answers, assist.labels.answers, count: assist.newAnswers)
         tabButton(.todo, assist.labels.todo)
         tabButton(.summary, assist.labels.summary)
         tabButton(.live, assist.labels.live)
@@ -307,6 +319,79 @@ struct FloatingAssistPanelView<Live: View>: View {
     default:
       Circle().strokeBorder(secondary, lineWidth: 1.5).frame(width: 9, height: 9)
     }
+  }
+
+  private var askField: some View {
+    TextField(assist.labels.askPlaceholder, text: $draft)
+      .textFieldStyle(.plain)
+      .font(.system(size: 13))
+      .padding(.horizontal, 14)
+      .padding(.vertical, 8)
+      .background(Capsule().fill(Color.black.opacity(isDark ? 0.22 : 0.06)))
+      .overlay(Capsule().strokeBorder(primary.opacity(0.14), lineWidth: 0.5))
+      .padding(.horizontal, 16)
+      .onSubmit {
+        let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else { return }
+        onAction("ask", question)
+        draft = ""
+      }
+  }
+
+  @ViewBuilder
+  private var answersTab: some View {
+    if assist.answers.isEmpty {
+      emptyText(assist.labels.emptyAnswers)
+    } else {
+      ForEach(Array(assist.answers.enumerated()), id: \.element.id) { index, answer in
+        if index > 0 {
+          Divider().opacity(0.6)
+        }
+        answerRow(answer)
+      }
+    }
+  }
+
+  private func answerRow(_ answer: FloatingAssistPayload.Answer) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        if answer.isNew {
+          Circle().fill(amber).frame(width: 7, height: 7)
+        }
+        Text(
+          answer.origin == "asked"
+            ? "\(assist.labels.youAsked) · \(answer.question)" : answer.question
+        )
+        .font(.system(size: 12))
+        .foregroundStyle(secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      }
+      Text(
+        answer.status == "ready"
+          ? answer.answer
+          : answer.status == "error" ? assist.labels.noAnswer : assist.labels.answering
+      )
+      .font(.system(size: 14, weight: .medium))
+      .fixedSize(horizontal: false, vertical: true)
+      ForEach(Array(answer.sources.enumerated()), id: \.offset) { _, source in
+        if let urlString = source.url, let url = URL(string: urlString) {
+          Link(destination: url) {
+            Text("↗ \(source.label)").font(.system(size: 11, design: .monospaced))
+          }
+          .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
+        } else {
+          Text(sourceMarker(source))
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
+        }
+      }
+    }
+    .padding(.vertical, 10)
+  }
+
+  private func sourceMarker(_ source: FloatingAssistPayload.AnswerSource) -> String {
+    let marker = source.kind == "obsidian" ? "◆" : "■"
+    return "\(marker) \(source.label)"
   }
 
   @ViewBuilder

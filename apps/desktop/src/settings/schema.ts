@@ -287,6 +287,16 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "live_assist_web_research"],
     default: true as boolean,
   },
+  live_assist_auto_answers: {
+    type: "boolean",
+    path: ["general", "live_assist_auto_answers"],
+    default: true as boolean,
+  },
+  obsidian_vault_path: {
+    type: "string",
+    path: ["general", "obsidian_vault_path"],
+    default: "" as string,
+  },
   call_templates_seeded: {
     type: "boolean",
     path: ["general", "call_templates_seeded"],

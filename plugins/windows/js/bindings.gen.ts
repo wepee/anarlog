@@ -383,7 +383,12 @@ export type AppWindow =
 export type AssistPanelAction =
   | "dismissQuestion"
   | "selectTemplate"
-  | "seenQuestions";
+  | "seenQuestions"
+  /**
+   * Ask a question to the LLM; the question text travels in `id`.
+   */
+  | "ask"
+  | "seenAnswers";
 export type ChangelogState = { previous: string | null; current: string };
 export type ContactsSelection =
   | { type: "person"; id: string }
@@ -401,7 +406,8 @@ export type FloatingBarAssistAction = {
   sessionId: string;
   action: AssistPanelAction;
   /**
-   * The question to dismiss, or the template to select (null for Auto).
+   * The question to dismiss, the template to select (null for Auto), or
+   * the text of a question to ask.
    */
   id?: string | null;
 };

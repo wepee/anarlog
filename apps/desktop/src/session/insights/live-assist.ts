@@ -460,3 +460,60 @@ export function getCoverageLabels(
     ? sections.slice(0, 8)
     : getAutoCoverageLabels(language);
 }
+
+const QUESTION_MIN_WORDS = 4;
+
+// Questions the other side asked since the last scan: a finished sentence
+// ending with "?", from anyone but the user, long enough to be a real
+// question. Cheap and local, so answers can start without waiting for the
+// next Live Assist update.
+export function detectIncomingQuestions(
+  segments: LiveTranscriptSegment[],
+  scannedEndMs: number,
+): { questions: Array<{ text: string; endMs: number }>; lastEndMs: number } {
+  const questions: Array<{ text: string; endMs: number }> = [];
+  let lastEndMs = scannedEndMs;
+
+  const fresh = segments
+    .filter((segment) => segment.end_ms > scannedEndMs)
+    .slice()
+    .sort((a, b) => a.start_ms - b.start_ms);
+  for (const segment of fresh) {
+    const isFinal =
+      segment.words.length === 0 ||
+      segment.words.every((word) => word.is_final);
+    if (!isFinal) {
+      continue;
+    }
+    lastEndMs = Math.max(lastEndMs, segment.end_ms);
+    if (segment.key.channel === "DirectMic") {
+      continue;
+    }
+    for (const match of segment.text.matchAll(/[^.!?]*\?/g)) {
+      const text = match[0].trim();
+      if (countWords(text) >= QUESTION_MIN_WORDS) {
+        questions.push({ text, endMs: segment.end_ms });
+      }
+    }
+  }
+
+  return { questions, lastEndMs };
+}
+
+export function summarizeSnapshotForAnswers(
+  snapshot: LiveAssistSnapshot,
+): string {
+  return [
+    snapshot.recent && `Recent: ${snapshot.recent}`,
+    ...snapshot.topics.map(
+      (topic) => `Topic ${topic.title}: ${topic.bullets.join("; ")}`,
+    ),
+    ...snapshot.decisions.map((decision) => `Decision: ${decision.text}`),
+    ...snapshot.todos.map(
+      (todo) =>
+        `To-do: ${todo.text}${todo.owner ? ` (${todo.owner})` : ""}${todo.due ? `, ${todo.due}` : ""}`,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}

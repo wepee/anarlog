@@ -1,6 +1,13 @@
 import { type LanguageModel, Output, streamText } from "ai";
 
+import { generateLiveAnswer, buildLiveAnswerPrompt } from "./answers";
 import { describeError, describeModel, liveAssistLog } from "./journal";
+import {
+  type KnowledgeSnippet,
+  loadObsidianVault,
+  searchMarkdownFiles,
+  searchPastNotes,
+} from "./knowledge";
 import {
   formatResearchForPrompt,
   getWebSearchTools,
@@ -16,6 +23,7 @@ import {
   buildLiveAssistPrompt,
   buildLiveAssistWindow,
   decideLiveAssistTemplate,
+  detectIncomingQuestions,
   getCoverageLabels,
   LIVE_ASSIST_MIN_INTERVAL_MS,
   LIVE_ASSIST_MIN_NEW_WORDS,
@@ -23,6 +31,7 @@ import {
   liveAssistOutputSchema,
   mergeLiveAssistOutput,
   shouldRunLiveAssistUpdate,
+  summarizeSnapshotForAnswers,
 } from "~/session/insights/live-assist";
 import { listenerStore } from "~/store/zustand/listener/instance";
 import {
@@ -33,6 +42,8 @@ import {
 const TICK_MS = 5_000;
 const GENERATION_TIMEOUT_MS = 45_000;
 const MAX_OUTPUT_TOKENS = 3_000;
+const MAX_AUTO_ANSWERS_PER_CALL = 30;
+const ANSWER_CONTEXT_MS = 3 * 60_000;
 
 type EngineConfig = {
   enabled: boolean;
@@ -41,6 +52,8 @@ type EngineConfig = {
   spokenLanguages: string[];
   useMainLanguage: boolean;
   researchEnabled: boolean;
+  autoAnswers: boolean;
+  obsidianPath: string;
 };
 
 type RunningSession = {
@@ -52,6 +65,10 @@ type RunningSession = {
   updates: number;
   lastSkipReason: string | null;
   researched: Set<string>;
+  questionsScannedEndMs: number;
+  seenQuestions: Set<string>;
+  autoAnswers: number;
+  answering: boolean;
   controller: AbortController | null;
   context: Promise<{ title: string | null; participants: string[] }> | null;
 };
@@ -149,6 +166,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         updates: 0,
         lastSkipReason: null,
         researched: new Set(),
+        questionsScannedEndMs: 0,
+        seenQuestions: new Set(),
+        autoAnswers: 0,
+        answering: false,
         controller: null,
         context: null,
       };
@@ -164,6 +185,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     }
 
     const segments = listenerStore.getState().liveSegments;
+    scanQuestions(session, segments, config);
+    void processAnswers(session);
     const window = buildLiveAssistWindow(segments, session.processedEndMs);
     const nowMs = Date.now();
     if (
@@ -462,6 +485,188 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     }
   };
 
+  const scanQuestions = (
+    session: RunningSession,
+    segments: ReturnType<typeof listenerStore.getState>["liveSegments"],
+    config: EngineConfig,
+  ) => {
+    const { questions, lastEndMs } = detectIncomingQuestions(
+      segments,
+      session.questionsScannedEndMs,
+    );
+    session.questionsScannedEndMs = lastEndMs;
+    if (!config.autoAnswers) {
+      return;
+    }
+    for (const question of questions) {
+      const key = question.text.toLowerCase().replace(/\s+/g, " ");
+      if (session.seenQuestions.has(key)) {
+        continue;
+      }
+      session.seenQuestions.add(key);
+      if (session.autoAnswers >= MAX_AUTO_ANSWERS_PER_CALL) {
+        liveAssistLog(
+          "answer.skipped",
+          { question: question.text, reason: "limit_reached" },
+          session.sessionId,
+        );
+        continue;
+      }
+      session.autoAnswers += 1;
+      useLiveAssistStore.getState().queueAnswer(session.sessionId, {
+        id: crypto.randomUUID(),
+        question: question.text,
+        origin: "auto",
+      });
+      liveAssistLog(
+        "answer.question_detected",
+        { question: question.text, atMs: question.endMs },
+        session.sessionId,
+      );
+    }
+  };
+
+  const processAnswers = async (session: RunningSession) => {
+    const config = getConfig();
+    if (session.answering || current !== session || !config.model) {
+      return;
+    }
+    const { sessionId } = session;
+    const queued = getLiveAssistSession(sessionId)
+      .answers.filter((answer) => answer.status === "queued")
+      .sort(
+        (a, b) =>
+          (a.origin === "asked" ? 0 : 1) - (b.origin === "asked" ? 0 : 1) ||
+          a.createdAtMs - b.createdAtMs,
+      );
+    const next = queued[0];
+    if (!next) {
+      return;
+    }
+
+    session.answering = true;
+    const store = useLiveAssistStore.getState();
+    store.updateAnswer(sessionId, next.id, { status: "answering" });
+    const startedAt = Date.now();
+    try {
+      session.context ??= loadCallContext(sessionId);
+      const segments = listenerStore.getState().liveSegments;
+      const lastEndMs = segments.reduce(
+        (max, segment) => Math.max(max, segment.end_ms),
+        0,
+      );
+      const transcript = buildLiveAssistWindow(
+        segments,
+        lastEndMs - ANSWER_CONTEXT_MS + 120_000,
+      ).text;
+      const [context, language] = await Promise.all([
+        session.context,
+        resolveCallLanguage(config, transcript),
+      ]);
+
+      const snippets: KnowledgeSnippet[] = [];
+      try {
+        snippets.push(...(await searchPastNotes(next.question, sessionId)));
+      } catch (error) {
+        liveAssistLog("answer.notes_failed", describeError(error), sessionId);
+      }
+      if (config.obsidianPath) {
+        try {
+          const files = await loadObsidianVault(config.obsidianPath);
+          snippets.push(...searchMarkdownFiles(files, next.question));
+        } catch (error) {
+          liveAssistLog(
+            "answer.obsidian_failed",
+            describeError(error),
+            sessionId,
+          );
+        }
+      }
+      const webTools = config.researchEnabled
+        ? getWebSearchTools(config.model)
+        : null;
+      const latest = getLiveAssistSession(sessionId);
+      const prompt = buildLiveAnswerPrompt({
+        question: next.question,
+        origin: next.origin,
+        language,
+        callTitle: context.title,
+        callState: summarizeSnapshotForAnswers(latest.snapshot),
+        transcript,
+        snippets,
+      });
+      liveAssistLog(
+        "answer.started",
+        {
+          id: next.id,
+          origin: next.origin,
+          question: next.question,
+          language,
+          web: Boolean(webTools),
+          snippets: snippets.map(({ tag, kind, title }) => ({
+            tag,
+            kind,
+            title,
+          })),
+          prompt,
+        },
+        sessionId,
+      );
+
+      const result = await generateLiveAnswer({
+        model: config.model,
+        prompt,
+        snippets,
+        webTools,
+      });
+      if (current !== session) {
+        return;
+      }
+      if (result.status === "skipped") {
+        if (next.origin === "auto") {
+          store.removeAnswer(sessionId, next.id);
+        } else {
+          store.updateAnswer(sessionId, next.id, { status: "error" });
+        }
+      } else {
+        store.updateAnswer(sessionId, next.id, {
+          status: "ready",
+          answer: result.answer,
+          sources: result.sources,
+        });
+      }
+      liveAssistLog(
+        "answer.done",
+        {
+          id: next.id,
+          status: result.status,
+          durationMs: Date.now() - startedAt,
+          rawText: result.rawText,
+          sources: result.sources,
+        },
+        sessionId,
+      );
+    } catch (error) {
+      if (current === session) {
+        store.updateAnswer(sessionId, next.id, { status: "error" });
+      }
+      liveAssistLog(
+        "answer.failed",
+        {
+          id: next.id,
+          durationMs: Date.now() - startedAt,
+          error: describeError(error),
+        },
+        sessionId,
+      );
+    } finally {
+      session.answering = false;
+      if (current === session) {
+        void processAnswers(session);
+      }
+    }
+  };
+
   const interval = setInterval(() => void tick(), TICK_MS);
   const unsubscribeListener = listenerStore.subscribe((state, previous) => {
     if (
@@ -477,6 +682,14 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     const sessionId = current?.sessionId;
     if (!sessionId) {
       return;
+    }
+    const answers = state.sessions[sessionId]?.answers;
+    if (
+      current &&
+      answers !== previous.sessions[sessionId]?.answers &&
+      answers?.some((answer) => answer.status === "queued")
+    ) {
+      void processAnswers(current);
     }
     const next = state.sessions[sessionId]?.template;
     const before = previous.sessions[sessionId]?.template;

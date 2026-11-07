@@ -5,12 +5,27 @@ import {
   type LiveAssistSnapshot,
   type LiveAssistTemplate,
 } from "~/session/insights/live-assist";
+import type { LiveAnswerSource } from "~/session/live-assist/answers";
 import type { LiveAssistResearch } from "~/session/live-assist/research";
 
 export type LiveAssistTemplateOption = { id: string; title: string };
 
+export type LiveAssistAnswer = {
+  id: string;
+  question: string;
+  origin: "auto" | "asked";
+  status: "queued" | "answering" | "ready" | "error";
+  answer: string;
+  sources: LiveAnswerSource[];
+  isNew: boolean;
+  createdAtMs: number;
+};
+
+const MAX_ANSWERS = 20;
+
 export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
+  answers: LiveAssistAnswer[];
   research: LiveAssistResearch[];
   snapshot: LiveAssistSnapshot;
   template: LiveAssistTemplate;
@@ -21,6 +36,7 @@ export type LiveAssistSessionState = {
 
 const EMPTY_SESSION: LiveAssistSessionState = {
   templates: [],
+  answers: [],
   research: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
   template: { id: null, source: "auto" },
@@ -43,6 +59,17 @@ type LiveAssistActions = {
     templates: LiveAssistTemplateOption[],
   ) => void;
   addResearch: (sessionId: string, research: LiveAssistResearch) => void;
+  queueAnswer: (
+    sessionId: string,
+    answer: Pick<LiveAssistAnswer, "id" | "question" | "origin">,
+  ) => void;
+  updateAnswer: (
+    sessionId: string,
+    answerId: string,
+    patch: Partial<Pick<LiveAssistAnswer, "status" | "answer" | "sources">>,
+  ) => void;
+  removeAnswer: (sessionId: string, answerId: string) => void;
+  markAnswersSeen: (sessionId: string) => void;
   applyUpdate: (
     sessionId: string,
     update: {
@@ -76,6 +103,45 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
         updateSession(sessionId, (session) => ({ ...session, status })),
       setTemplates: (sessionId, templates) =>
         updateSession(sessionId, (session) => ({ ...session, templates })),
+      queueAnswer: (sessionId, answer) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          answers: [
+            {
+              ...answer,
+              status: "queued" as const,
+              answer: "",
+              sources: [],
+              isNew: answer.origin === "auto",
+              createdAtMs: Date.now(),
+            },
+            ...session.answers,
+          ].slice(0, MAX_ANSWERS),
+        })),
+      updateAnswer: (sessionId, answerId, patch) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          answers: session.answers.map((answer) =>
+            answer.id === answerId ? { ...answer, ...patch } : answer,
+          ),
+        })),
+      removeAnswer: (sessionId, answerId) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          answers: session.answers.filter((answer) => answer.id !== answerId),
+        })),
+      markAnswersSeen: (sessionId) =>
+        updateSession(sessionId, (session) =>
+          session.answers.some((answer) => answer.isNew)
+            ? {
+                ...session,
+                answers: session.answers.map((answer) => ({
+                  ...answer,
+                  isNew: false,
+                })),
+              }
+            : session,
+        ),
       addResearch: (sessionId, research) =>
         updateSession(sessionId, (session) => ({
           ...session,

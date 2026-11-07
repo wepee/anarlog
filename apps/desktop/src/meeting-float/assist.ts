@@ -26,6 +26,12 @@ export type FloatingAssist = {
     emptyQuestions: string;
     emptyTodo: string;
     emptySummary: string;
+    answers: string;
+    askPlaceholder: string;
+    answering: string;
+    noAnswer: string;
+    emptyAnswers: string;
+    youAsked: string;
   };
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
@@ -54,12 +60,28 @@ export type FloatingAssist = {
     bullets: string[];
   }>;
   newQuestions: number;
+  answers: Array<{
+    id: string;
+    question: string;
+    origin: "auto" | "asked";
+    status: "queued" | "answering" | "ready" | "error";
+    answer: string;
+    sources: Array<{
+      kind: "note" | "obsidian" | "web";
+      label: string;
+      url: string | null;
+    }>;
+    isNew: boolean;
+  }>;
+  newAnswers: number;
 };
 
 export type FloatingAssistAction =
   | { action: "dismissQuestion"; id: string }
   | { action: "selectTemplate"; id: string | null }
-  | { action: "seenQuestions" };
+  | { action: "seenQuestions" }
+  | { action: "ask"; id: string }
+  | { action: "seenAnswers" };
 
 const SELF_OWNERS = new Set(["you", "vous", "moi", "me"]);
 
@@ -121,6 +143,12 @@ export function buildFloatingAssist(
       emptyQuestions: t`Questions to ask will show up once the conversation gets going.`,
       emptyTodo: t`No action items yet.`,
       emptySummary: t`The summary shows up after the first minute of conversation.`,
+      answers: t`Answers`,
+      askPlaceholder: t`Ask about this call…`,
+      answering: t`Answering…`,
+      noAnswer: t`No answer found.`,
+      emptyAnswers: t`Questions asked to you get a suggested answer here. You can also ask your own.`,
+      youAsked: t`You asked`,
     },
     template: {
       id: template.id,
@@ -156,5 +184,19 @@ export function buildFloatingAssist(
     })),
     newQuestions: snapshot.questions.filter((question) => question.isNew)
       .length,
+    answers: session.answers.map(
+      ({ id, question, origin, status, answer, sources, isNew }) => ({
+        id,
+        question,
+        origin,
+        status,
+        answer,
+        sources,
+        isNew,
+      }),
+    ),
+    newAnswers: session.answers.filter(
+      (answer) => answer.isNew && answer.status === "ready",
+    ).length,
   };
 }

@@ -5,7 +5,7 @@ import { cn } from "@anlg/utils";
 
 import type { FloatingAssist, FloatingAssistAction } from "../assist";
 
-type Tab = "questions" | "todo" | "summary" | "live";
+type Tab = "questions" | "answers" | "todo" | "summary" | "live";
 
 // The Live Assist panel of the webview overlay (Windows, Linux). macOS draws
 // the same content natively in FloatingBarView.swift.
@@ -34,8 +34,15 @@ export function AssistPanel({
     }
   }, [tab, assist.newQuestions, onAction]);
 
+  useEffect(() => {
+    if (tab === "answers" && assist.newAnswers > 0) {
+      onAction({ action: "seenAnswers" });
+    }
+  }, [tab, assist.newAnswers, onAction]);
+
   const tabs: Array<{ id: Tab; label: string; count?: number }> = [
     { id: "questions", label: labels.questions, count: assist.newQuestions },
+    { id: "answers", label: labels.answers, count: assist.newAnswers },
     { id: "todo", label: labels.todo },
     { id: "summary", label: labels.summary },
     { id: "live", label: labels.live },
@@ -116,6 +123,15 @@ export function AssistPanel({
             onAction={onAction}
           />
         )}
+        {tab === "answers" && (
+          <AnswersTab
+            assist={assist}
+            muted={muted}
+            hairline={hairline}
+            dark={dark}
+            onAction={onAction}
+          />
+        )}
         {tab === "todo" && <TodoTab assist={assist} muted={muted} />}
         {tab === "summary" && (
           <SummaryTab assist={assist} muted={muted} dark={dark} />
@@ -177,6 +193,100 @@ export function AssistPanel({
           </p>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function AnswersTab({
+  assist,
+  muted,
+  hairline,
+  dark,
+  onAction,
+}: {
+  assist: FloatingAssist;
+  muted: string;
+  hairline: string;
+  dark: boolean;
+  onAction: (action: FloatingAssistAction) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const { labels } = assist;
+
+  return (
+    <div className="flex flex-col gap-3 pt-1">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const question = draft.trim();
+          if (!question) return;
+          onAction({ action: "ask", id: question });
+          setDraft("");
+        }}
+      >
+        <input
+          type="text"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder={labels.askPlaceholder}
+          aria-label={labels.askPlaceholder}
+          className="w-full rounded-full px-3.5 py-2 text-[13px] outline-none"
+          style={{
+            background: dark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.7)",
+            boxShadow: `inset 0 0 0 0.5px ${hairline}`,
+          }}
+        />
+      </form>
+      {assist.answers.length === 0 ? (
+        <p className="text-[13px]" style={{ color: muted }}>
+          {labels.emptyAnswers}
+        </p>
+      ) : (
+        <ul className="flex flex-col">
+          {assist.answers.map((answer, index) => (
+            <li
+              key={answer.id}
+              className="flex flex-col gap-1 py-2.5"
+              style={{
+                borderTop: index === 0 ? undefined : `0.5px solid ${hairline}`,
+              }}
+            >
+              <p className="text-[12px] leading-[1.4]" style={{ color: muted }}>
+                {answer.isNew ? (
+                  <span
+                    aria-hidden
+                    className="mr-1.5 inline-block size-[7px] rounded-full align-[1px]"
+                    style={{ background: "rgb(255, 210, 122)" }}
+                  />
+                ) : null}
+                {answer.origin === "asked" ? `${labels.youAsked} · ` : ""}
+                {answer.question}
+              </p>
+              <p className="text-[14px] leading-[1.42] font-medium">
+                {answer.status === "ready"
+                  ? answer.answer
+                  : answer.status === "error"
+                    ? labels.noAnswer
+                    : labels.answering}
+              </p>
+              {answer.sources.length > 0 ? (
+                <p
+                  className="font-mono text-[11px]"
+                  style={{ color: "rgb(168, 212, 255)" }}
+                >
+                  {answer.sources
+                    .map((source) =>
+                      source.kind === "web"
+                        ? `↗ ${source.label}`
+                        : `${source.kind === "obsidian" ? "◆" : "■"} ${source.label}`,
+                    )
+                    .join("  ")}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

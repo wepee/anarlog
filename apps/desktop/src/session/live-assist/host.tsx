@@ -12,6 +12,8 @@ export function LiveAssistHost() {
   const spokenLanguages = useConfigValue("spoken_languages");
   const useMainLanguage = useConfigValue("summary_use_main_language");
   const researchEnabled = useConfigValue("live_assist_web_research");
+  const autoAnswers = useConfigValue("live_assist_auto_answers");
+  const obsidianPath = useConfigValue("obsidian_vault_path");
   const model = useLanguageModel("chat");
   const config = useLatestRef({
     enabled,
@@ -20,6 +22,8 @@ export function LiveAssistHost() {
     spokenLanguages,
     useMainLanguage,
     researchEnabled,
+    autoAnswers,
+    obsidianPath,
   });
   const engineRef = useRef<ReturnType<typeof createLiveAssistEngine> | null>(
     null,

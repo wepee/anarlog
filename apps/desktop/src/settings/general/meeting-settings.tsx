@@ -1,7 +1,14 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { useMutation } from "@tanstack/react-query";
+import { open as selectFolder } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
 
-import { SettingSwitchRow } from "~/settings/setting-row";
+import { Button } from "@anlg/ui/components/ui/button";
+import { toast } from "@anlg/ui/components/ui/toast";
+
+import { setSettingValue } from "~/settings/queries";
+import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
+import { useConfigValue } from "~/shared/config";
 
 interface SettingItem {
   value: boolean;
@@ -18,6 +25,7 @@ export function MeetingSettingsView({
   captureMeetingChat,
   liveAssistEnabled,
   liveAssistWebResearch,
+  liveAssistAutoAnswers,
   captureSharedScreens,
 }: {
   autoJoinScheduledMeetings: SettingItem;
@@ -29,6 +37,7 @@ export function MeetingSettingsView({
   captureMeetingChat: SettingItem;
   liveAssistEnabled: SettingItem;
   liveAssistWebResearch: SettingItem;
+  liveAssistAutoAnswers: SettingItem;
   captureSharedScreens: SettingItem;
 }) {
   const currentPlatform = platform();
@@ -150,6 +159,81 @@ export function MeetingSettingsView({
           onChange={liveAssistWebResearch.onChange}
         />
       )}
+      {liveAssistEnabled.value && (
+        <SettingSwitchRow
+          title={<Trans>Suggested answers</Trans>}
+          description={
+            <Trans>
+              When someone asks you a question during the call, the floating bar
+              suggests an answer from the call, your notes, your Obsidian vault
+              and the web.
+            </Trans>
+          }
+          checked={liveAssistAutoAnswers.value}
+          onChange={liveAssistAutoAnswers.onChange}
+        />
+      )}
+      {liveAssistEnabled.value && <ObsidianVaultRow />}
     </div>
+  );
+}
+
+function ObsidianVaultRow() {
+  const { t } = useLingui();
+  const path = useConfigValue("obsidian_vault_path");
+  const update = useMutation({
+    mutationFn: async (clear: boolean) => {
+      if (clear) {
+        await setSettingValue("obsidian_vault_path", "");
+        return;
+      }
+      const selected = await selectFolder({ directory: true, multiple: false });
+      if (typeof selected === "string") {
+        await setSettingValue("obsidian_vault_path", selected);
+      }
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  return (
+    <SettingRow
+      title={<Trans>Obsidian vault</Trans>}
+      description={
+        path ? (
+          <span className="break-all">{path}</span>
+        ) : (
+          <Trans>
+            Pick your vault folder so suggested answers can use your Obsidian
+            notes. They are read on your computer only.
+          </Trans>
+        )
+      }
+      controlWidth="content"
+    >
+      {() => (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={update.isPending}
+            onClick={() => update.mutate(false)}
+          >
+            {path ? t`Change` : t`Choose folder`}
+          </Button>
+          {path ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={update.isPending}
+              onClick={() => update.mutate(true)}
+            >
+              <Trans>Remove</Trans>
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </SettingRow>
   );
 }

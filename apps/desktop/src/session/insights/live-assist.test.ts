@@ -4,6 +4,7 @@ import type { LiveTranscriptSegment } from "@anlg/plugin-transcription";
 
 import {
   buildLiveAssistWindow,
+  detectIncomingQuestions,
   EMPTY_LIVE_ASSIST_SNAPSHOT,
   type LiveAssistOutput,
   mergeLiveAssistOutput,
@@ -183,5 +184,28 @@ describe("nextLiveAssistTemplate", () => {
         transcript,
       ),
     ).toEqual({ id: null, source: "manual" });
+  });
+});
+
+describe("detectIncomingQuestions", () => {
+  it("picks finished questions from the other side only", () => {
+    const remote = segment(
+      "r",
+      1_000,
+      5_000,
+      "Super. Et vous facturez combien pour un audit complet ? Ok.",
+    );
+    const self = {
+      ...segment("s", 6_000, 8_000, "Vous avez quel budget pour ce projet ?"),
+      key: { channel: "DirectMic" },
+    } as unknown as LiveTranscriptSegment;
+    const short = segment("x", 9_000, 9_500, "Ah bon ?");
+
+    const result = detectIncomingQuestions([remote, self, short], 0);
+
+    expect(result.questions.map((question) => question.text)).toEqual([
+      "Et vous facturez combien pour un audit complet ?",
+    ]);
+    expect(result.lastEndMs).toBe(9_500);
   });
 });

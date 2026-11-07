@@ -331,6 +331,14 @@ function FloatingMeetingWindowSync({
           store.selectTemplate(payload.sessionId, templateId);
         } else if (payload.action === "seenQuestions") {
           store.markQuestionsSeen(payload.sessionId);
+        } else if (payload.action === "seenAnswers") {
+          store.markAnswersSeen(payload.sessionId);
+        } else if (payload.action === "ask" && payload.id?.trim()) {
+          store.queueAnswer(payload.sessionId, {
+            id: crypto.randomUUID(),
+            question: payload.id.trim(),
+            origin: "asked",
+          });
         }
       })
       .then((unlisten) => {

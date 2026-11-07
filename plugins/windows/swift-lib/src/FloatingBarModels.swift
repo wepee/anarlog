@@ -64,6 +64,7 @@ struct FloatingAssistPayload: Codable, Equatable {
     let lastMinutes, sinceStart, toCover, decisions: String
     let due, toClarify, dismiss, templateMenu, templateFooter, auto: String
     let emptyQuestions, emptyTodo, emptySummary: String
+    let answers, askPlaceholder, answering, noAnswer, emptyAnswers, youAsked: String
   }
 
   struct Template: Codable, Equatable {
@@ -96,6 +97,22 @@ struct FloatingAssistPayload: Codable, Equatable {
     let evidence: String?
   }
 
+  struct AnswerSource: Codable, Equatable {
+    let kind: String
+    let label: String
+    let url: String?
+  }
+
+  struct Answer: Codable, Equatable, Identifiable {
+    let id: String
+    let question: String
+    let origin: String
+    let status: String
+    let answer: String
+    let sources: [AnswerSource]
+    let isNew: Bool
+  }
+
   struct TodoItem: Codable, Equatable {
     let text: String
     let due: String?
@@ -124,4 +141,6 @@ struct FloatingAssistPayload: Codable, Equatable {
   let decisions: [String]
   let topics: [Topic]
   let newQuestions: Int
+  let answers: [Answer]
+  let newAnswers: Int
 }

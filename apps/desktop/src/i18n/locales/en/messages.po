@@ -382,6 +382,14 @@ msgstr "Analyzing structure..."
 msgid "Animals & Nature"
 msgstr "Animals & Nature"
 
+#: src/meeting-float/assist.ts
+msgid "Answering…"
+msgstr "Answering…"
+
+#: src/meeting-float/assist.ts
+msgid "Answers"
+msgstr "Answers"
+
 #: src/settings/ai/shared/index.tsx
 msgid "API Key"
 msgstr "API Key"
@@ -438,6 +446,10 @@ msgstr "Archive delay"
 #: src/settings/general/audio-archive.tsx
 msgid "Archive recordings"
 msgstr "Archive recordings"
+
+#: src/meeting-float/assist.ts
+msgid "Ask about this call…"
+msgstr "Ask about this call…"
 
 #: src/chat/components/input/index.tsx
 #: src/shared/chat-cta.tsx
@@ -757,6 +769,10 @@ msgstr "Capture shared screens in Memos"
 msgid "Capture your first conversation. Every collection starts somewhere."
 msgstr "Capture your first conversation. Every collection starts somewhere."
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Change"
+msgstr "Change"
+
 #: src/calendar/components/event-chip.tsx
 msgid "Change auto-add folder"
 msgstr "Change auto-add folder"
@@ -862,6 +878,7 @@ msgstr "Choose files exported from this app."
 
 #: src/settings/automations/starter-config.tsx
 #: src/settings/general/audio-archive.tsx
+#: src/settings/general/meeting-settings.tsx
 #: src/settings/general/storage/export-location.tsx
 msgid "Choose folder"
 msgstr "Choose folder"
@@ -2595,6 +2612,10 @@ msgstr "No"
 msgid "No action items yet."
 msgstr "No action items yet."
 
+#: src/meeting-float/assist.ts
+msgid "No answer found."
+msgstr "No answer found."
+
 #: src/imports/screen.tsx
 #: src/settings/general/notification.tsx
 msgid "No apps found."
@@ -2822,6 +2843,10 @@ msgstr "Now"
 msgid "Objects"
 msgstr "Objects"
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Obsidian vault"
+msgstr "Obsidian vault"
+
 #: src/settings/general/audio-archive.tsx
 msgid "Off: recordings stay on this device"
 msgstr "Off: recordings stay on this device"
@@ -3024,6 +3049,10 @@ msgstr "Permissions granted"
 msgid "Phone"
 msgstr "Phone"
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Pick your vault folder so suggested answers can use your Obsidian notes. They are read on your computer only."
+msgstr "Pick your vault folder so suggested answers can use your Obsidian notes. They are read on your computer only."
+
 #: src/contacts/contact-page-header.tsx
 msgid "Pin"
 msgstr "Pin"
@@ -3092,6 +3121,10 @@ msgstr "Protect cloud sync"
 #: src/meeting-float/assist.ts
 msgid "Questions"
 msgstr "Questions"
+
+#: src/meeting-float/assist.ts
+msgid "Questions asked to you get a suggested answer here. You can also ask your own."
+msgstr "Questions asked to you get a suggested answer here. You can also ask your own."
 
 #: src/meeting-float/assist.ts
 msgid "Questions to ask will show up once the conversation gets going."
@@ -3206,6 +3239,7 @@ msgstr "Related Notes"
 msgid "Remember speakers"
 msgstr "Remember speakers"
 
+#: src/settings/general/meeting-settings.tsx
 #: src/sidebar/automations.tsx
 msgid "Remove"
 msgstr "Remove"
@@ -3972,6 +4006,10 @@ msgstr "Suggest a Feature"
 msgid "Suggest what to ask next."
 msgstr "Suggest what to ask next."
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Suggested answers"
+msgstr "Suggested answers"
+
 #: src/session/components/note-input/raw.tsx
 msgid "Suggested templates"
 msgstr "Suggested templates"
@@ -4480,6 +4518,10 @@ msgstr "What's new in {version}?"
 msgid "When off, summaries follow the detected meeting language."
 msgstr "When off, summaries follow the detected meeting language."
 
+#: src/settings/general/meeting-settings.tsx
+msgid "When someone asks you a question during the call, the floating bar suggests an answer from the call, your notes, your Obsidian vault and the web."
+msgstr "When someone asks you a question during the call, the floating bar suggests an answer from the call, your notes, your Obsidian vault and the web."
+
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"
 msgstr "When this happens"
@@ -4515,6 +4557,10 @@ msgstr "Write to a folder"
 #: src/sidebar/timeline/utils/index.ts
 msgid "Yesterday"
 msgstr "Yesterday"
+
+#: src/meeting-float/assist.ts
+msgid "You asked"
+msgstr "You asked"
 
 #: src/calendar/components/apple/permission.tsx
 msgid "You can"

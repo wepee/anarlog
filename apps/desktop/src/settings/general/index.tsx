@@ -48,6 +48,7 @@ const SETTINGS_FORM_KEYS = [
   "capture_meeting_chat",
   "live_assist_enabled",
   "live_assist_web_research",
+  "live_assist_auto_answers",
   "capture_shared_screens",
   "app_language",
   "ai_language",
@@ -79,6 +80,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
       capture_meeting_chat: settingsValue.capture_meeting_chat,
       live_assist_enabled: settingsValue.live_assist_enabled,
       live_assist_web_research: settingsValue.live_assist_web_research,
+      live_assist_auto_answers: settingsValue.live_assist_auto_answers,
       capture_shared_screens: settingsValue.capture_shared_screens,
       app_language: settingsValue.app_language,
       ai_language: settingsValue.ai_language,
@@ -126,6 +128,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         live_assist_enabled: normalizedValue.live_assist_enabled,
         live_assist_web_research: normalizedValue.live_assist_web_research,
+        live_assist_auto_answers: normalizedValue.live_assist_auto_answers,
         capture_shared_screens: normalizedValue.capture_shared_screens,
         app_language: normalizedValue.app_language,
         ai_language: normalizedValue.ai_language,
@@ -152,6 +155,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         live_assist_enabled: normalizedValue.live_assist_enabled,
         live_assist_web_research: normalizedValue.live_assist_web_research,
+        live_assist_auto_answers: normalizedValue.live_assist_auto_answers,
         capture_shared_screens: normalizedValue.capture_shared_screens,
       });
     },
@@ -383,6 +387,11 @@ function SettingsSectionContent({
                   value: values.live_assist_enabled,
                   onChange: (value) =>
                     submitFieldValue("live_assist_enabled", value),
+                }}
+                liveAssistAutoAnswers={{
+                  value: values.live_assist_auto_answers,
+                  onChange: (value) =>
+                    submitFieldValue("live_assist_auto_answers", value),
                 }}
                 liveAssistWebResearch={{
                   value: values.live_assist_web_research,

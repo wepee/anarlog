@@ -9,6 +9,7 @@ describe("buildFloatingAssist", () => {
     const assist = buildFloatingAssist({
       templates: [{ id: "sales", title: "Commercial" }],
       research: [],
+      answers: [],
       snapshot: {
         ...EMPTY_LIVE_ASSIST_SNAPSHOT,
         todos: [

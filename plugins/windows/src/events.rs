@@ -254,7 +254,8 @@ pub struct FloatingBarDictationAction {
 pub struct FloatingBarAssistAction {
     pub session_id: String,
     pub action: AssistPanelAction,
-    /// The question to dismiss, or the template to select (null for Auto).
+    /// The question to dismiss, the template to select (null for Auto), or
+    /// the text of a question to ask.
     #[serde(default)]
     pub id: Option<String>,
 }
@@ -265,6 +266,9 @@ pub enum AssistPanelAction {
     DismissQuestion,
     SelectTemplate,
     SeenQuestions,
+    /// Ask a question to the LLM; the question text travels in `id`.
+    Ask,
+    SeenAnswers,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]
