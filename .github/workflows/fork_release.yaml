@@ -88,6 +88,20 @@ jobs:
       - uses: ./.github/actions/rust_install
         with:
           platform: macos
+      # rust-cache only restores dependencies, so every release recompiled the
+      # workspace's own crates. sccache keeps those between releases too, in
+      # the Actions cache of the default branch, which PR runs cannot write.
+      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+        with:
+          version: "v0.19.0"
+      - name: Compile Rust through sccache
+        run: |
+          {
+            echo "SCCACHE_GHA_ENABLED=true"
+            echo "RUSTC_WRAPPER=sccache"
+            # Incremental artifacts cannot be cached, and release builds skip them anyway.
+            echo "CARGO_INCREMENTAL=0"
+          } >> "$GITHUB_ENV"
       - uses: ./.github/actions/pnpm_install
 
       - run: echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"

@@ -178,6 +178,7 @@ mod tests {
             resolve_default_path_for_command(dir.path(), Some(OsStr::new("anarlog-dev"))),
             dir.path().join("com.blackmushi.dev/app.db")
         );
+        let stable = dir.path().join("anarlog/app.db");
         for command in ["anarlog-nightly", "anarlog-nightly.exe"] {
             assert_eq!(
                 resolve_default_path_for_command(dir.path(), Some(OsStr::new(command))),
