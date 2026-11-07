@@ -302,6 +302,11 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "cloud_sync_enabled"],
     default: true as boolean,
   },
+  app_language: {
+    type: "string",
+    path: ["language", "app_language"],
+    default: "" as string,
+  },
   ai_language: {
     type: "string",
     path: ["language", "ai_language"],
