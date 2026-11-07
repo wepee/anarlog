@@ -178,7 +178,13 @@ function credentialRequest({ provider, baseUrl, apiKey }: ProviderCredential) {
   switch (provider) {
     case "anthropic":
       checkAuthentication = new URL(base).hostname !== "api.anthropic.com";
-      headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+      // The desktop HTTP client sends the webview origin, so Anthropic treats
+      // the probe as a browser request and rejects it without this opt-in.
+      headers = {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      };
       break;
     case "google_generative_ai":
       checkAuthentication =
