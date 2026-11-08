@@ -9,7 +9,7 @@ import { commands as tracingCommands } from "@anlg/plugin-tracing";
 // A test journal for Live Assist, kept apart from app.log on purpose: app.log
 // never records webview payloads, while this journal holds what is needed to
 // understand a run (prompts, model answers, template decisions). It stays in
-// memory, is rewritten to one file per app run next to the app logs, and only
+// memory, is appended to one file per app run next to the app logs, and only
 // leaves the machine when the user copies or saves it.
 
 type JournalEntry = {
@@ -24,6 +24,9 @@ const PERSIST_DEBOUNCE_MS = 2_000;
 const runStartedAt = new Date();
 const entries: JournalEntry[] = [];
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+// Entries not yet written to the file.
+let unwritten: JournalEntry[] = [];
+let fileStarted = false;
 let persistPath: Promise<string | null> | null = null;
 
 export function liveAssistLog(
@@ -33,6 +36,7 @@ export function liveAssistLog(
 ) {
   const entry: JournalEntry = { at: Date.now(), event, sessionId, data };
   entries.push(entry);
+  unwritten.push(entry);
   if (entries.length > MAX_ENTRIES) {
     entries.splice(0, entries.length - MAX_ENTRIES);
   }
@@ -81,14 +85,15 @@ export async function formatLiveAssistJournal(): Promise<string> {
     "Contains transcript excerpts, prompts and model answers from your calls.",
     "",
   ];
-  const lines = entries.map((entry) => {
-    const time = new Date(entry.at).toISOString();
-    const session = entry.sessionId ? ` [${entry.sessionId}]` : "";
-    const data =
-      entry.data === undefined ? "" : `\n${indent(stringify(entry.data))}`;
-    return `${time}${session} ${entry.event}${data}`;
-  });
-  return [...header, ...lines, ""].join("\n");
+  return [...header, ...entries.map(formatEntry), ""].join("\n");
+}
+
+function formatEntry(entry: JournalEntry): string {
+  const time = new Date(entry.at).toISOString();
+  const session = entry.sessionId ? ` [${entry.sessionId}]` : "";
+  const data =
+    entry.data === undefined ? "" : `\n${indent(stringify(entry.data))}`;
+  return `${time}${session} ${entry.event}${data}`;
 }
 
 export async function copyLiveAssistJournal(): Promise<void> {
@@ -125,11 +130,20 @@ function schedulePersist() {
 }
 
 async function persist() {
+  const batch = unwritten;
+  unwritten = [];
   try {
     persistPath ??= resolvePersistPath();
     const path = await persistPath;
-    if (!path) return;
-    await fs2Commands.writeTextFile(path, await formatLiveAssistJournal());
+    if (!path || batch.length === 0) return;
+    const header = fileStarted
+      ? ""
+      : `BlackMushi · Live Assist journal · app run started ${runStartedAt.toISOString()}\n`;
+    fileStarted = true;
+    await fs2Commands.appendTextFile(
+      path,
+      `${header}${batch.map(formatEntry).join("\n")}\n`,
+    );
   } catch {
     // Best effort: the in-memory journal stays available for export.
   }
@@ -165,6 +179,7 @@ function indent(text: string): string {
 
 export function resetLiveAssistJournalForTests() {
   entries.length = 0;
+  unwritten = [];
 }
 
 export function getLiveAssistJournalEntries(): readonly JournalEntry[] {

@@ -254,8 +254,9 @@ pub struct FloatingBarDictationAction {
 pub struct FloatingBarAssistAction {
     pub session_id: String,
     pub action: AssistPanelAction,
-    /// The question to dismiss, the template to select (null for Auto), the
-    /// project to select (null for none), or the text of a question to ask.
+    /// The question or answer to dismiss, the template to select (null for
+    /// Auto), the project to select (null for Auto), or the text of a
+    /// question to ask.
     #[serde(default)]
     pub id: Option<String>,
 }
@@ -269,9 +270,9 @@ pub enum AssistPanelAction {
     /// Ask a question to the LLM; the question text travels in `id`.
     Ask,
     SeenAnswers,
+    /// The project to use, null to let the projects command pick.
     SelectProject,
-    /// Go back to finding the call's project automatically.
-    AutoProject,
+    DismissAnswer,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]

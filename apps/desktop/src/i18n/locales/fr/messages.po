@@ -68,12 +68,9 @@ msgstr ""
 msgid "{count} of {total} collected"
 msgstr ""
 
-#. placeholder {0}: first.name
-#. placeholder {1}: first.chars
-#. placeholder {2}: first.ms
 #: src/settings/general/meeting-settings.tsx
-msgid "{count} projects in {listMs} ms. Brief of {0}: {1} characters in {2} ms."
-msgstr "{count} projets en {listMs} ms. Fiche de {0} : {1} caractères en {2} ms."
+msgid "{count} projects in {listMs} ms. A test question returned {chars} characters in {askMs} ms."
+msgstr "{count} projets en {listMs} ms. Une question de test a renvoyé {chars} caractères en {askMs} ms."
 
 #: src/settings/stats/index.tsx
 msgid "{date}. Conversations: {count}"
@@ -149,8 +146,8 @@ msgid "7 days"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "A command that lists your projects, so answers know the context of the call. BlackMushi runs it with projects, context <id> and search <id> <query>; what it prints is sent to your AI provider."
-msgstr "Une commande qui liste vos projets, pour que les réponses connaissent le contexte de l'appel. BlackMushi la lance avec projects, context <id> et search <id> <requête> ; ce qu'elle renvoie est envoyé à votre fournisseur d'IA."
+msgid "A command that gives answers the context of your projects. BlackMushi runs it with projects (a JSON list to pick from) and ask (the question and the call as JSON on stdin; it prints your notes). What it prints is sent to your AI provider."
+msgstr "Une commande qui donne aux réponses le contexte de vos projets. BlackMushi la lance avec projects (une liste JSON pour choisir le projet) et ask (la question et l'appel en JSON sur l'entrée standard ; elle renvoie vos notes). Ce qu'elle renvoie est envoyé à votre fournisseur d'IA."
 
 #: src/sidebar/folder-name-dialog.tsx
 msgid "A folder with this name already exists."
@@ -402,8 +399,8 @@ msgid "Answers"
 msgstr "Réponses"
 
 #: src/meeting-float/assist.ts
-msgid "Answers use what you know about this project. Picked by hand, it no longer changes."
-msgstr "Les réponses s'appuient sur ce que vous savez de ce projet. Choisi à la main, il ne change plus."
+msgid "Answers use your notes on this project. On Auto, your projects command finds it."
+msgstr "Les réponses s'appuient sur vos notes de ce projet. En Auto, votre commande projets le trouve elle-même."
 
 #: src/settings/ai/shared/index.tsx
 msgid "API Key"
@@ -2748,10 +2745,6 @@ msgstr ""
 msgid "No people in this organization"
 msgstr ""
 
-#: src/meeting-float/assist.ts
-msgid "No project"
-msgstr "Aucun projet"
-
 #: src/settings/ai/llm/configure.tsx
 #: src/settings/ai/llm/select.tsx
 #: src/settings/ai/stt/configure.tsx
@@ -4151,10 +4144,6 @@ msgstr ""
 msgid "The AI model did not respond. Check your AI settings."
 msgstr "Le modèle d'IA n'a pas répondu. Vérifiez vos réglages d'IA."
 
-#: src/settings/general/meeting-settings.tsx
-msgid "The command ran but listed no projects."
-msgstr "La commande a fonctionné mais n'a listé aucun projet."
-
 #: src/shared/control.tsx
 msgid "The page you're looking for doesn't exist."
 msgstr ""
@@ -4460,8 +4449,8 @@ msgid "Use your microphone to capture your voice"
 msgstr ""
 
 #: src/settings/ai/llm/select.tsx
-msgid "Used by Live Assist and live answers, which must reply within seconds. Summaries keep the model above. By default, the provider's fast model when it has one."
-msgstr "Utilisé par Live Assist et les réponses en direct, qui doivent répondre en quelques secondes. Les résumés gardent le modèle ci-dessus. Par défaut, le modèle rapide du fournisseur s'il en a un."
+msgid "Used by Live Assist and live answers, which must reply within seconds; summaries keep the model above. Pick a fast model from your provider. Without a choice: Claude Haiku with Anthropic, the model above with others, always with minimal reasoning."
+msgstr "Utilisé par Live Assist et les réponses en direct, qui doivent répondre en quelques secondes ; les résumés gardent le modèle ci-dessus. Choisissez un modèle rapide de votre fournisseur. Sans choix : Claude Haiku chez Anthropic, le modèle ci-dessus chez les autres, toujours avec un raisonnement minimal."
 
 #: src/settings/general/spoken-languages.tsx
 msgid "Used for transcription and automatic summary language detection."
@@ -4576,6 +4565,10 @@ msgstr ""
 #: src/templates/template-form.tsx
 msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
 msgstr "Quand utiliser ce modèle, par ex. « premier appel avec un prospect ». Le Live Assist s'en sert pour reconnaître l'appel."
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Where does this project stand?"
+msgstr "Où en est ce projet ?"
 
 #: src/settings/general/meeting-settings.tsx
 msgid "While a meeting is transcribed live, the floating bar suggests the questions to ask, drafts the to-do and keeps a running summary. Sends the new transcript to your configured AI provider about once a minute."

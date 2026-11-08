@@ -2,36 +2,41 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const MAX_STDOUT_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_STDERR_BYTES: u64 = 8 * 1024;
 
 // The app only ever calls the user's projects command with one of these
-// subcommands, and passes every value as its own argument: nothing goes
-// through a shell, so a search query taken from the call cannot run anything.
+// subcommands. Nothing goes through a shell: what comes from the call (the
+// question, the transcript) is written to the command's stdin as JSON, so it
+// cannot run anything.
 #[derive(Debug, Clone, serde::Deserialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ProjectProviderRequest {
     Projects,
-    Context { id: String },
-    Search { id: String, query: String },
+    Ask { input: String },
 }
 
 impl ProjectProviderRequest {
     fn args(&self) -> Vec<String> {
         match self {
             Self::Projects => vec!["projects".into()],
-            Self::Context { id } => vec!["context".into(), id.clone()],
-            Self::Search { id, query } => vec!["search".into(), id.clone(), query.clone()],
+            Self::Ask { .. } => vec!["ask".into()],
+        }
+    }
+
+    fn stdin(&self) -> Option<&str> {
+        match self {
+            Self::Projects => None,
+            Self::Ask { input } => Some(input),
         }
     }
 
     fn timeout(&self) -> Duration {
         match self {
             Self::Projects => Duration::from_secs(10),
-            Self::Context { .. } => Duration::from_secs(15),
-            Self::Search { .. } => Duration::from_secs(5),
+            Self::Ask { .. } => Duration::from_secs(15),
         }
     }
 }
@@ -51,7 +56,11 @@ pub async fn run(command: &str, request: &ProjectProviderRequest) -> Result<Stri
         .args(words.map(|word| expand_home(&word)))
         .args(request.args())
         .env("PATH", &search_path)
-        .stdin(Stdio::null())
+        .stdin(if request.stdin().is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -63,11 +72,20 @@ pub async fn run(command: &str, request: &ProjectProviderRequest) -> Result<Stri
         .spawn()
         .map_err(|error| format!("could not start {program}: {error}"))?;
     let pid = child.id();
+    let input = request.stdin().map(str::to_owned);
+    let stdin = child.stdin.take();
 
     let stdout = child.stdout.take().expect("stdout is piped");
     let stderr = child.stderr.take().expect("stderr is piped");
     let work = async {
-        let (out, err, status) = tokio::join!(
+        let write_input = async move {
+            if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                // A command that does not read its input is fine.
+                let _ = stdin.write_all(input.as_bytes()).await;
+            }
+        };
+        let (_, out, err, status) = tokio::join!(
+            write_input,
             read_capped(stdout, MAX_STDOUT_BYTES + 1),
             read_capped(stderr, MAX_STDERR_BYTES),
             child.wait(),
@@ -279,18 +297,17 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn passes_the_query_as_one_argument_without_a_shell() {
+    async fn passes_the_question_on_stdin_without_a_shell() {
         let output = run(
-            "printf %s|",
-            &ProjectProviderRequest::Search {
-                id: "lumen".into(),
-                query: "$(touch pwned); prix ?".into(),
+            "sh -c 'printf \"$0 \"; cat'",
+            &ProjectProviderRequest::Ask {
+                input: r#"{"question":"$(touch pwned); prix ?"}"#.into(),
             },
         )
         .await
         .unwrap();
 
-        assert_eq!(output, "search|lumen|$(touch pwned); prix ?|");
+        assert_eq!(output, r#"ask {"question":"$(touch pwned); prix ?"}"#);
     }
 
     #[cfg(unix)]

@@ -133,10 +133,16 @@ export const useLiveModel = (): {
       liveProviderId: live_llm_provider,
       liveModelId: live_llm_model,
     });
-    const liveConn =
-      modelId === conn.modelId
-        ? conn
-        : { ...conn, modelId, reasoningEffort: "default" as const };
+    // Live calls need a reply within seconds: the least reasoning the
+    // provider allows (Anthropic models get theirs per call, see answers.ts).
+    const liveConn = {
+      ...conn,
+      modelId,
+      reasoningEffort:
+        conn.providerId === "anthropic" || conn.providerId === "claude"
+          ? ("default" as const)
+          : ("low" as const),
+    };
     return {
       model: createLanguageModel(liveConn, "chat"),
       modelId,

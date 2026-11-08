@@ -7,7 +7,7 @@ import { Button } from "@anlg/ui/components/ui/button";
 import { Input } from "@anlg/ui/components/ui/input";
 import { toast } from "@anlg/ui/components/ui/toast";
 
-import { listProjects, loadProjectBrief } from "~/session/live-assist/projects";
+import { askProject, listProjects } from "~/session/live-assist/projects";
 import { setSettingValue } from "~/settings/queries";
 import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
 import { useConfigValue } from "~/shared/config";
@@ -189,34 +189,32 @@ function ProjectsCommandRow() {
       setSettingValue("projects_command", value.trim()),
     onError: (error) => toast.error(error.message),
   });
-  // Runs what a call will run: the list, then the first project's brief.
+  // Runs what a call will run: the list, then one question.
   const test = useMutation({
     mutationFn: async (value: string) => {
+      const command = value.trim();
       const startedAt = Date.now();
-      const projects = await listProjects(value.trim());
+      const projects = await listProjects(command);
       const listMs = Date.now() - startedAt;
-      const first = projects[0];
-      if (!first) {
-        return { count: 0, listMs, first: null };
-      }
-      const briefStartedAt = Date.now();
-      const brief = await loadProjectBrief(value.trim(), first.id);
+      const askStartedAt = Date.now();
+      const notes = await askProject(command, {
+        question: t`Where does this project stand?`,
+        origin: "asked",
+        projectId: projects[0]?.id ?? null,
+        call: { title: null, participants: [] },
+        transcript: "",
+      });
       return {
         count: projects.length,
         listMs,
-        first: {
-          name: first.name,
-          chars: brief.length,
-          ms: Date.now() - briefStartedAt,
-        },
+        chars: notes.length,
+        askMs: Date.now() - askStartedAt,
       };
     },
-    onSuccess: ({ count, listMs, first }) =>
-      first
-        ? toast.success(
-            t`${count} projects in ${listMs} ms. Brief of ${first.name}: ${first.chars} characters in ${first.ms} ms.`,
-          )
-        : toast.error(t`The command ran but listed no projects.`),
+    onSuccess: ({ count, listMs, chars, askMs }) =>
+      toast.success(
+        t`${count} projects in ${listMs} ms. A test question returned ${chars} characters in ${askMs} ms.`,
+      ),
     onError: (error) => toast.error(error.message),
   });
   const form = useForm({
@@ -233,9 +231,10 @@ function ProjectsCommandRow() {
       title={<Trans>Projects command</Trans>}
       description={
         <Trans>
-          A command that lists your projects, so answers know the context of the
-          call. BlackMushi runs it with projects, context &lt;id&gt; and search
-          &lt;id&gt; &lt;query&gt;; what it prints is sent to your AI provider.
+          A command that gives answers the context of your projects. BlackMushi
+          runs it with projects (a JSON list to pick from) and ask (the question
+          and the call as JSON on stdin; it prints your notes). What it prints
+          is sent to your AI provider.
         </Trans>
       }
       controlWidth="content"

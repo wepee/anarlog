@@ -178,15 +178,11 @@ export function AssistPanel({
           muted={muted}
           hairline={hairline}
           options={assist.projectOptions.map((option) => ({
-            key: `${option.action}:${option.id ?? ""}`,
+            key: option.id ?? "auto",
             title: option.title,
             selected: option.selected,
             onSelect: () =>
-              onAction(
-                option.action === "autoProject"
-                  ? { action: "autoProject" }
-                  : { action: "selectProject", id: option.id },
-              ),
+              onAction({ action: "selectProject", id: option.id }),
           }))}
           onClose={() => setMenu(null)}
         />
@@ -356,11 +352,21 @@ function AnswersTab({
           {assist.answers.map((answer, index) => (
             <li
               key={answer.id}
-              className="flex flex-col gap-1 py-2.5"
+              className="group relative flex flex-col gap-1 py-2.5 pr-7"
               style={{
                 borderTop: index === 0 ? undefined : `0.5px solid ${hairline}`,
               }}
             >
+              <button
+                type="button"
+                aria-label={labels.dismiss}
+                onClick={() =>
+                  onAction({ action: "dismissAnswer", id: answer.id })
+                }
+                className="absolute top-2 right-0 flex size-6 items-center justify-center rounded-full opacity-50 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              >
+                <X size={10} weight="bold" />
+              </button>
               <p className="text-[12px] leading-[1.4]" style={{ color: muted }}>
                 {answer.isNew ? (
                   <span
@@ -444,25 +450,39 @@ function QuestionsTab({
   return (
     <div>
       {assist.spotlight ? (
-        <button
-          type="button"
-          onClick={onOpenAnswers}
-          className="mt-1 mb-2 flex w-full flex-col gap-1 rounded-xl px-3 py-2 text-left"
+        <div
+          className="group relative mt-1 mb-2 rounded-xl"
           style={{ boxShadow: `inset 0 0 0 0.5px ${hairline}` }}
         >
-          <span
-            className="font-mono text-[10.5px] tracking-wider uppercase"
-            style={{ color: "rgb(255, 210, 122)" }}
+          <button
+            type="button"
+            onClick={onOpenAnswers}
+            className="flex w-full flex-col gap-1 px-3 py-2 pr-8 text-left"
           >
-            {assist.labels.suggestedAnswer}
-          </span>
-          <span className="text-[12px]" style={{ color: muted }}>
-            {assist.spotlight.question}
-          </span>
-          <span className="text-[13.5px] leading-[1.4] font-medium">
-            {assist.spotlight.answer}
-          </span>
-        </button>
+            <span
+              className="font-mono text-[10.5px] tracking-wider uppercase"
+              style={{ color: "rgb(255, 210, 122)" }}
+            >
+              {assist.labels.suggestedAnswer}
+            </span>
+            <span className="text-[12px]" style={{ color: muted }}>
+              {assist.spotlight.question}
+            </span>
+            <span className="text-[13.5px] leading-[1.4] font-medium">
+              {assist.spotlight.answer}
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-label={assist.labels.dismiss}
+            onClick={() =>
+              onAction({ action: "dismissAnswer", id: assist.spotlight!.id })
+            }
+            className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-full opacity-50 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          >
+            <X size={10} weight="bold" />
+          </button>
+        </div>
       ) : null}
       {assist.questions.length === 0 ? (
         <p className="py-2 text-[13px]" style={{ color: muted }}>

@@ -69,7 +69,7 @@ describe("live answers", () => {
     vi.useRealTimers();
   });
 
-  it("starts answering a participant's question while the user starts replying", async () => {
+  it("answers a participant's question within seconds, even while the user keeps talking", async () => {
     vi.useFakeTimers();
     const engine = createLiveAssistEngine(() => ({
       enabled: true,
@@ -95,7 +95,7 @@ describe("live answers", () => {
     );
     store.setState({ liveSegments: [question] });
     // The user starts answering: their partial words keep coming in.
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 15; index += 1) {
       await vi.advanceTimersByTimeAsync(300);
       store.setState({
         liveSegments: [

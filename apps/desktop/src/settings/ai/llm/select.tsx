@@ -527,8 +527,9 @@ function LiveModelRow({
         <p className="text-muted-foreground text-xs">
           <Trans>
             Used by Live Assist and live answers, which must reply within
-            seconds. Summaries keep the model above. By default, the provider's
-            fast model when it has one.
+            seconds; summaries keep the model above. Pick a fast model from your
+            provider. Without a choice: Claude Haiku with Anthropic, the model
+            above with others, always with minimal reasoning.
           </Trans>
         </p>
       </div>

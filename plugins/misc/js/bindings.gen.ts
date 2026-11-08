@@ -67,7 +67,7 @@ async runProjectProvider(command: string, request: ProjectProviderRequest) : Pro
 /** user-defined types **/
 
 export type DeviceInfo = { platform: string; arch: string; totalMemoryBytes: number; osVersion: string; appVersion: string; buildHash?: string | null; locale?: string | null }
-export type ProjectProviderRequest = { kind: "projects" } | { kind: "context"; id: string } | { kind: "search"; id: string; query: string }
+export type ProjectProviderRequest = { kind: "projects" } | { kind: "ask"; input: string }
 
 /** tauri-specta globals **/
 

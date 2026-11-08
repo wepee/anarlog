@@ -10,14 +10,7 @@ import {
   NO_PAST_MEETINGS,
   type PastMeetings,
 } from "./past-meetings";
-import {
-  listProjects,
-  loadProjectBrief,
-  matchProject,
-  matchProjectInTranscript,
-  type Project,
-  searchProject,
-} from "./projects";
+import { askProject, listProjects, type ProjectOption } from "./projects";
 import { getWebSearchTools } from "./research";
 
 import { listTemplateCandidates } from "~/services/enhancer/auto-template";
@@ -47,14 +40,11 @@ const GENERATION_TIMEOUT_MS = 45_000;
 const MAX_OUTPUT_TOKENS = 6_000;
 const MAX_AUTO_ANSWERS_PER_CALL = 60;
 const ANSWER_CONTEXT_MS = 3 * 60_000;
-// A turn is considered finished once the transcript has been quiet this long.
+// Questions are looked for once the transcript has been quiet this long, and
+// at least this often while people keep talking.
 const QUESTION_QUIET_MS = 1_200;
+const QUESTION_MAX_WAIT_MS = 4_000;
 const QUESTION_SCAN_MS = 400;
-// A suggestion for a question asked this long ago no longer helps.
-const AUTO_ANSWER_MAX_WAIT_MS = 20_000;
-// Answers never wait long for a project brief that is still loading.
-const BRIEF_WAIT_MS = 1_500;
-const BRIEF_RETRY_MS = 60_000;
 const ANSWER_RENDER_INTERVAL_MS = 120;
 
 type EngineConfig = {
@@ -72,9 +62,7 @@ type EngineConfig = {
 
 type CallContext = {
   title: string | null;
-  participants: string[];
-  // Everyone's address but the user's own.
-  participantEmails: string[];
+  participants: Array<{ name: string; email: string | null }>;
 };
 
 type RunningSession = {
@@ -88,21 +76,15 @@ type RunningSession = {
   controller: AbortController | null;
   context: Promise<CallContext> | null;
   pastMeetings: Promise<PastMeetings> | null;
-  projects: Project[];
-  briefs: Map<string, Promise<string>>;
+  projects: ProjectOption[];
   questionsScannedEndMs: number;
   seenQuestions: Set<string>;
   autoAnswers: number;
-  answering: {
-    id: string;
-    origin: "auto" | "asked";
-    controller: AbortController;
-  } | null;
-  // When the participants' side of the transcript last changed; the user
-  // talking does not count.
-  remoteChangedAt: number;
-  remoteSignature: string;
+  answering: AbortController | null;
+  transcriptChangedAt: number;
+  transcriptSignature: string;
   scannedSignature: string;
+  scannedAt: number;
   nextId: number;
 };
 
@@ -130,7 +112,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       current.sessionId,
     );
     current.controller?.abort();
-    current.answering?.controller.abort();
+    current.answering?.abort();
     useLiveAssistStore.getState().clearSession(current.sessionId);
     current = null;
   };
@@ -207,14 +189,14 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         context: null,
         pastMeetings: null,
         projects: [],
-        briefs: new Map(),
         questionsScannedEndMs: 0,
         seenQuestions: new Set(),
         autoAnswers: 0,
         answering: null,
-        remoteChangedAt: Date.now(),
-        remoteSignature: "",
+        transcriptChangedAt: Date.now(),
+        transcriptSignature: "",
         scannedSignature: "",
+        scannedAt: Date.now(),
         nextId: 0,
       };
       current = session;
@@ -260,7 +242,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       return;
     }
     const startedAt = Date.now();
-    let projects: Project[];
+    let projects: ProjectOption[];
     try {
       projects = await listProjects(command);
     } catch (error) {
@@ -277,10 +259,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     if (current !== session) {
       return;
     }
-    projects.sort(
-      (a, b) =>
-        Number(b.active) - Number(a.active) || a.name.localeCompare(b.name),
-    );
     session.projects = projects;
     useLiveAssistStore.getState().setProjects(
       session.sessionId,
@@ -291,140 +269,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       {
         durationMs: Date.now() - startedAt,
         count: projects.length,
-        active: projects.filter((project) => project.active).length,
       },
       session.sessionId,
     );
-    await matchByRules(session);
-  };
-
-  // Rules 2 and 3 (an address, then a name in the title, pointing to a single
-  // project). Rule 4, the call's content, runs with the Live Assist update.
-  const matchByRules = async (session: RunningSession) => {
-    session.context ??= loadCallContext(session.sessionId);
-    const context = await session.context;
-    if (current !== session || session.projects.length === 0) {
-      return;
-    }
-    const match = matchProject({
-      projects: session.projects,
-      title: context.title,
-      participantEmails: context.participantEmails,
-    });
-    liveAssistLog(
-      "project.rules",
-      {
-        decision: match?.reason ?? "no_single_match",
-        projectId: match?.project.id ?? null,
-        title: context.title,
-        participantEmails: context.participantEmails,
-      },
-      session.sessionId,
-    );
-    if (match) {
-      useLiveAssistStore
-        .getState()
-        .setAutoProject(session.sessionId, match.project.id);
-    }
-  };
-
-  const getBrief = (session: RunningSession, projectId: string) => {
-    const cached = session.briefs.get(projectId);
-    if (cached) {
-      return cached;
-    }
-    const startedAt = Date.now();
-    const brief = loadProjectBrief(
-      getConfig().projectsCommand.trim(),
-      projectId,
-    )
-      .then((text) => {
-        liveAssistLog(
-          "project.brief_loaded",
-          {
-            projectId,
-            durationMs: Date.now() - startedAt,
-            chars: text.length,
-            text,
-          },
-          session.sessionId,
-        );
-        return text;
-      })
-      .catch((error) => {
-        liveAssistLog(
-          "project.brief_failed",
-          {
-            projectId,
-            durationMs: Date.now() - startedAt,
-            error: describeError(error),
-          },
-          session.sessionId,
-        );
-        setTimeout(() => {
-          if (session.briefs.get(projectId) === brief) {
-            session.briefs.delete(projectId);
-          }
-        }, BRIEF_RETRY_MS);
-        return "";
-      });
-    session.briefs.set(projectId, brief);
-    return brief;
-  };
-
-  const getBriefIfReady = async (
-    session: RunningSession,
-    projectId: string | null,
-  ): Promise<string> => {
-    if (!projectId) {
-      return "";
-    }
-    const brief = await Promise.race([
-      getBrief(session, projectId),
-      new Promise<null>((resolve) =>
-        setTimeout(() => resolve(null), BRIEF_WAIT_MS),
-      ),
-    ]);
-    if (brief === null) {
-      liveAssistLog(
-        "project.brief_not_ready",
-        { projectId },
-        session.sessionId,
-      );
-      return "";
-    }
-    return brief;
-  };
-
-  // Rule 4: the project named in the call itself.
-  const matchByTranscript = (session: RunningSession) => {
-    const { project } = getLiveAssistSession(session.sessionId);
-    if (
-      project.source !== "auto" ||
-      project.id ||
-      session.projects.length === 0
-    ) {
-      return;
-    }
-    const transcript = listenerStore
-      .getState()
-      .liveSegments.map((segment) => segment.text)
-      .join("\n");
-    const match = matchProjectInTranscript(session.projects, transcript);
-    if (match) {
-      liveAssistLog(
-        "project.rules",
-        {
-          decision: "named_in_call",
-          projectId: match.project.id,
-          mentions: match.mentions,
-        },
-        session.sessionId,
-      );
-      useLiveAssistStore
-        .getState()
-        .setAutoProject(session.sessionId, match.project.id);
-    }
   };
 
   const getProjectName = (session: RunningSession, projectId: string | null) =>
@@ -434,9 +281,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     sync();
     const session = current;
     const config = getConfig();
-    if (session) {
-      matchByTranscript(session);
-    }
     if (disposed || !session || session.running || !config.model) {
       return;
     }
@@ -503,7 +347,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         candidates.find((candidate) => candidate.id === before.template.id)
           ?.title ?? "Auto";
       const language = await resolveCallLanguage(config, window.text);
-      const projectBrief = await getBriefIfReady(session, before.project.id);
       const coverageLabels = getCoverageLabels(
         before.template,
         candidates,
@@ -512,7 +355,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       const prompt = buildLiveAssistPrompt({
         language,
         title: context.title,
-        participants: context.participants,
+        participants: context.participants.map(({ name }) => name),
         template: before.template,
         templateTitle,
         candidates,
@@ -520,7 +363,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         dismissed: before.dismissed,
         snapshot: before.snapshot,
         transcript: window.text,
-        projectBrief,
       });
 
       liveAssistLog(
@@ -535,11 +377,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           template: { ...before.template, title: templateTitle },
           coverageLabels,
           dismissed: before.dismissed,
-          project: {
-            ...before.project,
-            name: getProjectName(session, before.project.id),
-            briefChars: projectBrief.length,
-          },
           candidates: candidates.map(({ id, title, description }) => ({
             id,
             title,
@@ -703,6 +540,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         id: crypto.randomUUID(),
         question: question.text,
         origin: "auto",
+        speaker: question.speaker,
       });
       liveAssistLog(
         "answer.question_detected",
@@ -729,19 +567,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     }
     const { sessionId } = session;
     const store = useLiveAssistStore.getState();
-    for (const stale of getLiveAssistSession(sessionId).answers.filter(
-      (answer) =>
-        answer.status === "queued" &&
-        answer.origin === "auto" &&
-        Date.now() - answer.createdAtMs > AUTO_ANSWER_MAX_WAIT_MS,
-    )) {
-      store.removeAnswer(sessionId, stale.id);
-      liveAssistLog(
-        "answer.expired",
-        { id: stale.id, question: stale.question },
-        sessionId,
-      );
-    }
     const next = getLiveAssistSession(sessionId)
       .answers.filter((answer) => answer.status === "queued")
       .sort(
@@ -754,13 +579,13 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     }
 
     const controller = new AbortController();
-    session.answering = { id: next.id, origin: next.origin, controller };
+    session.answering = controller;
     store.updateAnswer(sessionId, next.id, { status: "answering" });
     const startedAt = Date.now();
     try {
       session.context ??= loadCallContext(sessionId);
       session.pastMeetings ??= loadPastMeetingsFor(session);
-      const projectId = getLiveAssistSession(sessionId).project.id;
+      const { projectId } = getLiveAssistSession(sessionId);
       const command = config.projectsCommand.trim();
       const segments = listenerStore.getState().liveSegments;
       const lastEndMs = segments.reduce(
@@ -771,26 +596,44 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         segments,
         lastEndMs - ANSWER_CONTEXT_MS + 120_000,
       ).text;
-      const [context, pastMeetings, projectBrief, language] = await Promise.all(
-        [
-          session.context,
-          session.pastMeetings,
-          getBriefIfReady(session, projectId),
-          resolveCallLanguage(config, transcript),
-        ],
-      );
-      const projectSearch =
-        projectId && command
-          ? (query: string) =>
-              searchProject(command, projectId, query).catch((error) => {
-                liveAssistLog(
-                  "answer.project_search_failed",
-                  { id: next.id, query, error: describeError(error) },
-                  sessionId,
-                );
-                return [];
-              })
-          : null;
+      const context = await session.context;
+      const notesStartedAt = Date.now();
+      const [pastMeetings, notes, language] = await Promise.all([
+        session.pastMeetings,
+        command
+          ? askProject(command, {
+              question: next.question,
+              origin: next.origin,
+              projectId,
+              call: {
+                title: context.title,
+                participants: context.participants,
+              },
+              transcript,
+            }).catch((error) => {
+              liveAssistLog(
+                "answer.notes_failed",
+                { id: next.id, error: describeError(error) },
+                sessionId,
+              );
+              return "";
+            })
+          : Promise.resolve(""),
+        resolveCallLanguage(config, transcript),
+      ]);
+      if (command) {
+        liveAssistLog(
+          "answer.notes_loaded",
+          {
+            id: next.id,
+            projectId,
+            durationMs: Date.now() - notesStartedAt,
+            chars: notes.length,
+            notes,
+          },
+          sessionId,
+        );
+      }
       const webTools = config.webSearch
         ? getWebSearchTools(config.model)
         : null;
@@ -800,8 +643,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         language,
         callTitle: context.title,
         transcript,
-        projectName: getProjectName(session, projectId),
-        projectBrief,
+        speaker: next.speaker ?? null,
+        notes,
         pastMeetings: pastMeetings.text,
       });
       liveAssistLog(
@@ -814,9 +657,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           model: config.modelId,
           web: Boolean(webTools),
           projectId,
-          projectBriefChars: projectBrief.length,
+          notesChars: notes.length,
           pastMeetingsChars: pastMeetings.text.length,
-          projectSearch: Boolean(projectSearch),
           waitedInQueueMs: startedAt - next.createdAtMs,
           promptChars: prompt.context.length + prompt.request.length,
         },
@@ -830,7 +672,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         modelId: config.modelId,
         prompt,
         webTools,
-        projectSearch,
         signal: controller.signal,
         onText: (text) => {
           const now = Date.now();
@@ -869,7 +710,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           durationMs: Date.now() - startedAt,
           text: result.text,
           sources: result.sources,
-          projectSearches: result.projectSearches,
         },
         sessionId,
       );
@@ -910,12 +750,15 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   // moment; the user starting to reply does not hold them back.
   const questionScan = setInterval(() => {
     const session = current;
+    const now = Date.now();
     if (
       session &&
-      session.remoteSignature !== session.scannedSignature &&
-      Date.now() - session.remoteChangedAt >= QUESTION_QUIET_MS
+      session.transcriptSignature !== session.scannedSignature &&
+      (now - session.transcriptChangedAt >= QUESTION_QUIET_MS ||
+        now - session.scannedAt >= QUESTION_MAX_WAIT_MS)
     ) {
-      session.scannedSignature = session.remoteSignature;
+      session.scannedSignature = session.transcriptSignature;
+      session.scannedAt = now;
       scanQuestions();
     }
   }, QUESTION_SCAN_MS);
@@ -929,10 +772,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       sync();
     }
     if (state.liveSegments !== previous.liveSegments && current) {
-      const signature = getRemoteSignature(state.liveSegments);
-      if (signature !== current.remoteSignature) {
-        current.remoteSignature = signature;
-        current.remoteChangedAt = Date.now();
+      const signature = getTranscriptSignature(state.liveSegments);
+      if (signature !== current.transcriptSignature) {
+        current.transcriptSignature = signature;
+        current.transcriptChangedAt = Date.now();
       }
     }
   });
@@ -947,36 +790,18 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       answers !== previous.sessions[sessionId]?.answers &&
       answers?.some((answer) => answer.status === "queued")
     ) {
-      // A question the user types goes before a suggestion still being
-      // written.
-      if (
-        session.answering?.origin === "auto" &&
-        answers.some(
-          (answer) => answer.status === "queued" && answer.origin === "asked",
-        )
-      ) {
-        session.answering.controller.abort();
-      }
       void processAnswers(session);
     }
-    const project = state.sessions[sessionId]?.project;
-    const previousProject = previous.sessions[sessionId]?.project;
-    if (project && previousProject && project !== previousProject) {
+    const projectId = state.sessions[sessionId]?.projectId;
+    if (projectId !== previous.sessions[sessionId]?.projectId) {
       liveAssistLog(
-        "project.changed",
+        "project.picked",
         {
-          from: previousProject,
-          to: { ...project, name: getProjectName(session, project.id) },
+          projectId: projectId ?? null,
+          name: getProjectName(session, projectId ?? null),
         },
         sessionId,
       );
-      if (project.id) {
-        void getBrief(session, project.id);
-        // Its open questions and pending tasks feed the next suggestions.
-        session.forced = true;
-      } else if (project.source === "auto") {
-        void matchByRules(session);
-      }
     }
     const next = state.sessions[sessionId]?.template;
     const before = previous.sessions[sessionId]?.template;
@@ -1040,32 +865,26 @@ async function loadCallContext(sessionId: string): Promise<CallContext> {
       return null;
     },
   );
-  const participants = snapshot?.participants ?? [];
-  const context = {
+  const context: CallContext = {
     title: getEventName(snapshot?.event) ?? (snapshot?.title || null),
-    participants: participants
-      .map((participant) => participant.name)
-      .filter(Boolean),
-    participantEmails: participants
-      .filter((participant) => participant.humanId !== snapshot?.ownerUserId)
-      .flatMap((participant) =>
-        participant.email ? [participant.email.toLowerCase()] : [],
-      ),
+    participants: (snapshot?.participants ?? [])
+      .filter((participant) => participant.name || participant.email)
+      .map((participant) => ({
+        name: participant.name,
+        email: participant.email || null,
+      })),
   };
   liveAssistLog("context.loaded", context, sessionId);
   return context;
 }
 
-function getRemoteSignature(segments: LiveTranscriptSegment[]): string {
+function getTranscriptSignature(segments: LiveTranscriptSegment[]): string {
   let last: LiveTranscriptSegment | null = null;
-  let count = 0;
   for (const segment of segments) {
-    if (segment.key.channel === "DirectMic") continue;
-    count += 1;
     if (!last || segment.end_ms >= last.end_ms) last = segment;
   }
   return last
-    ? `${count}:${last.id}:${last.text.length}:${last.words.filter((word) => word.is_final).length}`
+    ? `${segments.length}:${last.id}:${last.text.length}:${last.words.filter((word) => word.is_final).length}`
     : "";
 }
 

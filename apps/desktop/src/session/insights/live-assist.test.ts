@@ -181,7 +181,7 @@ describe("nextLiveAssistTemplate", () => {
 });
 
 describe("detectIncomingQuestions", () => {
-  it("picks finished questions from the other side only", () => {
+  it("picks finished questions from every speaker, with or without a question mark", () => {
     const remote = segment(
       "r",
       1_000,
@@ -193,13 +193,32 @@ describe("detectIncomingQuestions", () => {
       key: { channel: "DirectMic" },
     } as unknown as LiveTranscriptSegment;
     const short = segment("x", 9_000, 9_500, "Ah bon ?");
+    const unpunctuated = segment(
+      "u",
+      10_000,
+      12_000,
+      "est-ce que vous pouvez m'envoyer le devis",
+    );
 
-    const result = detectIncomingQuestions([remote, self, short], 0);
+    const result = detectIncomingQuestions(
+      [remote, self, short, unpunctuated],
+      0,
+    );
 
-    expect(result.questions.map((question) => question.text)).toEqual([
-      "Et vous facturez combien pour un audit complet ?",
+    expect(
+      result.questions.map(({ text, speaker }) => ({ text, speaker })),
+    ).toEqual([
+      {
+        text: "Et vous facturez combien pour un audit complet ?",
+        speaker: "Speaker 1",
+      },
+      { text: "Vous avez quel budget pour ce projet ?", speaker: "You" },
+      {
+        text: "est-ce que vous pouvez m'envoyer le devis",
+        speaker: "Speaker 1",
+      },
     ]);
-    expect(result.lastEndMs).toBe(9_500);
+    expect(result.lastEndMs).toBe(12_000);
   });
 
   it("joins a question split across one speaker's segments and waits for unfinished ones", () => {

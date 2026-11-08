@@ -21,36 +21,17 @@ function text(id: string, value: string) {
   ];
 }
 
-// First step: a sentence then a search; second step: the given reply.
-function modelSearchingThen(reply: string) {
-  const steps: unknown[][] = [
-    [
-      ...text("t1", "Je vérifie dans les notes du projet."),
-      {
-        type: "tool-call",
-        toolCallId: "c1",
-        toolName: "search_project",
-        input: JSON.stringify({ query: "tarif" }),
-      },
-      {
-        type: "finish",
-        finishReason: { unified: "tool-calls", raw: "tool_use" },
-        usage,
-      },
-    ],
-    [
-      ...text("t2", reply),
-      {
-        type: "finish",
-        finishReason: { unified: "stop", raw: "end_turn" },
-        usage,
-      },
-    ],
-  ];
-  let call = 0;
+function modelReplying(reply: string) {
   return new MockLanguageModelV3({
     doStream: async () => ({
-      stream: convertArrayToReadableStream(steps[call++]!) as never,
+      stream: convertArrayToReadableStream<unknown>([
+        ...text("t1", reply),
+        {
+          type: "finish",
+          finishReason: { unified: "stop", raw: "end_turn" },
+          usage,
+        },
+      ]) as never,
     }),
   });
 }
@@ -58,15 +39,15 @@ function modelSearchingThen(reply: string) {
 async function answer(reply: string) {
   const shown: string[] = [];
   const result = await streamLiveAnswer({
-    model: modelSearchingThen(reply),
+    model: modelReplying(reply),
     providerId: "anthropic",
     modelId: "claude-haiku-5-5",
-    prompt: { context: "Project brief:\n(none)", request: "Question: tarif ?" },
+    prompt: {
+      context: "Language: fr",
+      request:
+        "The user's notes for this question:\n[MEMORY.md › Tarification]\nTJM 600 € HT",
+    },
     webTools: null,
-    projectSearch: async () => [
-      { ref: "MEMORY.md › Tarification", text: "TJM 600 € HT" },
-      { ref: "Billing/Devis.md", text: "Devis V1" },
-    ],
     onText: (value) => shown.push(value),
   });
   return { result, shown };
@@ -94,7 +75,7 @@ describe("live answers", () => {
     expect(getLiveAnswerProviderOptions("openai", "gpt-5")).toBeUndefined();
   });
 
-  it("shows only the final step, and only the references it cites", async () => {
+  it("shows only the references it was given, never while they are written", async () => {
     const { result, shown } = await answer(
       "Notre TJM est de 600 € HT. [MEMORY.md › Tarification] [Inventé.md]",
     );
@@ -104,14 +85,14 @@ describe("live answers", () => {
     expect(result.sources).toEqual([
       { kind: "project", label: "MEMORY.md › Tarification", url: null },
     ]);
-    expect(shown[shown.length - 1]).toBe("Notre TJM est de 600 € HT.");
-    expect(shown).toContain("");
+    expect(shown.every((value) => !value.includes("["))).toBe(true);
   });
 
-  it("treats SKIP after a search as declined", async () => {
-    const { result } = await answer("SKIP");
+  it("never shows a declined answer", async () => {
+    const { result, shown } = await answer("SKIP");
 
     expect(result.skipped).toBe(true);
+    expect(shown).toEqual([]);
   });
 
   it("keeps brackets that are part of the answer", () => {

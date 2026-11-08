@@ -6,7 +6,6 @@ import {
   type LiveAssistTemplate,
 } from "~/session/insights/live-assist";
 import type { LiveAnswerSource } from "~/session/live-assist/answers";
-import type { LiveAssistProject } from "~/session/live-assist/projects";
 
 export type LiveAssistTemplateOption = { id: string; title: string };
 export type LiveAssistProjectOption = { id: string; title: string };
@@ -15,6 +14,8 @@ export type LiveAssistAnswer = {
   id: string;
   question: string;
   origin: "auto" | "asked";
+  // Who asked, as labelled in the transcript, for a question heard in the call.
+  speaker?: string;
   status: "queued" | "answering" | "ready" | "error";
   answer: string;
   sources: LiveAnswerSource[];
@@ -28,7 +29,8 @@ export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
   projects: LiveAssistProjectOption[];
   projectsFailed: boolean;
-  project: LiveAssistProject;
+  // Picked by hand; null lets the projects command find it.
+  projectId: string | null;
   answers: LiveAssistAnswer[];
   snapshot: LiveAssistSnapshot;
   template: LiveAssistTemplate;
@@ -41,7 +43,7 @@ const EMPTY_SESSION: LiveAssistSessionState = {
   templates: [],
   projects: [],
   projectsFailed: false,
-  project: { id: null, source: "auto" },
+  projectId: null,
   answers: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
   template: { id: null, source: "auto" },
@@ -65,13 +67,10 @@ type LiveAssistActions = {
   ) => void;
   setProjects: (sessionId: string, projects: LiveAssistProjectOption[]) => void;
   setProjectsFailed: (sessionId: string) => void;
-  // A project found automatically never replaces one picked by hand.
-  setAutoProject: (sessionId: string, projectId: string) => void;
   selectProject: (sessionId: string, projectId: string | null) => void;
-  resetProject: (sessionId: string) => void;
   queueAnswer: (
     sessionId: string,
-    answer: Pick<LiveAssistAnswer, "id" | "question" | "origin">,
+    answer: Pick<LiveAssistAnswer, "id" | "question" | "origin" | "speaker">,
   ) => void;
   updateAnswer: (
     sessionId: string,
@@ -120,22 +119,8 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
           ...session,
           projectsFailed: true,
         })),
-      setAutoProject: (sessionId, projectId) =>
-        updateSession(sessionId, (session) =>
-          session.project.source === "manual"
-            ? session
-            : { ...session, project: { id: projectId, source: "auto" } },
-        ),
       selectProject: (sessionId, projectId) =>
-        updateSession(sessionId, (session) => ({
-          ...session,
-          project: { id: projectId, source: "manual" },
-        })),
-      resetProject: (sessionId) =>
-        updateSession(sessionId, (session) => ({
-          ...session,
-          project: { id: null, source: "auto" },
-        })),
+        updateSession(sessionId, (session) => ({ ...session, projectId })),
       queueAnswer: (sessionId, answer) =>
         updateSession(sessionId, (session) => ({
           ...session,

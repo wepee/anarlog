@@ -172,7 +172,7 @@ struct FloatingAssistPanelView<Live: View>: View {
       Section(assist.labels.projectMenu) {
         ForEach(Array(assist.projectOptions.enumerated()), id: \.offset) { _, option in
           Button {
-            onAction(option.action, option.id)
+            onAction("selectProject", option.id)
           } label: {
             if option.selected {
               Label(option.title, systemImage: "checkmark")
@@ -264,9 +264,10 @@ struct FloatingAssistPanelView<Live: View>: View {
   @ViewBuilder
   private var questionsTab: some View {
     if let spotlight = assist.spotlight {
-      Button {
-        tab = .answers
-      } label: {
+      HStack(alignment: .top, spacing: 0) {
+        Button {
+          tab = .answers
+        } label: {
         VStack(alignment: .leading, spacing: 4) {
           Text(assist.labels.suggestedAnswer.uppercased())
             .font(.system(size: 10.5, design: .monospaced))
@@ -285,9 +286,13 @@ struct FloatingAssistPanelView<Live: View>: View {
         .background(
           RoundedRectangle(cornerRadius: 12).strokeBorder(primary.opacity(0.16), lineWidth: 0.5)
         )
-        .contentShape(Rectangle())
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        dismissButton { onAction("dismissAnswer", spotlight.id) }
+          .padding(.top, 6)
+          .padding(.trailing, 6)
       }
-      .buttonStyle(.plain)
       .padding(.vertical, 6)
     }
     if assist.questions.isEmpty {
@@ -333,18 +338,7 @@ struct FloatingAssistPanelView<Live: View>: View {
         }
       }
       Spacer(minLength: 0)
-      Button {
-        onAction("dismissQuestion", question.id)
-      } label: {
-        Image(systemName: "xmark")
-          .font(.system(size: 9, weight: .bold))
-          .frame(width: 22, height: 22)
-          .contentShape(Circle())
-      }
-      .buttonStyle(.plain)
-      .foregroundStyle(secondary)
-      .help(assist.labels.dismiss)
-      .accessibilityLabel(assist.labels.dismiss)
+      dismissButton { onAction("dismissQuestion", question.id) }
     }
     .padding(.vertical, 10)
   }
@@ -411,7 +405,29 @@ struct FloatingAssistPanelView<Live: View>: View {
     }
   }
 
+  private func dismissButton(_ action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      Image(systemName: "xmark")
+        .font(.system(size: 9, weight: .bold))
+        .frame(width: 22, height: 22)
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(secondary)
+    .help(assist.labels.dismiss)
+    .accessibilityLabel(assist.labels.dismiss)
+  }
+
   private func answerRow(_ answer: FloatingAssistPayload.Answer) -> some View {
+    HStack(alignment: .top, spacing: 0) {
+      answerContent(answer)
+      Spacer(minLength: 0)
+      dismissButton { onAction("dismissAnswer", answer.id) }
+    }
+    .padding(.vertical, 10)
+  }
+
+  private func answerContent(_ answer: FloatingAssistPayload.Answer) -> some View {
     VStack(alignment: .leading, spacing: 4) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if answer.isNew {
@@ -446,7 +462,6 @@ struct FloatingAssistPanelView<Live: View>: View {
         }
       }
     }
-    .padding(.vertical, 10)
   }
 
   @ViewBuilder

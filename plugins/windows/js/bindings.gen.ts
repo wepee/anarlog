@@ -389,11 +389,11 @@ export type AssistPanelAction =
    */
   | "ask"
   | "seenAnswers"
-  | "selectProject"
   /**
-   * Go back to finding the call's project automatically.
+   * The project to use, null to let the projects command pick.
    */
-  | "autoProject";
+  | "selectProject"
+  | "dismissAnswer";
 export type ChangelogState = { previous: string | null; current: string };
 export type ContactsSelection =
   | { type: "person"; id: string }
@@ -411,8 +411,9 @@ export type FloatingBarAssistAction = {
   sessionId: string;
   action: AssistPanelAction;
   /**
-   * The question to dismiss, the template to select (null for Auto), the
-   * project to select (null for none), or the text of a question to ask.
+   * The question or answer to dismiss, the template to select (null for
+   * Auto), the project to select (null for Auto), or the text of a
+   * question to ask.
    */
   id?: string | null;
 };

@@ -69,6 +69,7 @@ struct FloatingAssistPayload: Codable, Equatable {
   }
 
   struct Spotlight: Codable, Equatable {
+    let id: String
     let question: String
     let answer: String
   }
@@ -90,8 +91,7 @@ struct FloatingAssistPayload: Codable, Equatable {
   }
 
   struct ProjectOption: Codable, Equatable {
-    // "autoProject" or "selectProject"
-    let action: String
+    // nil for Auto: the projects command finds the project.
     let id: String?
     let title: String
     let selected: Bool

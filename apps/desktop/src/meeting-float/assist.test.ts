@@ -11,7 +11,7 @@ describe("buildFloatingAssist", () => {
       answers: [],
       projects: [],
       projectsFailed: false,
-      project: { id: null, source: "auto" },
+      projectId: null,
       snapshot: {
         ...EMPTY_LIVE_ASSIST_SNAPSHOT,
         todos: [
@@ -58,7 +58,7 @@ describe("buildFloatingAssist", () => {
       templates: [],
       projects: [],
       projectsFailed: false,
-      project: { id: null, source: "auto" },
+      projectId: null,
       answers: [
         {
           ...answer,

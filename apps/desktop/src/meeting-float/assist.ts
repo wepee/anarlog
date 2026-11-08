@@ -39,13 +39,13 @@ export type FloatingAssist = {
   notice: string | null;
   // The latest suggested answer, also shown on the Questions tab so it is
   // seen without switching tabs.
-  spotlight: { question: string; answer: string } | null;
+  spotlight: { id: string; question: string; answer: string } | null;
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
-  // null when no projects command is set or it listed nothing.
+  // null when no projects command is set or it listed nothing. Auto (id
+  // null) lets the projects command find the project.
   project: { title: string; auto: boolean } | null;
   projectOptions: Array<{
-    action: "autoProject" | "selectProject";
     id: string | null;
     title: string;
     selected: boolean;
@@ -94,7 +94,7 @@ export type FloatingAssistAction =
   | { action: "dismissQuestion"; id: string }
   | { action: "selectTemplate"; id: string | null }
   | { action: "selectProject"; id: string | null }
-  | { action: "autoProject" }
+  | { action: "dismissAnswer"; id: string }
   | { action: "seenQuestions" }
   | { action: "ask"; id: string }
   | { action: "seenAnswers" };
@@ -105,7 +105,7 @@ const SPOTLIGHT_MS = 2 * 60_000;
 export function buildFloatingAssist(
   session: LiveAssistSessionState,
 ): FloatingAssist {
-  const { snapshot, template, templates, project, projects, projectsFailed } =
+  const { snapshot, template, templates, projectId, projects, projectsFailed } =
     session;
   const autoTitle = t`Auto`;
   const selfLabel = t`Me`;
@@ -140,12 +140,9 @@ export function buildFloatingAssist(
     ...(unassigned ? [unassigned] : []),
   ].filter((group) => group.items.length > 0);
 
-  const noProjectTitle = t`No project`;
-  const projectTitle = project.id
-    ? (projects.find((option) => option.id === project.id)?.title ?? project.id)
-    : project.source === "manual"
-      ? noProjectTitle
-      : t`Project`;
+  const projectTitle = projectId
+    ? (projects.find((option) => option.id === projectId)?.title ?? projectId)
+    : t`Project`;
 
   const lastTopic = snapshot.topics[snapshot.topics.length - 1];
   const visibleAnswers = session.answers.filter(
@@ -188,7 +185,7 @@ export function buildFloatingAssist(
       projectFooter:
         projects.length === 0 && projectsFailed
           ? t`The projects command failed. Check it in Settings › Meetings.`
-          : t`Answers use what you know about this project. Picked by hand, it no longer changes.`,
+          : t`Answers use your notes on this project. On Auto, your projects command finds it.`,
       suggestedAnswer: t`Suggested answer`,
     },
     notice:
@@ -196,7 +193,11 @@ export function buildFloatingAssist(
         ? t`Live Assist could not update. It retries on its own.`
         : null,
     spotlight: spotlight
-      ? { question: spotlight.question, answer: spotlight.answer }
+      ? {
+          id: spotlight.id,
+          question: spotlight.question,
+          answer: spotlight.answer,
+        }
       : null,
     template: {
       id: template.id,
@@ -211,30 +212,18 @@ export function buildFloatingAssist(
     ],
     project:
       projects.length > 0
-        ? { title: projectTitle, auto: project.source === "auto" }
+        ? { title: projectTitle, auto: !projectId }
         : projectsFailed
           ? { title: t`Projects unavailable`, auto: false }
           : null,
     projectOptions:
       projects.length > 0
         ? [
-            {
-              action: "autoProject",
-              id: null,
-              title: autoTitle,
-              selected: project.source === "auto",
-            },
-            {
-              action: "selectProject",
-              id: null,
-              title: noProjectTitle,
-              selected: project.source === "manual" && !project.id,
-            },
+            { id: null, title: autoTitle, selected: !projectId },
             ...projects.map(({ id, title }) => ({
-              action: "selectProject" as const,
               id,
               title,
-              selected: project.source === "manual" && project.id === id,
+              selected: projectId === id,
             })),
           ]
         : [],

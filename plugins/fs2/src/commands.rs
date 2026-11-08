@@ -30,3 +30,19 @@ pub(crate) async fn write_text_file(path: PathBuf, content: String) -> Result<()
     }
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn append_text_file(path: PathBuf, content: String) -> Result<(), String> {
+    use std::io::Write;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .and_then(|mut file| file.write_all(content.as_bytes()))
+        .map_err(|e| e.to_string())
+}
