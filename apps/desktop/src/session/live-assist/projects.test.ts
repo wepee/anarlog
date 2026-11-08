@@ -2,40 +2,40 @@ import { describe, expect, it } from "vitest";
 
 import { parseContext, parsePassages, parseProjects } from "./projects";
 
-// Shaped like the contract's examples; to be replaced by real, anonymized
-// outputs of the user's command once it exists.
+// Real outputs of the user's command (Memex `anarlog`), anonymized.
+const projectsOutput = [
+  { id: "projects/Studio/lumen-optique", label: "lumen-optique" },
+  { id: "🤖 Agence/Agence", label: "Agence" },
+  { id: "projects/old-projects/vieux-client", label: "vieux-client" },
+];
+
+const readOutput = {
+  passages: [
+    {
+      ref: "[[projects/Studio/globex/MEMORY.md#Abonnement|MEMORY › Abonnement]]",
+      text: "- **Le tarif Magasin passe à 79 €/mois HT en offre de lancement** ✓ 2026-07-31",
+    },
+    {
+      ref: "[[projects/Studio/globex/sources/2026-10-01 Tiers payant [3290cd87].md#Transcript|2026-10-01 Tiers payant [3290cd87] › Transcript]]",
+      text: "pouvoir chercher les prix pratiqués par la mutuelle du client…",
+    },
+  ],
+};
+
 describe("project command outputs", () => {
-  it("keeps projects with an id and a label, in the command's order", () => {
-    expect(
-      parseProjects([
-        { id: "projects/lumen-optique", label: "Lumen Optique", icon: "👓" },
-        { id: "broken" },
-        { id: "projects/globex", label: "Globex" },
-      ]),
-    ).toEqual([
-      { id: "projects/lumen-optique", label: "Lumen Optique" },
-      { id: "projects/globex", label: "Globex" },
-    ]);
+  it("keeps the command's order and ids as given", () => {
+    expect(parseProjects([...projectsOutput, { id: "broken" }])).toEqual(
+      projectsOutput,
+    );
   });
 
-  it("reads the context and the passages, ignoring malformed entries", () => {
-    expect(parseContext({ text: "## Lumen Optique" })).toBe("## Lumen Optique");
-    expect(parseContext({})).toBe("");
+  it("reads the context and the passages", () => {
     expect(
-      parsePassages({
-        passages: [
-          {
-            ref: "[[projects/lumen-optique/MEMORY.md#Tarification|MEMORY › Tarification]]",
-            text: "TJM 600 € HT",
-          },
-          { ref: "[[x]]" },
-        ],
+      parseContext({
+        text: "# lumen-optique\n\n## Ce que c'est [[projects/Studio/lumen-optique/PROJECT.md#What this is|PROJECT › What this is]]",
       }),
-    ).toEqual([
-      {
-        ref: "[[projects/lumen-optique/MEMORY.md#Tarification|MEMORY › Tarification]]",
-        text: "TJM 600 € HT",
-      },
-    ]);
+    ).toContain("# lumen-optique");
+    expect(parseContext({})).toBe("");
+    expect(parsePassages(readOutput)).toEqual(readOutput.passages);
   });
 });

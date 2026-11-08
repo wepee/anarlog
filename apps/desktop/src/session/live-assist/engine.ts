@@ -935,8 +935,14 @@ async function loadCallContext(sessionId: string): Promise<CallContext> {
   );
   const context: CallContext = {
     title: getEventName(snapshot?.event) ?? (snapshot?.title || null),
+    // The user is "You" in the transcript, and the projects command expects
+    // the other participants only.
     participants: (snapshot?.participants ?? [])
-      .filter((participant) => participant.name || participant.email)
+      .filter(
+        (participant) =>
+          participant.humanId !== snapshot?.ownerUserId &&
+          (participant.name || participant.email),
+      )
       .map((participant) => ({
         name: participant.name,
         email: participant.email || null,

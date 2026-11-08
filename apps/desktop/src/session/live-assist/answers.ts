@@ -98,7 +98,9 @@ export function isSkippedAnswer(text: string): boolean {
 
 // [[path#Title|label]] (the notes' own format) or [label]; never a bare
 // number, which is part of the answer.
-const REFERENCE = /\[\[[^\]\n]{1,300}\]\]|\[(?!\d+\])[^[\]\n]{1,160}\]/g;
+// A note's name can itself hold brackets ("Cadrage [3fa9c2d1].md").
+const REFERENCE =
+  /\[\[(?:(?!\]\])[^\n]){1,300}\]\]|\[(?!\d+\])[^[\]\n]{1,160}\]/g;
 const TRAILING_REFERENCES = new RegExp(`(?:\\s*(?:${REFERENCE.source}))+\\s*$`);
 
 function referenceLabel(ref: string): string {
