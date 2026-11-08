@@ -6,4 +6,5 @@ permissions = [
     "allow-get-device-info",
     "allow-get-process-memory-bytes",
     "allow-opinionated-md-to-html",
+    "allow-run-project-provider",
 ]

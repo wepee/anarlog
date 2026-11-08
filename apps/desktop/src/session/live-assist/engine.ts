@@ -3,10 +3,18 @@ import { type LanguageModel, Output, streamText } from "ai";
 import { buildLiveAnswerPrompt, streamLiveAnswer } from "./answers";
 import { describeError, describeModel, liveAssistLog } from "./journal";
 import {
-  buildProjectContext,
-  EMPTY_PROJECT_CONTEXT,
-  type ProjectContext,
-} from "./project-context";
+  loadPastMeetings,
+  NO_PAST_MEETINGS,
+  type PastMeetings,
+} from "./past-meetings";
+import {
+  acceptProjectProposal,
+  listProjects,
+  loadProjectBrief,
+  matchProject,
+  type Project,
+  searchProject,
+} from "./projects";
 import { getWebSearchTools } from "./research";
 
 import { listTemplateCandidates } from "~/services/enhancer/auto-template";
@@ -51,10 +59,15 @@ type EngineConfig = {
   useMainLanguage: boolean;
   webSearch: boolean;
   autoAnswers: boolean;
-  obsidianPath: string;
+  projectsCommand: string;
 };
 
-type CallContext = { title: string | null; participants: string[] };
+type CallContext = {
+  title: string | null;
+  participants: string[];
+  // Everyone's address but the user's own.
+  participantEmails: string[];
+};
 
 type RunningSession = {
   sessionId: string;
@@ -66,7 +79,9 @@ type RunningSession = {
   lastSkipReason: string | null;
   controller: AbortController | null;
   context: Promise<CallContext> | null;
-  project: Promise<ProjectContext> | null;
+  pastMeetings: Promise<PastMeetings> | null;
+  projects: Project[];
+  briefs: Map<string, Promise<string>>;
   questionsScannedEndMs: number;
   seenQuestions: Set<string>;
   autoAnswers: number;
@@ -155,7 +170,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
               : "unsupported_by_provider"
             : "off",
           autoAnswers: config.autoAnswers,
-          obsidianVault: config.obsidianPath || null,
+          projectsCommand: config.projectsCommand.trim() || null,
           minIntervalMs: LIVE_ASSIST_MIN_INTERVAL_MS,
           minNewWords: LIVE_ASSIST_MIN_NEW_WORDS,
         },
@@ -172,54 +187,164 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         lastSkipReason: null,
         controller: null,
         context: null,
-        project: null,
+        pastMeetings: null,
+        projects: [],
+        briefs: new Map(),
         questionsScannedEndMs: 0,
         seenQuestions: new Set(),
         autoAnswers: 0,
         answering: false,
       };
       current = session;
-      // The project brief is ready, or on its way, before the first question.
+      // What the user knows about the project is ready, or on its way,
+      // before the first question.
       session.context = loadCallContext(activeSessionId);
-      session.project = loadProject(session, config);
+      session.pastMeetings = loadPastMeetingsFor(session);
+      void loadProjects(session, config);
     }
   };
 
-  const loadProject = async (
+  const loadPastMeetingsFor = async (
     session: RunningSession,
-    config: EngineConfig,
-  ): Promise<ProjectContext> => {
+  ): Promise<PastMeetings> => {
     const startedAt = Date.now();
-    const context = await (session.context ??
-      loadCallContext(session.sessionId));
-    const project = await buildProjectContext({
-      sessionId: session.sessionId,
-      title: context.title,
-      participants: context.participants,
-      obsidianPath: config.obsidianPath,
-      onError: (source, error) =>
-        liveAssistLog(
-          "project.source_failed",
-          { source, error: describeError(error) },
-          session.sessionId,
-        ),
-    }).catch((error) => {
-      liveAssistLog("project.failed", describeError(error), session.sessionId);
-      return EMPTY_PROJECT_CONTEXT;
+    const past = await loadPastMeetings(session.sessionId).catch((error) => {
+      liveAssistLog(
+        "past_meetings.failed",
+        describeError(error),
+        session.sessionId,
+      );
+      return NO_PAST_MEETINGS;
     });
     liveAssistLog(
-      "project.loaded",
+      "past_meetings.loaded",
       {
         durationMs: Date.now() - startedAt,
-        chars: project.text.length,
-        pastMeetings: project.pastMeetings,
-        obsidianNotes: project.obsidianNotes,
-        text: project.text,
+        meetings: past.titles,
+        chars: past.text.length,
       },
       session.sessionId,
     );
-    return project;
+    return past;
   };
+
+  const loadProjects = async (
+    session: RunningSession,
+    config: EngineConfig,
+  ) => {
+    const command = config.projectsCommand.trim();
+    if (!command) {
+      liveAssistLog("projects.not_configured", undefined, session.sessionId);
+      return;
+    }
+    const startedAt = Date.now();
+    let projects: Project[];
+    try {
+      projects = await listProjects(command);
+    } catch (error) {
+      liveAssistLog(
+        "projects.failed",
+        { durationMs: Date.now() - startedAt, error: describeError(error) },
+        session.sessionId,
+      );
+      return;
+    }
+    if (current !== session) {
+      return;
+    }
+    projects.sort(
+      (a, b) =>
+        Number(b.active) - Number(a.active) || a.name.localeCompare(b.name),
+    );
+    session.projects = projects;
+    useLiveAssistStore.getState().setProjects(
+      session.sessionId,
+      projects.map(({ id, name }) => ({ id, title: name })),
+    );
+    liveAssistLog(
+      "projects.loaded",
+      {
+        durationMs: Date.now() - startedAt,
+        count: projects.length,
+        active: projects.filter((project) => project.active).length,
+      },
+      session.sessionId,
+    );
+    await matchByRules(session);
+  };
+
+  // Rules 2 and 3 (an address, then a name in the title, pointing to a single
+  // project). Rule 4, the call's content, runs with the Live Assist update.
+  const matchByRules = async (session: RunningSession) => {
+    session.context ??= loadCallContext(session.sessionId);
+    const context = await session.context;
+    if (current !== session || session.projects.length === 0) {
+      return;
+    }
+    const match = matchProject({
+      projects: session.projects,
+      title: context.title,
+      participantEmails: context.participantEmails,
+    });
+    liveAssistLog(
+      "project.rules",
+      {
+        decision: match?.reason ?? "no_single_match",
+        projectId: match?.project.id ?? null,
+        title: context.title,
+        participantEmails: context.participantEmails,
+      },
+      session.sessionId,
+    );
+    if (match) {
+      useLiveAssistStore
+        .getState()
+        .setAutoProject(session.sessionId, match.project.id);
+    }
+  };
+
+  const getBrief = (session: RunningSession, projectId: string) => {
+    const cached = session.briefs.get(projectId);
+    if (cached) {
+      return cached;
+    }
+    const startedAt = Date.now();
+    const brief = loadProjectBrief(
+      getConfig().projectsCommand.trim(),
+      projectId,
+    )
+      .then((text) => {
+        liveAssistLog(
+          "project.brief_loaded",
+          {
+            projectId,
+            durationMs: Date.now() - startedAt,
+            chars: text.length,
+            text,
+          },
+          session.sessionId,
+        );
+        return text;
+      })
+      .catch((error) => {
+        liveAssistLog(
+          "project.brief_failed",
+          {
+            projectId,
+            durationMs: Date.now() - startedAt,
+            error: describeError(error),
+          },
+          session.sessionId,
+        );
+        session.briefs.delete(projectId);
+        return "";
+      });
+    session.briefs.set(projectId, brief);
+    return brief;
+  };
+
+  const getProjectName = (session: RunningSession, projectId: string | null) =>
+    session.projects.find((project) => project.id === projectId)?.name ?? null;
 
   const tick = async () => {
     sync();
@@ -288,6 +413,13 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         candidates.find((candidate) => candidate.id === before.template.id)
           ?.title ?? "Auto";
       const language = await resolveCallLanguage(config, window.text);
+      const projectCandidates =
+        before.project.source === "auto" && !before.project.id
+          ? session.projects
+          : [];
+      const projectBrief = before.project.id
+        ? await getBrief(session, before.project.id)
+        : "";
       const coverageLabels = getCoverageLabels(
         before.template,
         candidates,
@@ -304,6 +436,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         dismissed: before.dismissed,
         snapshot: before.snapshot,
         transcript: window.text,
+        projectCandidates,
+        projectBrief,
       });
 
       liveAssistLog(
@@ -318,6 +452,12 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           template: { ...before.template, title: templateTitle },
           coverageLabels,
           dismissed: before.dismissed,
+          project: {
+            ...before.project,
+            name: getProjectName(session, before.project.id),
+            candidates: projectCandidates.length,
+            briefChars: projectBrief.length,
+          },
           candidates: candidates.map(({ id, title, description }) => ({
             id,
             title,
@@ -375,6 +515,22 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       });
       session.processedEndMs = window.lastEndMs;
 
+      const projectDecision =
+        projectCandidates.length > 0
+          ? acceptProjectProposal(
+              output.project,
+              projectCandidates,
+              window.text,
+            )
+          : null;
+      const stillUnknown =
+        latest.project.source === "auto" && !latest.project.id;
+      if (projectDecision?.projectId && stillUnknown) {
+        useLiveAssistStore
+          .getState()
+          .setAutoProject(sessionId, projectDecision.projectId);
+      }
+
       liveAssistLog(
         "update.done",
         {
@@ -388,6 +544,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
             before: latest.template,
             after: decision.template,
           },
+          project: projectDecision
+            ? { proposal: output.project, decision: projectDecision.reason }
+            : { decision: "not_asked" },
           questions: {
             shown: snapshot.questions.map(({ id, text }) => ({ id, text })),
             added: snapshot.questions
@@ -517,7 +676,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     const startedAt = Date.now();
     try {
       session.context ??= loadCallContext(sessionId);
-      session.project ??= loadProject(session, config);
+      session.pastMeetings ??= loadPastMeetingsFor(session);
+      const projectId = getLiveAssistSession(sessionId).project.id;
+      const command = config.projectsCommand.trim();
       const segments = listenerStore.getState().liveSegments;
       const lastEndMs = segments.reduce(
         (max, segment) => Math.max(max, segment.end_ms),
@@ -527,11 +688,26 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         segments,
         lastEndMs - ANSWER_CONTEXT_MS + 120_000,
       ).text;
-      const [context, project, language] = await Promise.all([
-        session.context,
-        session.project,
-        resolveCallLanguage(config, transcript),
-      ]);
+      const [context, pastMeetings, projectBrief, language] = await Promise.all(
+        [
+          session.context,
+          session.pastMeetings,
+          projectId ? getBrief(session, projectId) : Promise.resolve(""),
+          resolveCallLanguage(config, transcript),
+        ],
+      );
+      const projectSearch =
+        projectId && command
+          ? (query: string) =>
+              searchProject(command, projectId, query).catch((error) => {
+                liveAssistLog(
+                  "answer.project_search_failed",
+                  { id: next.id, query, error: describeError(error) },
+                  sessionId,
+                );
+                return [];
+              })
+          : null;
       const webTools = config.webSearch
         ? getWebSearchTools(config.model)
         : null;
@@ -544,7 +720,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           getLiveAssistSession(sessionId).snapshot,
         ),
         transcript,
-        projectContext: project.text,
+        projectName: getProjectName(session, projectId),
+        projectBrief,
+        pastMeetings: pastMeetings.text,
       });
       liveAssistLog(
         "answer.started",
@@ -555,7 +733,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           language,
           model: config.modelId,
           web: Boolean(webTools),
-          projectContextChars: project.text.length,
+          projectId,
+          projectBriefChars: projectBrief.length,
+          pastMeetingsChars: pastMeetings.text.length,
+          projectSearch: Boolean(projectSearch),
           waitedInQueueMs: startedAt - next.createdAtMs,
           promptChars: prompt.length,
         },
@@ -569,6 +750,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         modelId: config.modelId,
         prompt,
         webTools,
+        projectSearch,
         onText: (text) => {
           const now = Date.now();
           if (
@@ -606,6 +788,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           durationMs: Date.now() - startedAt,
           text: result.text,
           sources: result.sources,
+          projectSearches: result.projectSearches,
         },
         sessionId,
       );
@@ -660,6 +843,25 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       answers?.some((answer) => answer.status === "queued")
     ) {
       void processAnswers(session);
+    }
+    const project = state.sessions[sessionId]?.project;
+    const previousProject = previous.sessions[sessionId]?.project;
+    if (project && previousProject && project !== previousProject) {
+      liveAssistLog(
+        "project.changed",
+        {
+          from: previousProject,
+          to: { ...project, name: getProjectName(session, project.id) },
+        },
+        sessionId,
+      );
+      if (project.id) {
+        void getBrief(session, project.id);
+        // Its open questions and pending tasks feed the next suggestions.
+        session.forced = true;
+      } else if (project.source === "auto") {
+        void matchByRules(session);
+      }
     }
     const next = state.sessions[sessionId]?.template;
     const before = previous.sessions[sessionId]?.template;
@@ -723,11 +925,17 @@ async function loadCallContext(sessionId: string): Promise<CallContext> {
       return null;
     },
   );
+  const participants = snapshot?.participants ?? [];
   const context = {
     title: getEventName(snapshot?.event) ?? (snapshot?.title || null),
-    participants: (snapshot?.participants ?? [])
+    participants: participants
       .map((participant) => participant.name)
       .filter(Boolean),
+    participantEmails: participants
+      .filter((participant) => participant.humanId !== snapshot?.ownerUserId)
+      .flatMap((participant) =>
+        participant.email ? [participant.email.toLowerCase()] : [],
+      ),
   };
   liveAssistLog("context.loaded", context, sessionId);
   return context;

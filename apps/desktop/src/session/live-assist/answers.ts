@@ -1,21 +1,33 @@
-import { streamText, type LanguageModel, type ToolSet } from "ai";
+import {
+  type LanguageModel,
+  stepCountIs,
+  streamText,
+  tool,
+  type ToolSet,
+} from "ai";
+import { z } from "zod";
 
+import type { ProjectExcerpt } from "./projects";
 import { getSourceLabel } from "./research";
 
 export type LiveAnswerSource = {
-  kind: "web";
+  kind: "web" | "project";
   label: string;
-  url: string;
+  url: string | null;
 };
 
 const ANSWER_TIMEOUT_MS = 30_000;
 const MAX_WEB_SOURCES = 2;
+const MAX_PROJECT_SEARCHES = 2;
+const MAX_PROJECT_SOURCES = 3;
 
 export const LIVE_ANSWER_SYSTEM_PROMPT = `You help the user ("You" in the transcript) answer a question during a live call. Reply with what the user could say right now: one to three short sentences, plain text, no preamble, no markdown.
 
-Sources, in this order: what was said in the call; the project context (the user's earlier meetings and notes about this project); your general knowledge for general or technical questions; the web search tool, only if one is available and the answer depends on recent or specific public facts (a price, a release, a company's news).
+Sources, in this order: what was said in the call; the project brief and the earlier meetings (what the user already knows about this project); the search_project tool, when it is available and the brief lacks a fact the question needs; your general knowledge for general or technical questions; the web search tool, only if one is available and the answer depends on recent or specific public facts (a price, a release, a company's news).
 
-Never invent facts about the user, their company, this project or its client: figures, prices, dates, past work, commitments. If the call and the project context do not contain them, say in a few words that you do not have this information.
+A struck-through value (~~old~~ → new) is outdated: use the new one.
+
+Never invent facts about the user, their company, this project or its client: figures, prices, dates, past work, commitments. If the call, the brief, the earlier meetings and the project search do not contain them, say in a few words that your notes do not have this information.
 
 When a participant asked the question: if it is small talk, rhetorical, addressed to someone else, or nothing reliable supports an answer, reply exactly SKIP.
 When the user typed the question: never reply SKIP.
@@ -29,7 +41,9 @@ export function buildLiveAnswerPrompt({
   callTitle,
   callState,
   transcript,
-  projectContext,
+  projectName,
+  projectBrief,
+  pastMeetings,
 }: {
   question: string;
   origin: "auto" | "asked";
@@ -37,7 +51,9 @@ export function buildLiveAnswerPrompt({
   callTitle: string | null;
   callState: string;
   transcript: string;
-  projectContext: string;
+  projectName: string | null;
+  projectBrief: string;
+  pastMeetings: string;
 }): string {
   return [
     `Language: ${language}`,
@@ -46,8 +62,12 @@ export function buildLiveAnswerPrompt({
       ? `Question typed by the user: ${question}`
       : `Question asked by a participant: ${question}`,
     "",
-    "Project context:",
-    projectContext || "(nothing found for this project)",
+    `Project: ${projectName ?? "(unknown)"}`,
+    "Project brief:",
+    projectBrief || "(none)",
+    "",
+    "Earlier meetings with the same people:",
+    pastMeetings || "(none)",
     "",
     "What the call covered so far:",
     callState || "(nothing yet)",
@@ -89,6 +109,7 @@ export async function streamLiveAnswer({
   modelId,
   prompt,
   webTools,
+  projectSearch,
   signal,
   onText,
 }: {
@@ -97,6 +118,7 @@ export async function streamLiveAnswer({
   modelId: string;
   prompt: string;
   webTools: ToolSet | null;
+  projectSearch: ((query: string) => Promise<ProjectExcerpt[]>) | null;
   signal?: AbortSignal;
   onText: (text: string) => void;
 }): Promise<{
@@ -104,15 +126,50 @@ export async function streamLiveAnswer({
   skipped: boolean;
   sources: LiveAnswerSource[];
   firstTextMs: number | null;
+  projectSearches: string[];
 }> {
   const startedAt = Date.now();
   let firstTextMs: number | null = null;
   const providerOptions = getLiveAnswerProviderOptions(providerId, modelId);
+  const projectSearches: string[] = [];
+  const projectRefs: string[] = [];
+  const tools: ToolSet = {
+    ...webTools,
+    ...(projectSearch
+      ? {
+          search_project: tool({
+            description:
+              "Search the user's notes on this project (decisions, prices, contacts, tasks, past exchanges). Use a few precise keywords.",
+            inputSchema: z.object({ query: z.string() }),
+            execute: async ({ query }) => {
+              if (projectSearches.length >= MAX_PROJECT_SEARCHES) {
+                return "Search limit reached: answer with what you have.";
+              }
+              projectSearches.push(query);
+              const excerpts = await projectSearch(query);
+              for (const excerpt of excerpts) {
+                if (!projectRefs.includes(excerpt.ref)) {
+                  projectRefs.push(excerpt.ref);
+                }
+              }
+              return excerpts.length > 0
+                ? excerpts
+                    .map((excerpt) => `[${excerpt.ref}]\n${excerpt.text}`)
+                    .join("\n\n")
+                : "Nothing found.";
+            },
+          }),
+        }
+      : {}),
+  };
+  const hasTools = Object.keys(tools).length > 0;
   const result = streamText({
     model,
     system: LIVE_ANSWER_SYSTEM_PROMPT,
     prompt,
-    ...(webTools ? { tools: webTools } : {}),
+    ...(hasTools
+      ? { tools, stopWhen: stepCountIs(MAX_PROJECT_SEARCHES + 2) }
+      : {}),
     ...(providerOptions ? { providerOptions } : {}),
     abortSignal: signal,
     maxRetries: 1,
@@ -132,15 +189,19 @@ export async function streamLiveAnswer({
   }
 
   const skipped = !text.trim() || isSkippedAnswer(text);
-  const sources: LiveAnswerSource[] = [];
+  const sources: LiveAnswerSource[] = projectRefs
+    .slice(0, MAX_PROJECT_SOURCES)
+    .map((ref) => ({ kind: "project", label: ref, url: null }));
   const seen = new Set<string>();
-  for (const source of (await result.sources) ?? []) {
+  const steps = await result.steps;
+  for (const source of steps.flatMap((step) => step.sources)) {
     const url = (source as { url?: unknown }).url;
     if (typeof url !== "string" || seen.has(url)) continue;
     seen.add(url);
     sources.push({ kind: "web", label: getSourceLabel(url), url });
-    if (sources.length >= MAX_WEB_SOURCES) break;
+    if (sources.filter((item) => item.kind === "web").length >= MAX_WEB_SOURCES)
+      break;
   }
 
-  return { text: text.trim(), skipped, sources, firstTextMs };
+  return { text: text.trim(), skipped, sources, firstTextMs, projectSearches };
 }

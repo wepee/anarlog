@@ -65,6 +65,7 @@ struct FloatingAssistPayload: Codable, Equatable {
     let due, toClarify, dismiss, templateMenu, templateFooter, auto: String
     let emptyQuestions, emptyTodo, emptySummary: String
     let answers, askPlaceholder, answering, noAnswer, emptyAnswers, youAsked: String
+    let projectMenu, projectFooter: String
   }
 
   struct Template: Codable, Equatable {
@@ -76,6 +77,19 @@ struct FloatingAssistPayload: Codable, Equatable {
   struct TemplateOption: Codable, Equatable {
     let id: String?
     let title: String
+  }
+
+  struct Project: Codable, Equatable {
+    let title: String
+    let auto: Bool
+  }
+
+  struct ProjectOption: Codable, Equatable {
+    // "autoProject" or "selectProject"
+    let action: String
+    let id: String?
+    let title: String
+    let selected: Bool
   }
 
   struct Question: Codable, Equatable, Identifiable {
@@ -92,8 +106,10 @@ struct FloatingAssistPayload: Codable, Equatable {
   }
 
   struct AnswerSource: Codable, Equatable {
+    // "web" or "project"
+    let kind: String
     let label: String
-    let url: String
+    let url: String?
   }
 
   struct Answer: Codable, Equatable, Identifiable {
@@ -127,6 +143,8 @@ struct FloatingAssistPayload: Codable, Equatable {
   let labels: Labels
   let template: Template
   let templates: [TemplateOption]
+  let project: Project?
+  let projectOptions: [ProjectOption]
   let questions: [Question]
   let coverage: [Coverage]
   let todoGroups: [TodoGroup]

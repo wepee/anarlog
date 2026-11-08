@@ -31,6 +31,7 @@ function segment(
 function output(partial: Partial<LiveAssistOutput> = {}): LiveAssistOutput {
   return {
     template: { templateId: null, confidence: "low", evidence: null },
+    project: { projectId: null, confidence: "low", evidence: null },
     recent: "",
     topics: [],
     decisions: [],

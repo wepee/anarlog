@@ -2,9 +2,6 @@ mod commands;
 mod error;
 mod ext;
 mod manifest;
-mod markdown_tree;
-
-pub use markdown_tree::MarkdownFile;
 
 pub use error::{Error, Result};
 pub use ext::*;
@@ -15,7 +12,6 @@ fn make_specta_builder<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
     tauri_specta::Builder::<R>::new()
         .plugin_name(PLUGIN_NAME)
         .commands(tauri_specta::collect_commands![
-            commands::read_markdown_tree,
             commands::read_text_file::<tauri::Wry>,
             commands::remove::<tauri::Wry>,
             commands::write_text_file,

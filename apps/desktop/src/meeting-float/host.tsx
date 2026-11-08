@@ -329,6 +329,10 @@ function FloatingMeetingWindowSync({
           const templateId = payload.id ?? null;
           setManualTemplateChoice(payload.sessionId, templateId);
           store.selectTemplate(payload.sessionId, templateId);
+        } else if (payload.action === "selectProject") {
+          store.selectProject(payload.sessionId, payload.id ?? null);
+        } else if (payload.action === "autoProject") {
+          store.resetProject(payload.sessionId);
         } else if (payload.action === "seenQuestions") {
           store.markQuestionsSeen(payload.sessionId);
         } else if (payload.action === "seenAnswers") {

@@ -21,7 +21,7 @@ export function AssistPanel({
   onAction: (action: FloatingAssistAction) => void;
 }) {
   const [tab, setTab] = useState<Tab>("questions");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menu, setMenu] = useState<"template" | "project" | null>(null);
   const { labels } = assist;
   const muted = dark ? "rgba(255, 255, 255, 0.66)" : "rgba(31, 28, 26, 0.6)";
   const hairline = dark
@@ -54,25 +54,29 @@ export function AssistPanel({
       data-tauri-drag-region="false"
     >
       <div className="flex flex-col gap-2 px-3 pt-3 pb-2">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-            className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-medium"
-            style={{
-              background: dark
-                ? "rgba(255,255,255,0.13)"
-                : "rgba(31,28,26,0.08)",
-            }}
-          >
-            <span>{assist.template.title}</span>
-            {assist.template.auto ? (
-              <span style={{ color: muted }}>· {labels.auto}</span>
-            ) : null}
-            <CaretDown size={9} weight="bold" />
-          </button>
+        <div className="flex items-center justify-end gap-1.5">
+          {assist.project ? (
+            <MenuChip
+              title={assist.project.title}
+              auto={assist.project.auto ? labels.auto : null}
+              open={menu === "project"}
+              dark={dark}
+              muted={muted}
+              onClick={() =>
+                setMenu((open) => (open === "project" ? null : "project"))
+              }
+            />
+          ) : null}
+          <MenuChip
+            title={assist.template.title}
+            auto={assist.template.auto ? labels.auto : null}
+            open={menu === "template"}
+            dark={dark}
+            muted={muted}
+            onClick={() =>
+              setMenu((open) => (open === "template" ? null : "template"))
+            }
+          />
         </div>
         <div
           role="tablist"
@@ -139,60 +143,156 @@ export function AssistPanel({
         {tab === "live" && <div className="-mx-4 h-full">{live}</div>}
       </div>
 
-      {menuOpen ? (
-        <div
-          role="menu"
-          aria-label={labels.templateMenu}
-          className="absolute top-10 right-3 z-10 flex w-56 flex-col gap-px rounded-2xl p-1.5"
+      {menu === "template" ? (
+        <Menu
+          label={labels.templateMenu}
+          footer={labels.templateFooter}
+          dark={dark}
+          muted={muted}
+          hairline={hairline}
+          options={assist.templates.map((option) => ({
+            key: option.id ?? "auto",
+            title: option.title,
+            selected: option.id === assist.template.id,
+            onSelect: () =>
+              onAction({ action: "selectTemplate", id: option.id }),
+          }))}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
+      {menu === "project" ? (
+        <Menu
+          label={labels.projectMenu}
+          footer={labels.projectFooter}
+          dark={dark}
+          muted={muted}
+          hairline={hairline}
+          options={assist.projectOptions.map((option) => ({
+            key: `${option.action}:${option.id ?? ""}`,
+            title: option.title,
+            selected: option.selected,
+            onSelect: () =>
+              onAction(
+                option.action === "autoProject"
+                  ? { action: "autoProject" }
+                  : { action: "selectProject", id: option.id },
+              ),
+          }))}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function MenuChip({
+  title,
+  auto,
+  open,
+  dark,
+  muted,
+  onClick,
+}: {
+  title: string;
+  auto: string | null;
+  open: boolean;
+  dark: boolean;
+  muted: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={onClick}
+      className="flex max-w-40 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-medium"
+      style={{
+        background: dark ? "rgba(255,255,255,0.13)" : "rgba(31,28,26,0.08)",
+      }}
+    >
+      <span className="truncate">{title}</span>
+      {auto ? (
+        <span className="shrink-0" style={{ color: muted }}>
+          · {auto}
+        </span>
+      ) : null}
+      <CaretDown size={9} weight="bold" className="shrink-0" />
+    </button>
+  );
+}
+
+function Menu({
+  label,
+  footer,
+  options,
+  dark,
+  muted,
+  hairline,
+  onClose,
+}: {
+  label: string;
+  footer: string;
+  options: Array<{
+    key: string;
+    title: string;
+    selected: boolean;
+    onSelect: () => void;
+  }>;
+  dark: boolean;
+  muted: string;
+  hairline: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      role="menu"
+      aria-label={label}
+      className="absolute top-10 right-3 z-10 flex max-h-[70%] w-56 flex-col gap-px overflow-y-auto rounded-2xl p-1.5"
+      style={{
+        background: dark
+          ? "rgba(40, 42, 37, 0.94)"
+          : "rgba(246, 245, 240, 0.97)",
+        boxShadow: `inset 0 0 0 0.5px ${hairline}, 0 12px 32px rgba(0,0,0,0.3)`,
+      }}
+    >
+      <p
+        className="px-2.5 pt-1.5 pb-1 font-mono text-[10.5px] tracking-wider uppercase"
+        style={{ color: muted }}
+      >
+        {label}
+      </p>
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          role="menuitemradio"
+          aria-checked={option.selected}
+          onClick={() => {
+            onClose();
+            option.onSelect();
+          }}
+          className={cn([
+            "rounded-xl px-2.5 py-1.5 text-left text-[13px]",
+            option.selected ? "font-semibold" : "font-medium",
+          ])}
           style={{
-            background: dark
-              ? "rgba(40, 42, 37, 0.94)"
-              : "rgba(246, 245, 240, 0.97)",
-            boxShadow: `inset 0 0 0 0.5px ${hairline}, 0 12px 32px rgba(0,0,0,0.3)`,
+            background: option.selected
+              ? dark
+                ? "rgba(255,255,255,0.12)"
+                : "rgba(31,28,26,0.06)"
+              : undefined,
           }}
         >
-          <p
-            className="px-2.5 pt-1.5 pb-1 font-mono text-[10.5px] tracking-wider uppercase"
-            style={{ color: muted }}
-          >
-            {labels.templateMenu}
-          </p>
-          {assist.templates.map((option) => (
-            <button
-              key={option.id ?? "auto"}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option.id === assist.template.id}
-              onClick={() => {
-                setMenuOpen(false);
-                onAction({ action: "selectTemplate", id: option.id });
-              }}
-              className={cn([
-                "rounded-xl px-2.5 py-1.5 text-left text-[13px]",
-                option.id === assist.template.id
-                  ? "font-semibold"
-                  : "font-medium",
-              ])}
-              style={{
-                background:
-                  option.id === assist.template.id
-                    ? dark
-                      ? "rgba(255,255,255,0.12)"
-                      : "rgba(31,28,26,0.06)"
-                    : undefined,
-              }}
-            >
-              {option.title}
-            </button>
-          ))}
-          <p
-            className="mt-1 px-2.5 pt-1.5 pb-1 text-[11.5px]"
-            style={{ color: muted, borderTop: `0.5px solid ${hairline}` }}
-          >
-            {labels.templateFooter}
-          </p>
-        </div>
-      ) : null}
+          {option.title}
+        </button>
+      ))}
+      <p
+        className="mt-1 px-2.5 pt-1.5 pb-1 text-[11.5px]"
+        style={{ color: muted, borderTop: `0.5px solid ${hairline}` }}
+      >
+        {footer}
+      </p>
     </div>
   );
 }
@@ -275,7 +375,11 @@ function AnswersTab({
                   style={{ color: "rgb(168, 212, 255)" }}
                 >
                   {answer.sources
-                    .map((source) => `↗ ${source.label}`)
+                    .map((source) =>
+                      source.kind === "web"
+                        ? `↗ ${source.label}`
+                        : `◆ ${source.label}`,
+                    )
                     .join("  ")}
                 </p>
               ) : null}

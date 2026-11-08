@@ -53,4 +53,21 @@ describe("live assist store", () => {
       source: "manual",
     });
   });
+
+  it("never lets an automatic project replace one picked by hand", () => {
+    const store = useLiveAssistStore.getState();
+    store.selectProject("s1", null);
+    store.setAutoProject("s1", "lumen");
+    expect(getLiveAssistSession("s1").project).toEqual({
+      id: null,
+      source: "manual",
+    });
+
+    store.resetProject("s1");
+    store.setAutoProject("s1", "lumen");
+    expect(getLiveAssistSession("s1").project).toEqual({
+      id: "lumen",
+      source: "auto",
+    });
+  });
 });

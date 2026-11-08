@@ -16814,6 +16814,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-specta",
+ "tokio",
  "vergen-gix",
 ]
 

@@ -13,6 +13,7 @@ vergen-gix = { workspace = true, features = ["build"] }
 
 [dev-dependencies]
 specta-typescript = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [dependencies]
 anlg-buffer = { workspace = true }
@@ -24,3 +25,4 @@ tauri-specta = { workspace = true, features = ["derive", "typescript"] }
 serde = { workspace = true, features = ["derive"] }
 specta = { workspace = true }
 sysinfo = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "time"] }

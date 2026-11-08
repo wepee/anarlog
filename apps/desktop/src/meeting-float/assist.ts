@@ -31,9 +31,19 @@ export type FloatingAssist = {
     noAnswer: string;
     emptyAnswers: string;
     youAsked: string;
+    projectMenu: string;
+    projectFooter: string;
   };
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
+  // null when no projects command is set or it listed nothing.
+  project: { title: string; auto: boolean } | null;
+  projectOptions: Array<{
+    action: "autoProject" | "selectProject";
+    id: string | null;
+    title: string;
+    selected: boolean;
+  }>;
   questions: Array<{
     id: string;
     text: string;
@@ -64,7 +74,11 @@ export type FloatingAssist = {
     origin: "auto" | "asked";
     status: "queued" | "answering" | "ready" | "error";
     answer: string;
-    sources: Array<{ kind: "web"; label: string; url: string }>;
+    sources: Array<{
+      kind: "web" | "project";
+      label: string;
+      url: string | null;
+    }>;
     isNew: boolean;
   }>;
   newAnswers: number;
@@ -73,6 +87,8 @@ export type FloatingAssist = {
 export type FloatingAssistAction =
   | { action: "dismissQuestion"; id: string }
   | { action: "selectTemplate"; id: string | null }
+  | { action: "selectProject"; id: string | null }
+  | { action: "autoProject" }
   | { action: "seenQuestions" }
   | { action: "ask"; id: string }
   | { action: "seenAnswers" };
@@ -82,7 +98,7 @@ const SELF_OWNERS = new Set(["you", "vous", "moi", "me"]);
 export function buildFloatingAssist(
   session: LiveAssistSessionState,
 ): FloatingAssist {
-  const { snapshot, template, templates } = session;
+  const { snapshot, template, templates, project, projects } = session;
   const autoTitle = t`Auto`;
   const selfLabel = t`Me`;
   const noOwnerLabel = t`No owner`;
@@ -116,6 +132,13 @@ export function buildFloatingAssist(
     ...(unassigned ? [unassigned] : []),
   ].filter((group) => group.items.length > 0);
 
+  const noProjectTitle = t`No project`;
+  const projectTitle = project.id
+    ? (projects.find((option) => option.id === project.id)?.title ?? project.id)
+    : project.source === "manual"
+      ? noProjectTitle
+      : t`Project`;
+
   const lastTopic = snapshot.topics[snapshot.topics.length - 1];
   const visibleAnswers = session.answers.filter(
     (answer) => answer.origin === "asked" || answer.answer.length > 0,
@@ -146,6 +169,8 @@ export function buildFloatingAssist(
       noAnswer: t`No answer found.`,
       emptyAnswers: t`Questions asked to you get a suggested answer here. You can also ask your own.`,
       youAsked: t`You asked`,
+      projectMenu: t`Project`,
+      projectFooter: t`Answers use what you know about this project. Picked by hand, it no longer changes.`,
     },
     template: {
       id: template.id,
@@ -158,6 +183,33 @@ export function buildFloatingAssist(
       { id: null, title: autoTitle },
       ...templates.map(({ id, title }) => ({ id, title })),
     ],
+    project:
+      projects.length > 0
+        ? { title: projectTitle, auto: project.source === "auto" }
+        : null,
+    projectOptions:
+      projects.length > 0
+        ? [
+            {
+              action: "autoProject",
+              id: null,
+              title: autoTitle,
+              selected: project.source === "auto",
+            },
+            {
+              action: "selectProject",
+              id: null,
+              title: noProjectTitle,
+              selected: project.source === "manual" && !project.id,
+            },
+            ...projects.map(({ id, title }) => ({
+              action: "selectProject" as const,
+              id,
+              title,
+              selected: project.source === "manual" && project.id === id,
+            })),
+          ]
+        : [],
     questions: snapshot.questions.map(({ id, text, why, isNew }) => ({
       id,
       text,

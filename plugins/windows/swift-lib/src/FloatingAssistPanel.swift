@@ -117,6 +117,9 @@ struct FloatingAssistPanelView<Live: View>: View {
     VStack(spacing: 10) {
       HStack {
         Spacer(minLength: 0)
+        if let project = assist.project {
+          projectMenu(project)
+        }
         templateMenu
       }
       HStack(spacing: 2) {
@@ -149,21 +152,50 @@ struct FloatingAssistPanelView<Live: View>: View {
       Divider()
       Text(assist.labels.templateFooter)
     } label: {
-      HStack(spacing: 4) {
-        Text(assist.template.title)
-        if assist.template.auto {
-          Text("· \(assist.labels.auto)").foregroundStyle(secondary)
-        }
-        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
-      }
-      .font(.system(size: 11.5, weight: .medium))
-      .padding(.horizontal, 9)
-      .padding(.vertical, 3)
-      .background(Capsule().fill(primary.opacity(0.13)))
+      menuChip(assist.template.title, auto: assist.template.auto)
     }
     .menuStyle(.borderlessButton)
     .menuIndicator(.hidden)
     .fixedSize()
+  }
+
+  private func projectMenu(_ project: FloatingAssistPayload.Project) -> some View {
+    Menu {
+      Section(assist.labels.projectMenu) {
+        ForEach(Array(assist.projectOptions.enumerated()), id: \.offset) { _, option in
+          Button {
+            onAction(option.action, option.id)
+          } label: {
+            if option.selected {
+              Label(option.title, systemImage: "checkmark")
+            } else {
+              Text(option.title)
+            }
+          }
+        }
+      }
+      Divider()
+      Text(assist.labels.projectFooter)
+    } label: {
+      menuChip(project.title, auto: project.auto)
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .fixedSize()
+  }
+
+  private func menuChip(_ title: String, auto: Bool) -> some View {
+    HStack(spacing: 4) {
+      Text(title).lineLimit(1).truncationMode(.tail).frame(maxWidth: 140, alignment: .leading)
+      if auto {
+        Text("· \(assist.labels.auto)").foregroundStyle(secondary)
+      }
+      Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+    }
+    .font(.system(size: 11.5, weight: .medium))
+    .padding(.horizontal, 9)
+    .padding(.vertical, 3)
+    .background(Capsule().fill(primary.opacity(0.13)))
   }
 
   private func tabButton(_ value: FloatingAssistTab, _ title: String, count: Int = 0)
@@ -366,12 +398,16 @@ struct FloatingAssistPanelView<Live: View>: View {
       .font(.system(size: 14, weight: .medium))
       .fixedSize(horizontal: false, vertical: true)
       ForEach(Array(answer.sources.enumerated()), id: \.offset) { _, source in
-        if let url = URL(string: source.url) {
+        if let urlString = source.url, let url = URL(string: urlString) {
           Link(destination: url) {
             Text("↗ \(source.label)").font(.system(size: 11, design: .monospaced))
           }
           .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
-          .help(source.url)
+          .help(urlString)
+        } else {
+          Text("◆ \(source.label)")
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(Color(red: 0.66, green: 0.83, blue: 1))
         }
       }
     }

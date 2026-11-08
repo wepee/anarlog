@@ -1,11 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
-import { open as selectFolder } from "@tauri-apps/plugin-dialog";
 import { platform } from "@tauri-apps/plugin-os";
 
 import { Button } from "@anlg/ui/components/ui/button";
+import { Input } from "@anlg/ui/components/ui/input";
 import { toast } from "@anlg/ui/components/ui/toast";
 
+import { listProjects } from "~/session/live-assist/projects";
 import { setSettingValue } from "~/settings/queries";
 import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
 import { useConfigValue } from "~/shared/config";
@@ -152,8 +154,8 @@ export function MeetingSettingsView({
             <Trans>
               When someone asks you a question during the call, the floating bar
               suggests a short answer, using the call, your past meetings with
-              the same people and your Obsidian notes about the project. You can
-              always ask your own questions in the Answers tab.
+              the same people and the project's context. You can always ask your
+              own questions in the Answers tab.
             </Trans>
           }
           checked={liveAssistAutoAnswers.value}
@@ -174,67 +176,80 @@ export function MeetingSettingsView({
           onChange={liveAssistWebResearch.onChange}
         />
       )}
-      {liveAssistEnabled.value && <ObsidianVaultRow />}
+      {liveAssistEnabled.value && <ProjectsCommandRow />}
     </div>
   );
 }
 
-function ObsidianVaultRow() {
+function ProjectsCommandRow() {
   const { t } = useLingui();
-  const path = useConfigValue("obsidian_vault_path");
-  const update = useMutation({
-    mutationFn: async (clear: boolean) => {
-      if (clear) {
-        await setSettingValue("obsidian_vault_path", "");
-        return;
-      }
-      const selected = await selectFolder({ directory: true, multiple: false });
-      if (typeof selected === "string") {
-        await setSettingValue("obsidian_vault_path", selected);
+  const command = useConfigValue("projects_command");
+  const save = useMutation({
+    mutationFn: (value: string) =>
+      setSettingValue("projects_command", value.trim()),
+    onError: (error) => toast.error(error.message),
+  });
+  const test = useMutation({
+    mutationFn: (value: string) => listProjects(value.trim()),
+    onSuccess: (projects) =>
+      toast.success(t`${projects.length} projects found`),
+    onError: (error) => toast.error(error.message),
+  });
+  const form = useForm({
+    defaultValues: { command },
+    onSubmit: ({ value }) => {
+      if (value.command.trim() !== command) {
+        save.mutate(value.command);
       }
     },
-    onError: (error) => toast.error(error.message),
   });
 
   return (
     <SettingRow
-      title={<Trans>Obsidian vault</Trans>}
+      title={<Trans>Projects command</Trans>}
       description={
-        path ? (
-          <span className="break-all">{path}</span>
-        ) : (
-          <Trans>
-            Pick your vault folder. When a call starts, the notes about its
-            project are found on your computer and sent with each question to
-            your AI provider, so answers know the context.
-          </Trans>
-        )
+        <Trans>
+          A command that lists your projects, so answers know the context of the
+          call. BlackMushi runs it with projects, context &lt;id&gt; and search
+          &lt;id&gt; &lt;query&gt;; what it prints is sent to your AI provider.
+        </Trans>
       }
       controlWidth="content"
     >
       {() => (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={update.isPending}
-            onClick={() => update.mutate(false)}
-          >
-            {path ? t`Change` : t`Choose folder`}
-          </Button>
-          {path ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={update.isPending}
-              onClick={() => update.mutate(true)}
-            >
-              <Trans>Remove</Trans>
-            </Button>
-          ) : null}
-        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void form.handleSubmit();
+          }}
+        >
+          <form.Field name="command">
+            {(field) => (
+              <Input
+                className="h-8 w-64 font-mono text-xs"
+                placeholder="/usr/local/bin/my-tool anarlog"
+                value={field.state.value}
+                onChange={(event) => field.handleChange(event.target.value)}
+                onBlur={() => void form.handleSubmit()}
+              />
+            )}
+          </form.Field>
+          <form.Subscribe selector={(state) => state.values.command}>
+            {(value) => (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!value.trim() || test.isPending}
+                onClick={() => test.mutate(value)}
+              >
+                <Trans>Test</Trans>
+              </Button>
+            )}
+          </form.Subscribe>
+        </form>
       )}
     </SettingRow>
   );

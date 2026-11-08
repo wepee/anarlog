@@ -55,6 +55,11 @@ msgstr ""
 msgid "{0} pending edits"
 msgstr ""
 
+#. placeholder {0}: projects.length
+#: src/settings/general/meeting-settings.tsx
+msgid "{0} projects found"
+msgstr ""
+
 #. placeholder {0}: Math.round((percentage ?? 0) * 100)
 #: src/session/components/note-input/transcript/screens/empty.tsx
 msgid "{0}% complete"
@@ -139,6 +144,10 @@ msgstr ""
 
 #: src/settings/stats/date-range.tsx
 msgid "7 days"
+msgstr ""
+
+#: src/settings/general/meeting-settings.tsx
+msgid "A command that lists your projects, so answers know the context of the call. BlackMushi runs it with projects, context <id> and search <id> <query>; what it prints is sent to your AI provider."
 msgstr ""
 
 #: src/sidebar/folder-name-dialog.tsx
@@ -388,6 +397,10 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "Answers"
+msgstr ""
+
+#: src/meeting-float/assist.ts
+msgid "Answers use what you know about this project. Picked by hand, it no longer changes."
 msgstr ""
 
 #: src/settings/ai/shared/index.tsx
@@ -769,10 +782,6 @@ msgstr ""
 msgid "Capture your first conversation. Every collection starts somewhere."
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
-msgid "Change"
-msgstr ""
-
 #: src/calendar/components/event-chip.tsx
 msgid "Change auto-add folder"
 msgstr ""
@@ -878,7 +887,6 @@ msgstr ""
 
 #: src/settings/automations/starter-config.tsx
 #: src/settings/general/audio-archive.tsx
-#: src/settings/general/meeting-settings.tsx
 #: src/settings/general/storage/export-location.tsx
 msgid "Choose folder"
 msgstr ""
@@ -2734,6 +2742,10 @@ msgstr ""
 msgid "No people in this organization"
 msgstr ""
 
+#: src/meeting-float/assist.ts
+msgid "No project"
+msgstr ""
+
 #: src/settings/ai/llm/configure.tsx
 #: src/settings/ai/llm/select.tsx
 #: src/settings/ai/stt/configure.tsx
@@ -2841,10 +2853,6 @@ msgstr ""
 
 #: src/templates/template-icon-picker.tsx
 msgid "Objects"
-msgstr ""
-
-#: src/settings/general/meeting-settings.tsx
-msgid "Obsidian vault"
 msgstr ""
 
 #: src/settings/general/audio-archive.tsx
@@ -3049,10 +3057,6 @@ msgstr ""
 msgid "Phone"
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
-msgid "Pick your vault folder. When a call starts, the notes about its project are found on your computer and sent with each question to your AI provider, so answers know the context."
-msgstr ""
-
 #: src/contacts/contact-page-header.tsx
 msgid "Pin"
 msgstr ""
@@ -3112,6 +3116,14 @@ msgstr ""
 
 #: src/settings/appearance/app-icon.tsx
 msgid "Production"
+msgstr ""
+
+#: src/meeting-float/assist.ts
+msgid "Project"
+msgstr ""
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Projects command"
 msgstr ""
 
 #: src/settings/general/e2ee-setup.tsx
@@ -3239,7 +3251,6 @@ msgstr ""
 msgid "Remember speakers"
 msgstr ""
 
-#: src/settings/general/meeting-settings.tsx
 #: src/sidebar/automations.tsx
 msgid "Remove"
 msgstr ""
@@ -4104,6 +4115,7 @@ msgstr ""
 
 #: src/settings/automations/index.tsx
 #: src/settings/developers/webhooks.tsx
+#: src/settings/general/meeting-settings.tsx
 msgid "Test"
 msgstr ""
 
@@ -4528,7 +4540,7 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and your Obsidian notes about the project. You can always ask your own questions in the Answers tab."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and the project's context. You can always ask your own questions in the Answers tab."
 msgstr ""
 
 #: src/settings/automations/workflow-builder.tsx

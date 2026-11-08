@@ -388,7 +388,12 @@ export type AssistPanelAction =
    * Ask a question to the LLM; the question text travels in `id`.
    */
   | "ask"
-  | "seenAnswers";
+  | "seenAnswers"
+  | "selectProject"
+  /**
+   * Go back to finding the call's project automatically.
+   */
+  | "autoProject";
 export type ChangelogState = { previous: string | null; current: string };
 export type ContactsSelection =
   | { type: "person"; id: string }
@@ -406,8 +411,8 @@ export type FloatingBarAssistAction = {
   sessionId: string;
   action: AssistPanelAction;
   /**
-   * The question to dismiss, the template to select (null for Auto), or
-   * the text of a question to ask.
+   * The question to dismiss, the template to select (null for Auto), the
+   * project to select (null for none), or the text of a question to ask.
    */
   id?: string | null;
 };

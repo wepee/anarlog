@@ -30,18 +30,3 @@ pub(crate) async fn write_text_file(path: PathBuf, content: String) -> Result<()
     }
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
-
-#[tauri::command]
-#[specta::specta]
-pub(crate) async fn read_markdown_tree(
-    path: PathBuf,
-    max_files: u32,
-    max_file_bytes: u32,
-) -> Result<Vec<crate::MarkdownFile>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::markdown_tree::read_markdown_tree(&path, max_files as usize, max_file_bytes as usize)
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}

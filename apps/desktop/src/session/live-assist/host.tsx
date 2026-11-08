@@ -13,7 +13,7 @@ export function LiveAssistHost() {
   const useMainLanguage = useConfigValue("summary_use_main_language");
   const webSearch = useConfigValue("live_assist_web_research");
   const autoAnswers = useConfigValue("live_assist_auto_answers");
-  const obsidianPath = useConfigValue("obsidian_vault_path");
+  const projectsCommand = useConfigValue("projects_command");
   const live = useLiveModel();
   const model = live?.model ?? null;
   const config = useLatestRef({
@@ -26,7 +26,7 @@ export function LiveAssistHost() {
     useMainLanguage,
     webSearch,
     autoAnswers,
-    obsidianPath,
+    projectsCommand,
   });
   const engineRef = useRef<ReturnType<typeof createLiveAssistEngine> | null>(
     null,

@@ -4,7 +4,6 @@ Default permissions for the fs2 plugin
 
 #### This default permission set includes the following:
 
-- `allow-read-markdown-tree`
 - `allow-read-text-file`
 - `allow-remove`
 - `allow-write-text-file`
@@ -17,32 +16,6 @@ Default permissions for the fs2 plugin
 <th>Description</th>
 </tr>
 
-
-<tr>
-<td>
-
-`fs2:allow-read-markdown-tree`
-
-</td>
-<td>
-
-Enables the read_markdown_tree command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`fs2:deny-read-markdown-tree`
-
-</td>
-<td>
-
-Denies the read_markdown_tree command without any pre-configured scope.
-
-</td>
-</tr>
 
 <tr>
 <td>

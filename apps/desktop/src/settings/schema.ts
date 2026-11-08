@@ -302,9 +302,9 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "live_assist_auto_answers"],
     default: true as boolean,
   },
-  obsidian_vault_path: {
+  projects_command: {
     type: "string",
-    path: ["general", "obsidian_vault_path"],
+    path: ["general", "projects_command"],
     default: "" as string,
   },
   call_templates_seeded: {
