@@ -23,12 +23,6 @@ export function setManualTemplateChoice(
   liveAssistLog("template.manual_choice", { templateId }, sessionId);
 }
 
-export function getManualTemplateChoice(
-  sessionId: string,
-): string | null | undefined {
-  return manualChoices.get(sessionId);
-}
-
 export async function listTemplateCandidates(): Promise<
   CallTemplateCandidate[]
 > {

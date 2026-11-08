@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StoreApi } from "zustand";
 
 const listener = vi.hoisted(() => ({ store: null as never }));
+const pastMeetings = vi.hoisted(() => ({
+  load: vi.fn(async () => ({ text: "", titles: [] as string[] })),
+}));
 
 vi.mock("~/store/zustand/listener/instance", async () => {
   const { createStore } = await import("zustand");
@@ -30,7 +33,7 @@ vi.mock("./answers", () => ({
   streamLiveAnswer: () => new Promise(() => {}),
 }));
 vi.mock("./past-meetings", () => ({
-  loadPastMeetings: async () => ({ text: "", titles: [] }),
+  loadPastMeetings: pastMeetings.load,
   NO_PAST_MEETINGS: { text: "", titles: [] },
 }));
 vi.mock("~/services/enhancer/auto-template", () => ({
@@ -39,13 +42,36 @@ vi.mock("~/services/enhancer/auto-template", () => ({
 vi.mock("~/services/enhancer/summary-language", () => ({
   resolveSummaryLanguage: async () => "fr",
 }));
+const mocks = vi.hoisted(() => ({
+  snapshot: null as unknown,
+  listProjects: vi.fn(async () => []),
+}));
 vi.mock("~/session/content-queries", () => ({
-  loadSessionContentSnapshot: async () => null,
+  loadSessionContentSnapshot: async () => mocks.snapshot,
+}));
+vi.mock("./projects", () => ({
+  listProjects: mocks.listProjects,
+  loadProjectContext: async () => "",
+  readProject: async () => [],
 }));
 
 import { createLiveAssistEngine } from "./engine";
 
 import { getLiveAssistSession } from "~/store/zustand/live-assist";
+
+const config = {
+  enabled: true,
+  model: {} as LanguageModel,
+  modelId: "claude-haiku-5-5",
+  providerId: "anthropic",
+  language: "fr",
+  spokenLanguages: [],
+  useMainLanguage: false,
+  webSearch: false,
+  autoAnswers: true,
+  projectContext: true,
+  projectsCommand: "",
+};
 
 function segment(
   id: string,
@@ -81,6 +107,7 @@ describe("live answers", () => {
       useMainLanguage: false,
       webSearch: false,
       autoAnswers: true,
+      projectContext: false,
       projectsCommand: "",
     }));
     engine.sync();
@@ -108,6 +135,61 @@ describe("live answers", () => {
     expect(
       getLiveAssistSession("s1").answers.map((answer) => answer.question),
     ).toEqual(["Et vous facturez combien pour un audit complet ?"]);
+    engine.dispose();
+  });
+
+  it("answers from the model and the call alone unless project context is on", async () => {
+    for (const projectContext of [false, true]) {
+      pastMeetings.load.mockClear();
+      const engine = createLiveAssistEngine(() => ({
+        enabled: true,
+        model: {} as LanguageModel,
+        modelId: "claude-haiku-5-5",
+        providerId: "anthropic",
+        language: "fr",
+        spokenLanguages: [],
+        useMainLanguage: false,
+        webSearch: false,
+        autoAnswers: true,
+        projectContext,
+        projectsCommand: "",
+      }));
+      engine.sync();
+      await Promise.resolve();
+
+      expect(pastMeetings.load).toHaveBeenCalledTimes(projectContext ? 1 : 0);
+      engine.dispose();
+    }
+  });
+
+  it("sends the projects command the other participants, never the user", async () => {
+    mocks.snapshot = {
+      title: "Point hebdo Lumen",
+      event: null,
+      ownerUserId: "me",
+      participants: [
+        { humanId: "me", name: "Adam", email: "adam@agence.fr", jobTitle: "" },
+        {
+          humanId: "h2",
+          name: "Claire Morel",
+          email: "claire.morel@lumen-optique.fr",
+          jobTitle: "",
+        },
+      ],
+    };
+    const engine = createLiveAssistEngine(() => ({
+      ...config,
+      projectsCommand: "memex",
+    }));
+    engine.sync();
+    await vi.waitFor(() => expect(mocks.listProjects).toHaveBeenCalled());
+
+    expect(mocks.listProjects).toHaveBeenCalledWith("memex", {
+      title: "Point hebdo Lumen",
+      participants: [
+        { name: "Claire Morel", email: "claire.morel@lumen-optique.fr" },
+      ],
+    });
     engine.dispose();
   });
 });

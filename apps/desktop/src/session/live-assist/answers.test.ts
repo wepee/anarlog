@@ -158,4 +158,16 @@ describe("live answers", () => {
     expect(shown[shown.length - 1]).toBe("La V1 est à 18 000 € HT.");
     expect(shown).toContain("");
   });
+
+  it("cites a note whose name holds brackets", () => {
+    const ref =
+      "[[projects/Studio/globex/sources/2026-10-01 Tiers payant [3290cd87].md#Transcript|2026-10-01 Tiers payant [3290cd87] › Transcript]]";
+
+    expect(
+      extractCitations(`Ils veulent voir les prix des mutuelles. ${ref}`, ref),
+    ).toEqual({
+      text: "Ils veulent voir les prix des mutuelles.",
+      refs: ["2026-10-01 Tiers payant [3290cd87] › Transcript"],
+    });
+  });
 });

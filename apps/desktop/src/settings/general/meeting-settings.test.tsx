@@ -40,6 +40,7 @@ function renderMeetingSettings({
         liveAssistEnabled={liveAssistEnabled}
         liveAssistWebResearch={setting(true)}
         liveAssistAutoAnswers={setting(true)}
+        liveAssistProjectContext={setting(false)}
         captureSharedScreens={captureSharedScreens}
       />,
     ),

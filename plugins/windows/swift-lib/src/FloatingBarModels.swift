@@ -87,7 +87,6 @@ struct FloatingAssistPayload: Codable, Equatable {
 
   struct Project: Codable, Equatable {
     let title: String
-    let auto: Bool
   }
 
   struct ProjectOption: Codable, Equatable {

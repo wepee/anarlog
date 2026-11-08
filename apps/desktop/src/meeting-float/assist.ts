@@ -42,10 +42,9 @@ export type FloatingAssist = {
   spotlight: { id: string; question: string; answer: string } | null;
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
-  // null when no projects command is set. "Project?" until the command
-  // finds the project or the user picks one; Auto (id null) goes back to
-  // finding it. Projects come sorted by fit, best first.
-  project: { title: string; auto: boolean } | null;
+  // null when no projects command is set. "Project?" until the user picks
+  // one; projects come most likely first.
+  project: { title: string } | null;
   projectOptions: Array<{
     id: string | null;
     title: string;
@@ -106,7 +105,7 @@ const SPOTLIGHT_MS = 2 * 60_000;
 export function buildFloatingAssist(
   session: LiveAssistSessionState,
 ): FloatingAssist {
-  const { snapshot, template, templates, project, projects, projectsFailed } =
+  const { snapshot, template, templates, projectId, projects, projectsFailed } =
     session;
   const autoTitle = t`Auto`;
   const selfLabel = t`Me`;
@@ -141,8 +140,8 @@ export function buildFloatingAssist(
     ...(unassigned ? [unassigned] : []),
   ].filter((group) => group.items.length > 0);
 
-  const projectTitle = project.id
-    ? (projects.find((option) => option.id === project.id)?.title ?? project.id)
+  const projectTitle = projectId
+    ? (projects.find((option) => option.id === projectId)?.title ?? projectId)
     : t`Project?`;
 
   const lastTopic = snapshot.topics[snapshot.topics.length - 1];
@@ -186,7 +185,7 @@ export function buildFloatingAssist(
       projectFooter:
         projects.length === 0 && projectsFailed
           ? t`The projects command failed. Check it in Settings › Meetings.`
-          : t`Answers use your notes on this project. On Auto, your projects command finds it from emails or its name said in the call.`,
+          : t`Answers use your notes on the project you pick.`,
       suggestedAnswer: t`Suggested answer`,
     },
     notice:
@@ -213,21 +212,18 @@ export function buildFloatingAssist(
     ],
     project:
       projects.length > 0
-        ? {
-            title: projectTitle,
-            auto: project.source === "auto" && Boolean(project.id),
-          }
+        ? { title: projectTitle }
         : projectsFailed
-          ? { title: t`Projects unavailable`, auto: false }
+          ? { title: t`Projects unavailable` }
           : null,
     projectOptions:
       projects.length > 0
         ? [
-            { id: null, title: autoTitle, selected: project.source === "auto" },
+            { id: null, title: t`No project`, selected: !projectId },
             ...projects.map(({ id, title }) => ({
               id,
               title,
-              selected: project.source === "manual" && project.id === id,
+              selected: projectId === id,
             })),
           ]
         : [],

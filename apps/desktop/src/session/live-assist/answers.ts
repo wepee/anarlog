@@ -22,7 +22,7 @@ const MAX_WEB_SOURCES = 2;
 const MAX_CITED_REFS = 2;
 const MAX_READS = 2;
 
-export const LIVE_ANSWER_SYSTEM_PROMPT = `You help the user ("You" in the transcript) answer a question during a live call. Reply with what the user could say right now: one to three short sentences, plain text, no preamble, no markdown. Never announce what you are about to do.
+const LIVE_ANSWER_SYSTEM_PROMPT = `You help the user ("You" in the transcript) answer a question during a live call. Reply with what the user could say right now: one to three short sentences, plain text, no preamble, no markdown. Never announce what you are about to do.
 
 Sources, in this order: what was said in the call; the user's notes on the project and the earlier meetings (what the user already knows); the read_notes tool, when it is available and the notes lack a fact the question needs (a section from the MEMORY summary by its theme, or a search with your own keywords: "prix tarif TJM devis" rather than the words of the question); your general knowledge for general or technical questions; the web search tool, only if one is available and the answer depends on recent or specific public facts (a price, a release, a company's news).
 
@@ -98,7 +98,9 @@ export function isSkippedAnswer(text: string): boolean {
 
 // [[path#Title|label]] (the notes' own format) or [label]; never a bare
 // number, which is part of the answer.
-const REFERENCE = /\[\[[^\]\n]{1,300}\]\]|\[(?!\d+\])[^[\]\n]{1,160}\]/g;
+// A note's name can itself hold brackets ("Cadrage [3fa9c2d1].md").
+const REFERENCE =
+  /\[\[(?:(?!\]\])[^\n]){1,300}\]\]|\[(?!\d+\])[^[\]\n]{1,160}\]/g;
 const TRAILING_REFERENCES = new RegExp(`(?:\\s*(?:${REFERENCE.source}))+\\s*$`);
 
 function referenceLabel(ref: string): string {

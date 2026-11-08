@@ -302,6 +302,13 @@ export const SETTING_DEFINITIONS = {
     path: ["general", "live_assist_auto_answers"],
     default: true as boolean,
   },
+  // Off: answers come from the model and the call alone, with no past
+  // meetings and no projects command.
+  live_assist_project_context: {
+    type: "boolean",
+    path: ["general", "live_assist_project_context"],
+    default: false as boolean,
+  },
   projects_command: {
     type: "string",
     path: ["general", "projects_command"],

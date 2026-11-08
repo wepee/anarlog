@@ -4,11 +4,11 @@ import type { LiveTranscriptSegment } from "@anlg/plugin-transcription";
 
 import {
   buildLiveAssistWindow,
+  decideLiveAssistTemplate,
   detectIncomingQuestions,
   EMPTY_LIVE_ASSIST_SNAPSHOT,
   type LiveAssistOutput,
   mergeLiveAssistOutput,
-  nextLiveAssistTemplate,
   shouldRunLiveAssistUpdate,
 } from "./live-assist";
 
@@ -143,7 +143,7 @@ describe("mergeLiveAssistOutput", () => {
   });
 });
 
-describe("nextLiveAssistTemplate", () => {
+describe("decideLiveAssistTemplate", () => {
   const candidates = [
     { id: "sales", title: "Commercial", description: "", sections: [] },
   ];
@@ -159,23 +159,23 @@ describe("nextLiveAssistTemplate", () => {
 
   it("switches on one cited sentence", () => {
     expect(
-      nextLiveAssistTemplate(
+      decideLiveAssistTemplate(
         { id: null, source: "auto" },
         proven,
         candidates,
         transcript,
-      ),
+      ).template,
     ).toEqual({ id: "sales", source: "auto" });
   });
 
   it("never replaces a template picked by hand", () => {
     expect(
-      nextLiveAssistTemplate(
+      decideLiveAssistTemplate(
         { id: null, source: "manual" },
         proven,
         candidates,
         transcript,
-      ),
+      ).template,
     ).toEqual({ id: null, source: "manual" });
   });
 });

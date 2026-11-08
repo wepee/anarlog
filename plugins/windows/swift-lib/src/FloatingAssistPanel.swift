@@ -185,7 +185,7 @@ struct FloatingAssistPanelView<Live: View>: View {
       Divider()
       Text(assist.labels.projectFooter)
     } label: {
-      menuChip(project.title, auto: project.auto)
+      menuChip(project.title, auto: false)
     }
     .menuStyle(.borderlessButton)
     .menuIndicator(.hidden)

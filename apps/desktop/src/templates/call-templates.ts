@@ -257,7 +257,7 @@ const CALL_TEMPLATES: Record<"fr" | "en", CallTemplateDefinition[]> = {
   ],
 };
 
-export function getCallTemplateDefinitions(
+function getCallTemplateDefinitions(
   language: string | null | undefined,
 ): CallTemplateDefinition[] {
   return language?.toLowerCase().startsWith("fr")

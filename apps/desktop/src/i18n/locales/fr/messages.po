@@ -72,8 +72,8 @@ msgstr ""
 #. placeholder {1}: first.chars
 #. placeholder {2}: first.ms
 #: src/settings/general/meeting-settings.tsx
-msgid "{count} projects in {routeMs} ms. Context of {0}: {1} characters in {2} ms."
-msgstr "{count} projets en {routeMs} ms. Contexte de {0} : {1} caractères en {2} ms."
+msgid "{count} projects in {listMs} ms. Context of {0}: {1} characters in {2} ms."
+msgstr "{count} projets en {listMs} ms. Contexte de {0} : {1} caractères en {2} ms."
 
 #: src/settings/stats/index.tsx
 msgid "{date}. Conversations: {count}"
@@ -149,8 +149,8 @@ msgid "7 days"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "A command that gives answers the context of your projects. BlackMushi runs it with route (finds the call's project), context (what you know about it, loaded once per call) and read (more notes, when the AI asks). What it prints is sent to your AI provider."
-msgstr "Une commande qui donne aux réponses le contexte de vos projets. BlackMushi la lance avec route (trouve le projet de l'appel), context (ce que vous savez du projet, chargé une fois par appel) et read (d'autres notes, quand l'IA en demande). Ce qu'elle renvoie est envoyé à votre fournisseur d'IA."
+msgid "A command that gives answers the context of your projects. BlackMushi runs it with projects (the list you pick the call's project from), context (what you know about it, loaded once per call) and read (more notes, when the AI asks). What it prints is sent to your AI provider."
+msgstr "Une commande qui donne aux réponses le contexte de vos projets. BlackMushi la lance avec projects (la liste où vous choisissez le projet de l'appel), context (ce que vous savez du projet, chargé une fois par appel) et read (d'autres notes, quand l'IA en demande). Ce qu'elle renvoie est envoyé à votre fournisseur d'IA."
 
 #: src/sidebar/folder-name-dialog.tsx
 msgid "A folder with this name already exists."
@@ -373,6 +373,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Also gives answers your past meetings with the same people and, through the projects command, your notes on the call's project. Off, answers come only from the model and the call."
+msgstr "Donne aussi aux réponses vos réunions passées avec les mêmes personnes et, via la commande projets, vos notes sur le projet de l'appel. Désactivé, les réponses viennent uniquement du modèle et de l'appel."
+
 #: src/session/components/outer-header/overflow/always-on-top.tsx
 msgid "Always on Top"
 msgstr ""
@@ -402,8 +406,8 @@ msgid "Answers"
 msgstr "Réponses"
 
 #: src/meeting-float/assist.ts
-msgid "Answers use your notes on this project. On Auto, your projects command finds it from emails or its name said in the call."
-msgstr "Les réponses s'appuient sur vos notes de ce projet. En Auto, votre commande projets le trouve grâce aux emails ou à son nom prononcé pendant l'appel."
+msgid "Answers use your notes on the project you pick."
+msgstr "Les réponses s'appuient sur vos notes du projet que vous choisissez."
 
 #: src/settings/ai/shared/index.tsx
 msgid "API Key"
@@ -2748,6 +2752,10 @@ msgstr ""
 msgid "No people in this organization"
 msgstr ""
 
+#: src/meeting-float/assist.ts
+msgid "No project"
+msgstr "Aucun projet"
+
 #: src/settings/ai/llm/configure.tsx
 #: src/settings/ai/llm/select.tsx
 #: src/settings/ai/stt/configure.tsx
@@ -3123,6 +3131,10 @@ msgstr ""
 #: src/meeting-float/assist.ts
 msgid "Project"
 msgstr "Projet"
+
+#: src/settings/general/meeting-settings.tsx
+msgid "Project context in answers"
+msgstr "Contexte du projet dans les réponses"
 
 #: src/meeting-float/assist.ts
 msgid "Project?"
@@ -4566,8 +4578,8 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and the project's context. You can always ask your own questions in the Answers tab."
-msgstr "Quand on vous pose une question pendant l'appel, la barre flottante propose une réponse courte, à partir de l'appel, de vos réunions passées avec les mêmes personnes et du contexte du projet. Vous pouvez toujours poser vos propres questions dans l'onglet Réponses."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer from your AI model, based on the call. You can always ask your own questions in the Answers tab."
+msgstr "Quand on vous pose une question pendant l'appel, la barre flottante propose une réponse courte de votre modèle d'IA, à partir de l'appel. Vous pouvez toujours poser vos propres questions dans l'onglet Réponses."
 
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"

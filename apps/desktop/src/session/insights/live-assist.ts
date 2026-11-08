@@ -17,24 +17,24 @@ export const LIVE_ASSIST_MIN_INTERVAL_MS = 45_000;
 export const LIVE_ASSIST_MIN_NEW_WORDS = 80;
 export const LIVE_ASSIST_OVERLAP_MS = 2 * 60_000;
 export const LIVE_ASSIST_WINDOW_MAX_CHARS = 8_000;
-export const LIVE_ASSIST_MAX_QUESTIONS = 3;
-export type LiveAssistCoverageStatus = "covered" | "partial" | "missing";
+const LIVE_ASSIST_MAX_QUESTIONS = 3;
+type LiveAssistCoverageStatus = "covered" | "partial" | "missing";
 
-export type LiveAssistQuestion = {
+type LiveAssistQuestion = {
   id: string;
   text: string;
   why: string;
   isNew: boolean;
 };
 
-export type LiveAssistTodo = {
+type LiveAssistTodo = {
   id: string;
   text: string;
   owner: string | null;
   due: string | null;
 };
 
-export type LiveAssistTopic = {
+type LiveAssistTopic = {
   id: string;
   title: string;
   start: string | null;
@@ -155,7 +155,7 @@ function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
-export type LiveAssistWindow = {
+type LiveAssistWindow = {
   text: string;
   newWords: number;
   lastEndMs: number;
@@ -384,16 +384,6 @@ function withIds<T extends { id: string | null }>(
 // One cited sentence is enough to apply a template, and a new one can change
 // it at any time; without proof the call stays on its current template.
 // A template picked by hand is never replaced.
-export function nextLiveAssistTemplate(
-  current: LiveAssistTemplate,
-  output: LiveAssistOutput,
-  candidates: CallTemplateCandidate[],
-  transcript: string,
-): LiveAssistTemplate {
-  return decideLiveAssistTemplate(current, output, candidates, transcript)
-    .template;
-}
-
 export function decideLiveAssistTemplate(
   current: LiveAssistTemplate,
   output: LiveAssistOutput,
@@ -420,7 +410,7 @@ export function decideLiveAssistTemplate(
   };
 }
 
-export function getAutoCoverageLabels(language: string): string[] {
+function getAutoCoverageLabels(language: string): string[] {
   return language.toLowerCase().startsWith("fr")
     ? ["Objectif", "Décisions", "Responsables", "Prochaines étapes"]
     : ["Goal", "Decisions", "Owners", "Next steps"];

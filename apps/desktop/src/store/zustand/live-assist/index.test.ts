@@ -53,21 +53,4 @@ describe("live assist store", () => {
       source: "manual",
     });
   });
-
-  it("never lets a project found automatically replace one picked by hand", () => {
-    const store = useLiveAssistStore.getState();
-    store.selectProject("s1", "globex");
-    store.setAutoProject("s1", "lumen");
-    expect(getLiveAssistSession("s1").project).toEqual({
-      id: "globex",
-      source: "manual",
-    });
-
-    store.selectProject("s1", null);
-    store.setAutoProject("s1", "lumen");
-    expect(getLiveAssistSession("s1").project).toEqual({
-      id: "lumen",
-      source: "auto",
-    });
-  });
 });

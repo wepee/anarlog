@@ -13,6 +13,7 @@ export function LiveAssistHost() {
   const useMainLanguage = useConfigValue("summary_use_main_language");
   const webSearch = useConfigValue("live_assist_web_research");
   const autoAnswers = useConfigValue("live_assist_auto_answers");
+  const projectContext = useConfigValue("live_assist_project_context");
   const projectsCommand = useConfigValue("projects_command");
   const live = useLiveModel();
   const model = live?.model ?? null;
@@ -26,7 +27,10 @@ export function LiveAssistHost() {
     useMainLanguage,
     webSearch,
     autoAnswers,
-    projectsCommand,
+    projectContext,
+    // Without project context the command never runs, and the floating bar
+    // hides its project picker.
+    projectsCommand: projectContext ? projectsCommand : "",
   });
   const engineRef = useRef<ReturnType<typeof createLiveAssistEngine> | null>(
     null,
