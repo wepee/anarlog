@@ -53,6 +53,7 @@ jobs:
         id: version
         env:
           REQUESTED: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           version="${REQUESTED:-}"
@@ -60,6 +61,12 @@ jobs:
             version="$(node scripts/release-version.mjs)"
           else
             node scripts/release-version.mjs --check "$version"
+          fi
+          # Fail now rather than after an hour of build: publishing would
+          # refuse an existing tag anyway.
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release v$version already exists. Bump it with node scripts/release-version.mjs <next version>, commit, then run this workflow again."
+            exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
