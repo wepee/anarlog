@@ -457,7 +457,7 @@ function speakerKey(key: SegmentKey): string {
 // Some transcription leaves out the question mark: a sentence that opens
 // like a question counts too.
 const QUESTION_OPENING =
-  /^(?:et |mais |alors |donc |du coup |ok |d'accord )?(?:est-ce qu|qu'est-ce|c'est quoi|combien|comment|pourquoi|quel(?:le)?s? |quand |où |qui |tu (?:peux|pourrais|sais|as)|vous (?:pouvez|pourriez|savez|avez)|what |how |why |when |where |who |which |can you|could you|do you|did you|is it|are you|is there|are there)/i;
+  /^(?:et |mais |alors |donc |du coup |ok |d'accord )?(?:est-ce qu|qu'est-ce|c'est quoi|combien|comment|pourquoi|what |how |why |do you|did you|can you|could you)/i;
 
 function splitSentences(text: string): string[] {
   return (text.match(/[^.!?]+[.!?]*/g) ?? [])
