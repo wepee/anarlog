@@ -49,6 +49,7 @@ const SETTINGS_FORM_KEYS = [
   "live_assist_enabled",
   "live_assist_web_research",
   "live_assist_auto_answers",
+  "live_assist_project_context",
   "capture_shared_screens",
   "app_language",
   "ai_language",
@@ -81,6 +82,7 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
       live_assist_enabled: settingsValue.live_assist_enabled,
       live_assist_web_research: settingsValue.live_assist_web_research,
       live_assist_auto_answers: settingsValue.live_assist_auto_answers,
+      live_assist_project_context: settingsValue.live_assist_project_context,
       capture_shared_screens: settingsValue.capture_shared_screens,
       app_language: settingsValue.app_language,
       ai_language: settingsValue.ai_language,
@@ -129,6 +131,8 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         live_assist_enabled: normalizedValue.live_assist_enabled,
         live_assist_web_research: normalizedValue.live_assist_web_research,
         live_assist_auto_answers: normalizedValue.live_assist_auto_answers,
+        live_assist_project_context:
+          normalizedValue.live_assist_project_context,
         capture_shared_screens: normalizedValue.capture_shared_screens,
         app_language: normalizedValue.app_language,
         ai_language: normalizedValue.ai_language,
@@ -392,6 +396,11 @@ function SettingsSectionContent({
                   value: values.live_assist_auto_answers,
                   onChange: (value) =>
                     submitFieldValue("live_assist_auto_answers", value),
+                }}
+                liveAssistProjectContext={{
+                  value: values.live_assist_project_context,
+                  onChange: (value) =>
+                    submitFieldValue("live_assist_project_context", value),
                 }}
                 liveAssistWebResearch={{
                   value: values.live_assist_web_research,

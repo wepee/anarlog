@@ -28,6 +28,7 @@ export function MeetingSettingsView({
   liveAssistEnabled,
   liveAssistWebResearch,
   liveAssistAutoAnswers,
+  liveAssistProjectContext,
   captureSharedScreens,
 }: {
   autoJoinScheduledMeetings: SettingItem;
@@ -40,6 +41,7 @@ export function MeetingSettingsView({
   liveAssistEnabled: SettingItem;
   liveAssistWebResearch: SettingItem;
   liveAssistAutoAnswers: SettingItem;
+  liveAssistProjectContext: SettingItem;
   captureSharedScreens: SettingItem;
 }) {
   const currentPlatform = platform();
@@ -153,9 +155,8 @@ export function MeetingSettingsView({
           description={
             <Trans>
               When someone asks you a question during the call, the floating bar
-              suggests a short answer, using the call, your past meetings with
-              the same people and the project's context. You can always ask your
-              own questions in the Answers tab.
+              suggests a short answer from your AI model, based on the call. You
+              can always ask your own questions in the Answers tab.
             </Trans>
           }
           checked={liveAssistAutoAnswers.value}
@@ -176,7 +177,23 @@ export function MeetingSettingsView({
           onChange={liveAssistWebResearch.onChange}
         />
       )}
-      {liveAssistEnabled.value && <ProjectsCommandRow />}
+      {liveAssistEnabled.value && (
+        <SettingSwitchRow
+          title={<Trans>Project context in answers</Trans>}
+          description={
+            <Trans>
+              Also gives answers your past meetings with the same people and,
+              through the projects command, your notes on the call's project.
+              Off, answers come only from the model and the call.
+            </Trans>
+          }
+          checked={liveAssistProjectContext.value}
+          onChange={liveAssistProjectContext.onChange}
+        />
+      )}
+      {liveAssistEnabled.value && liveAssistProjectContext.value && (
+        <ProjectsCommandRow />
+      )}
     </div>
   );
 }

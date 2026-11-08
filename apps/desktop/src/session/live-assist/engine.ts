@@ -66,6 +66,7 @@ type EngineConfig = {
   useMainLanguage: boolean;
   webSearch: boolean;
   autoAnswers: boolean;
+  projectContext: boolean;
   projectsCommand: string;
 };
 
@@ -226,6 +227,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   const loadPastMeetingsFor = async (
     session: RunningSession,
   ): Promise<PastMeetings> => {
+    if (!getConfig().projectContext) {
+      liveAssistLog("past_meetings.disabled", undefined, session.sessionId);
+      return NO_PAST_MEETINGS;
+    }
     const startedAt = Date.now();
     const past = await loadPastMeetings(session.sessionId).catch((error) => {
       liveAssistLog(

@@ -373,6 +373,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Also gives answers your past meetings with the same people and, through the projects command, your notes on the call's project. Off, answers come only from the model and the call."
+msgstr ""
+
 #: src/session/components/outer-header/overflow/always-on-top.tsx
 msgid "Always on Top"
 msgstr ""
@@ -3124,6 +3128,10 @@ msgstr ""
 msgid "Project"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Project context in answers"
+msgstr ""
+
 #: src/meeting-float/assist.ts
 msgid "Project?"
 msgstr ""
@@ -4566,7 +4574,7 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and the project's context. You can always ask your own questions in the Answers tab."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer from your AI model, based on the call. You can always ask your own questions in the Answers tab."
 msgstr ""
 
 #: src/settings/automations/workflow-builder.tsx

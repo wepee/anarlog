@@ -373,6 +373,10 @@ msgstr "All Set"
 msgid "All time"
 msgstr "All time"
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Also gives answers your past meetings with the same people and, through the projects command, your notes on the call's project. Off, answers come only from the model and the call."
+msgstr "Also gives answers your past meetings with the same people and, through the projects command, your notes on the call's project. Off, answers come only from the model and the call."
+
 #: src/session/components/outer-header/overflow/always-on-top.tsx
 msgid "Always on Top"
 msgstr "Always on Top"
@@ -3124,6 +3128,10 @@ msgstr "Production"
 msgid "Project"
 msgstr "Project"
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Project context in answers"
+msgstr "Project context in answers"
+
 #: src/meeting-float/assist.ts
 msgid "Project?"
 msgstr "Project?"
@@ -4566,8 +4574,8 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr "When off, summaries follow the detected meeting language."
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and the project's context. You can always ask your own questions in the Answers tab."
-msgstr "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and the project's context. You can always ask your own questions in the Answers tab."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer from your AI model, based on the call. You can always ask your own questions in the Answers tab."
+msgstr "When someone asks you a question during the call, the floating bar suggests a short answer from your AI model, based on the call. You can always ask your own questions in the Answers tab."
 
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"

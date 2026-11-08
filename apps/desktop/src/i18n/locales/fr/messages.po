@@ -373,6 +373,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Also gives answers your past meetings with the same people and, through the projects command, your notes on the call's project. Off, answers come only from the model and the call."
+msgstr "Donne aussi aux réponses vos réunions passées avec les mêmes personnes et, via la commande projets, vos notes sur le projet de l'appel. Désactivé, les réponses viennent uniquement du modèle et de l'appel."
+
 #: src/session/components/outer-header/overflow/always-on-top.tsx
 msgid "Always on Top"
 msgstr ""
@@ -3124,6 +3128,10 @@ msgstr ""
 msgid "Project"
 msgstr "Projet"
 
+#: src/settings/general/meeting-settings.tsx
+msgid "Project context in answers"
+msgstr "Contexte du projet dans les réponses"
+
 #: src/meeting-float/assist.ts
 msgid "Project?"
 msgstr "Projet ?"
@@ -4566,8 +4574,8 @@ msgid "When off, summaries follow the detected meeting language."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "When someone asks you a question during the call, the floating bar suggests a short answer, using the call, your past meetings with the same people and the project's context. You can always ask your own questions in the Answers tab."
-msgstr "Quand on vous pose une question pendant l'appel, la barre flottante propose une réponse courte, à partir de l'appel, de vos réunions passées avec les mêmes personnes et du contexte du projet. Vous pouvez toujours poser vos propres questions dans l'onglet Réponses."
+msgid "When someone asks you a question during the call, the floating bar suggests a short answer from your AI model, based on the call. You can always ask your own questions in the Answers tab."
+msgstr "Quand on vous pose une question pendant l'appel, la barre flottante propose une réponse courte de votre modèle d'IA, à partir de l'appel. Vous pouvez toujours poser vos propres questions dans l'onglet Réponses."
 
 #: src/settings/automations/workflow-builder.tsx
 msgid "When this happens"
