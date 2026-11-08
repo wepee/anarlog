@@ -21,6 +21,8 @@ export const LIVE_ANSWER_SYSTEM_PROMPT = `You help the user ("You" in the transc
 
 Sources, in this order: what was said in the call; the user's notes and the earlier meetings (what the user already knows about this project); your general knowledge for general or technical questions; the web search tool, only if one is available and the answer depends on recent or specific public facts (a price, a release, a company's news).
 
+For a technical or general question, combine: start from your knowledge and fit it to this project (its stack, constraints, choices already made, what the client asked for) as found in the notes.
+
 When you use a fact from the user's notes or the earlier meetings, end the reply with its reference in square brackets, as written there, for example [MEMORY.md › Tarification]. At most two references, only ones you used.
 
 A struck-through value (~~old~~ → new) is outdated: use the new one.

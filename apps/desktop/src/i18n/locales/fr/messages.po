@@ -146,8 +146,8 @@ msgid "7 days"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "A command that gives answers the context of your projects. BlackMushi runs it with projects (a JSON list to pick from) and ask (the question and the call as JSON on stdin; it prints your notes). What it prints is sent to your AI provider."
-msgstr "Une commande qui donne aux réponses le contexte de vos projets. BlackMushi la lance avec projects (une liste JSON pour choisir le projet) et ask (la question et l'appel en JSON sur l'entrée standard ; elle renvoie vos notes). Ce qu'elle renvoie est envoyé à votre fournisseur d'IA."
+msgid "A command that gives answers the context of your projects. BlackMushi runs it with projects (a JSON list to pick from) and ask (the question and the call as JSON on stdin; it prints the project's overview and the notes about the question). What it prints is sent to your AI provider."
+msgstr "Une commande qui donne aux réponses le contexte de vos projets. BlackMushi la lance avec projects (une liste JSON pour choisir le projet) et ask (la question et l'appel en JSON sur l'entrée standard ; elle renvoie la vue d'ensemble du projet et les notes liées à la question). Ce qu'elle renvoie est envoyé à votre fournisseur d'IA."
 
 #: src/sidebar/folder-name-dialog.tsx
 msgid "A folder with this name already exists."

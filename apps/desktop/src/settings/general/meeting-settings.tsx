@@ -233,8 +233,9 @@ function ProjectsCommandRow() {
         <Trans>
           A command that gives answers the context of your projects. BlackMushi
           runs it with projects (a JSON list to pick from) and ask (the question
-          and the call as JSON on stdin; it prints your notes). What it prints
-          is sent to your AI provider.
+          and the call as JSON on stdin; it prints the project's overview and
+          the notes about the question). What it prints is sent to your AI
+          provider.
         </Trans>
       }
       controlWidth="content"
