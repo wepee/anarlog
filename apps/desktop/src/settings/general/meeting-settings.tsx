@@ -7,7 +7,7 @@ import { Button } from "@anlg/ui/components/ui/button";
 import { Input } from "@anlg/ui/components/ui/input";
 import { toast } from "@anlg/ui/components/ui/toast";
 
-import { listProjects } from "~/session/live-assist/projects";
+import { listProjects, loadProjectBrief } from "~/session/live-assist/projects";
 import { setSettingValue } from "~/settings/queries";
 import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
 import { useConfigValue } from "~/shared/config";
@@ -189,10 +189,34 @@ function ProjectsCommandRow() {
       setSettingValue("projects_command", value.trim()),
     onError: (error) => toast.error(error.message),
   });
+  // Runs what a call will run: the list, then the first project's brief.
   const test = useMutation({
-    mutationFn: (value: string) => listProjects(value.trim()),
-    onSuccess: (projects) =>
-      toast.success(t`${projects.length} projects found`),
+    mutationFn: async (value: string) => {
+      const startedAt = Date.now();
+      const projects = await listProjects(value.trim());
+      const listMs = Date.now() - startedAt;
+      const first = projects[0];
+      if (!first) {
+        return { count: 0, listMs, first: null };
+      }
+      const briefStartedAt = Date.now();
+      const brief = await loadProjectBrief(value.trim(), first.id);
+      return {
+        count: projects.length,
+        listMs,
+        first: {
+          name: first.name,
+          chars: brief.length,
+          ms: Date.now() - briefStartedAt,
+        },
+      };
+    },
+    onSuccess: ({ count, listMs, first }) =>
+      first
+        ? toast.success(
+            t`${count} projects in ${listMs} ms. Brief of ${first.name}: ${first.chars} characters in ${first.ms} ms.`,
+          )
+        : toast.error(t`The command ran but listed no projects.`),
     onError: (error) => toast.error(error.message),
   });
   const form = useForm({

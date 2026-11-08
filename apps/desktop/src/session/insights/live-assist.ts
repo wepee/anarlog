@@ -6,12 +6,6 @@ import type {
 } from "@anlg/plugin-transcription";
 
 import {
-  formatProjectCandidates,
-  type Project,
-  PROJECT_RULES,
-  projectProposalSchema,
-} from "~/session/live-assist/projects";
-import {
   type CallTemplateCandidate,
   explainTemplateProposal,
   formatTemplateCandidates,
@@ -81,7 +75,6 @@ const idSchema = z.string().nullable();
 
 export const liveAssistOutputSchema = z.object({
   template: templateProposalSchema,
-  project: projectProposalSchema,
   recent: z.string(),
   topics: z
     .array(
@@ -140,9 +133,6 @@ Fields:
 
 ${TEMPLATE_RULES}
 - When the current template was fixed by the user, return templateId null.
-
-${PROJECT_RULES}
-- When no project list is given, return projectId null.
 
 The project context, when given, is what the user already knows about the project: use it to spot what the call should settle (open questions, pending tasks, figures to confirm), never as something said in the call.
 
@@ -254,7 +244,6 @@ export function buildLiveAssistPrompt({
   dismissed,
   snapshot,
   transcript,
-  projectCandidates,
   projectBrief,
 }: {
   language: string;
@@ -267,8 +256,6 @@ export function buildLiveAssistPrompt({
   dismissed: string[];
   snapshot: LiveAssistSnapshot;
   transcript: string;
-  // Listed only while the call's project is still unknown.
-  projectCandidates: Project[];
   projectBrief: string;
 }): string {
   const state = {
@@ -296,9 +283,6 @@ export function buildLiveAssistPrompt({
     "Points to cover (sections of the current template):",
     coverageLabels.map((label) => `- ${label}`).join("\n"),
     "",
-    ...(projectCandidates.length > 0
-      ? ["Projects:", formatProjectCandidates(projectCandidates), ""]
-      : []),
     ...(projectBrief
       ? [
           "Project context:",
@@ -503,7 +487,9 @@ export function detectIncomingQuestions(
     const isFinal =
       segment.words.length === 0 ||
       segment.words.every((word) => word.is_final);
-    if (!isFinal) {
+    // The user speaking (the mic channel) never holds back a participant's
+    // finished question.
+    if (!isFinal && segment.key.channel !== "DirectMic") {
       break;
     }
     finished.push(segment);
@@ -544,22 +530,4 @@ export function detectIncomingQuestions(
       scannedEndMs,
     ),
   };
-}
-
-export function summarizeSnapshotForAnswers(
-  snapshot: LiveAssistSnapshot,
-): string {
-  return [
-    snapshot.recent && `Recent: ${snapshot.recent}`,
-    ...snapshot.topics.map(
-      (topic) => `Topic ${topic.title}: ${topic.bullets.join("; ")}`,
-    ),
-    ...snapshot.decisions.map((decision) => `Decision: ${decision.text}`),
-    ...snapshot.todos.map(
-      (todo) =>
-        `To-do: ${todo.text}${todo.owner ? ` (${todo.owner})` : ""}${todo.due ? `, ${todo.due}` : ""}`,
-    ),
-  ]
-    .filter(Boolean)
-    .join("\n");
 }

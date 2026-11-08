@@ -5,8 +5,6 @@ import {
   type ProjectProviderRequest,
 } from "@anlg/plugin-misc";
 
-import { isEvidenceInTranscript } from "~/templates/detect";
-
 // Projects come from a command the user configures (Settings › Meetings):
 // `<command> projects` lists them as JSON, `<command> context <id>` prints the
 // Markdown brief to give the model, and the optional `<command> search <id>
@@ -196,55 +194,41 @@ export function matchProject({
   return byTitle ? { project: byTitle, reason: "title" } : null;
 }
 
-export const projectProposalSchema = z.object({
-  projectId: z.string().nullable(),
-  confidence: z.enum(["high", "medium", "low"]),
-  evidence: z.string().nullable(),
-});
+const MIN_TRANSCRIPT_MENTIONS = 2;
 
-export type ProjectProposal = z.infer<typeof projectProposalSchema>;
-
-export const PROJECT_RULES = `Choosing the project (only when a project list is given):
-- Pick the project the call is about from the list; return projectId null when none clearly fits.
-- "high" confidence requires a short verbatim quote (max 15 words) from the transcript that names the client, the product, a person or a subject specific to that project.
-- The calendar title and the participants are hints, never evidence. Small talk proves nothing.`;
-
-export function formatProjectCandidates(projects: Project[]): string {
-  return projects
-    .map((project) =>
-      [
-        `- id: ${project.id} · ${project.name}`,
-        project.aliases.length > 0
-          ? ` (also: ${project.aliases.join(", ")})`
-          : "",
-        project.active ? "" : " [inactive]",
-        project.people.length > 0
-          ? `\n  people: ${project.people.join(", ")}`
-          : "",
-        project.description ? `\n  ${project.description}` : "",
-      ].join(""),
-    )
-    .join("\n");
+function countMentions(haystack: string, needle: string): number {
+  const words = fold(needle)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  if (words.length === 0 || words.join("").length < 3) {
+    return 0;
+  }
+  const pattern = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${words.join("[^\\p{L}\\p{N}]+")}(?=$|[^\\p{L}\\p{N}])`,
+    "gu",
+  );
+  return [...haystack.matchAll(pattern)].length;
 }
 
-// Rule 4: the model may name the project, but only on a quote actually said
-// in the call, as for the template.
-export function acceptProjectProposal(
-  proposal: ProjectProposal | null | undefined,
+// Rule 4, without a model: the project whose name, aliases or people are
+// said at least twice in the call, clearly more than any other. A client
+// mentioning another client once does not tip it.
+export function matchProjectInTranscript(
   projects: Project[],
   transcript: string,
-): { projectId: string | null; reason: string } {
-  if (!proposal?.projectId) {
-    return { projectId: null, reason: "no_proposal" };
+): { project: Project; mentions: number } | null {
+  const folded = fold(transcript);
+  const ranked = projects
+    .map((project) => ({
+      project,
+      mentions: [project.name, ...project.aliases, ...project.people]
+        .filter((name, index, all) => all.indexOf(name) === index)
+        .reduce((total, name) => total + countMentions(folded, name), 0),
+    }))
+    .sort((a, b) => b.mentions - a.mentions);
+  const [best, second] = ranked;
+  if (!best || best.mentions < MIN_TRANSCRIPT_MENTIONS) {
+    return null;
   }
-  if (proposal.confidence !== "high") {
-    return { projectId: null, reason: "not_high_confidence" };
-  }
-  if (!projects.some((project) => project.id === proposal.projectId)) {
-    return { projectId: null, reason: "unknown_project" };
-  }
-  if (!isEvidenceInTranscript(proposal.evidence, transcript)) {
-    return { projectId: null, reason: "evidence_not_in_transcript" };
-  }
-  return { projectId: proposal.projectId, reason: "accepted" };
+  return second && second.mentions * 2 > best.mentions ? null : best;
 }

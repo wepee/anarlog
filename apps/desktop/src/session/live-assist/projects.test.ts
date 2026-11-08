@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptProjectProposal, matchProject, parseProjects } from "./projects";
+import {
+  matchProject,
+  matchProjectInTranscript,
+  parseProjects,
+} from "./projects";
 
 const projects = parseProjects(
   JSON.stringify([
@@ -73,25 +77,20 @@ describe("matchProject", () => {
   });
 });
 
-describe("acceptProjectProposal", () => {
-  it("needs a quote that was actually said", () => {
-    const transcript =
-      "[02:10] Speaker 1: chez Lumen on veut revoir la prise de rendez-vous";
-    const proposal = {
-      projectId: "lumen",
-      confidence: "high" as const,
-      evidence: "chez Lumen on veut revoir la prise de rendez-vous",
-    };
+describe("matchProjectInTranscript", () => {
+  it("needs the project named twice, clearly more than any other", () => {
+    const call = [
+      "[00:40] Speaker 1: Chez Lumen, on veut revoir la prise de rendez-vous.",
+      "[02:10] Speaker 1: Comme chez Globex, mais en mieux.",
+      "[05:30] You: Pour Lumen Optique, on peut démarrer en janvier.",
+    ].join("\n");
 
+    expect(matchProjectInTranscript(projects, call)?.project.id).toBe("lumen");
     expect(
-      acceptProjectProposal(proposal, projects, transcript).projectId,
-    ).toBe("lumen");
+      matchProjectInTranscript(projects, "Chez Lumen. Comme chez Globex."),
+    ).toBeNull();
     expect(
-      acceptProjectProposal(
-        { ...proposal, evidence: "Lumen veut un nouveau site e-commerce" },
-        projects,
-        transcript,
-      ).reason,
-    ).toBe("evidence_not_in_transcript");
+      matchProjectInTranscript(projects, "Lumen, Lumen, Globex, Globex."),
+    ).toBeNull();
   });
 });

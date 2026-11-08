@@ -55,6 +55,15 @@ export function AssistPanel({
     >
       <div className="flex flex-col gap-2 px-3 pt-3 pb-2">
         <div className="flex items-center justify-end gap-1.5">
+          {assist.notice ? (
+            <p
+              className="mr-auto truncate text-[11.5px]"
+              style={{ color: "rgb(255, 160, 140)" }}
+              title={assist.notice}
+            >
+              {assist.notice}
+            </p>
+          ) : null}
           {assist.project ? (
             <MenuChip
               title={assist.project.title}
@@ -125,6 +134,7 @@ export function AssistPanel({
             muted={muted}
             hairline={hairline}
             onAction={onAction}
+            onOpenAnswers={() => setTab("answers")}
           />
         )}
         {tab === "answers" && (
@@ -413,11 +423,13 @@ function QuestionsTab({
   muted,
   hairline,
   onAction,
+  onOpenAnswers,
 }: {
   assist: FloatingAssist;
   muted: string;
   hairline: string;
   onAction: (action: FloatingAssistAction) => void;
+  onOpenAnswers: () => void;
 }) {
   const statusDot = {
     covered: { background: "rgb(139, 224, 171)" },
@@ -431,6 +443,27 @@ function QuestionsTab({
 
   return (
     <div>
+      {assist.spotlight ? (
+        <button
+          type="button"
+          onClick={onOpenAnswers}
+          className="mt-1 mb-2 flex w-full flex-col gap-1 rounded-xl px-3 py-2 text-left"
+          style={{ boxShadow: `inset 0 0 0 0.5px ${hairline}` }}
+        >
+          <span
+            className="font-mono text-[10.5px] tracking-wider uppercase"
+            style={{ color: "rgb(255, 210, 122)" }}
+          >
+            {assist.labels.suggestedAnswer}
+          </span>
+          <span className="text-[12px]" style={{ color: muted }}>
+            {assist.spotlight.question}
+          </span>
+          <span className="text-[13.5px] leading-[1.4] font-medium">
+            {assist.spotlight.answer}
+          </span>
+        </button>
+      ) : null}
       {assist.questions.length === 0 ? (
         <p className="py-2 text-[13px]" style={{ color: muted }}>
           {assist.labels.emptyQuestions}

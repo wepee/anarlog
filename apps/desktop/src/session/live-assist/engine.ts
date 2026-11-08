@@ -1,4 +1,7 @@
+import { t } from "@lingui/core/macro";
 import { type LanguageModel, Output, streamText } from "ai";
+
+import type { LiveTranscriptSegment } from "@anlg/plugin-transcription";
 
 import { buildLiveAnswerPrompt, streamLiveAnswer } from "./answers";
 import { describeError, describeModel, liveAssistLog } from "./journal";
@@ -8,10 +11,10 @@ import {
   type PastMeetings,
 } from "./past-meetings";
 import {
-  acceptProjectProposal,
   listProjects,
   loadProjectBrief,
   matchProject,
+  matchProjectInTranscript,
   type Project,
   searchProject,
 } from "./projects";
@@ -32,7 +35,6 @@ import {
   liveAssistOutputSchema,
   mergeLiveAssistOutput,
   shouldRunLiveAssistUpdate,
-  summarizeSnapshotForAnswers,
 } from "~/session/insights/live-assist";
 import { listenerStore } from "~/store/zustand/listener/instance";
 import {
@@ -42,11 +44,17 @@ import {
 
 const TICK_MS = 5_000;
 const GENERATION_TIMEOUT_MS = 45_000;
-const MAX_OUTPUT_TOKENS = 3_000;
+const MAX_OUTPUT_TOKENS = 6_000;
 const MAX_AUTO_ANSWERS_PER_CALL = 60;
 const ANSWER_CONTEXT_MS = 3 * 60_000;
 // A turn is considered finished once the transcript has been quiet this long.
 const QUESTION_QUIET_MS = 1_200;
+const QUESTION_SCAN_MS = 400;
+// A suggestion for a question asked this long ago no longer helps.
+const AUTO_ANSWER_MAX_WAIT_MS = 20_000;
+// Answers never wait long for a project brief that is still loading.
+const BRIEF_WAIT_MS = 1_500;
+const BRIEF_RETRY_MS = 60_000;
 const ANSWER_RENDER_INTERVAL_MS = 120;
 
 type EngineConfig = {
@@ -85,7 +93,17 @@ type RunningSession = {
   questionsScannedEndMs: number;
   seenQuestions: Set<string>;
   autoAnswers: number;
-  answering: boolean;
+  answering: {
+    id: string;
+    origin: "auto" | "asked";
+    controller: AbortController;
+  } | null;
+  // When the participants' side of the transcript last changed; the user
+  // talking does not count.
+  remoteChangedAt: number;
+  remoteSignature: string;
+  scannedSignature: string;
+  nextId: number;
 };
 
 // Runs Live Assist for whichever session is recording with live
@@ -99,7 +117,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   let current: RunningSession | null = null;
   let disposed = false;
   let lastInactiveReason: string | null = null;
-  let questionTimer: ReturnType<typeof setTimeout> | null = null;
 
   liveAssistLog("engine.created");
 
@@ -113,6 +130,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       current.sessionId,
     );
     current.controller?.abort();
+    current.answering?.controller.abort();
     useLiveAssistStore.getState().clearSession(current.sessionId);
     current = null;
   };
@@ -193,7 +211,11 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         questionsScannedEndMs: 0,
         seenQuestions: new Set(),
         autoAnswers: 0,
-        answering: false,
+        answering: null,
+        remoteChangedAt: Date.now(),
+        remoteSignature: "",
+        scannedSignature: "",
+        nextId: 0,
       };
       current = session;
       // What the user knows about the project is ready, or on its way,
@@ -247,6 +269,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         { durationMs: Date.now() - startedAt, error: describeError(error) },
         session.sessionId,
       );
+      if (current === session) {
+        useLiveAssistStore.getState().setProjectsFailed(session.sessionId);
+      }
       return;
     }
     if (current !== session) {
@@ -336,11 +361,70 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           },
           session.sessionId,
         );
-        session.briefs.delete(projectId);
+        setTimeout(() => {
+          if (session.briefs.get(projectId) === brief) {
+            session.briefs.delete(projectId);
+          }
+        }, BRIEF_RETRY_MS);
         return "";
       });
     session.briefs.set(projectId, brief);
     return brief;
+  };
+
+  const getBriefIfReady = async (
+    session: RunningSession,
+    projectId: string | null,
+  ): Promise<string> => {
+    if (!projectId) {
+      return "";
+    }
+    const brief = await Promise.race([
+      getBrief(session, projectId),
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), BRIEF_WAIT_MS),
+      ),
+    ]);
+    if (brief === null) {
+      liveAssistLog(
+        "project.brief_not_ready",
+        { projectId },
+        session.sessionId,
+      );
+      return "";
+    }
+    return brief;
+  };
+
+  // Rule 4: the project named in the call itself.
+  const matchByTranscript = (session: RunningSession) => {
+    const { project } = getLiveAssistSession(session.sessionId);
+    if (
+      project.source !== "auto" ||
+      project.id ||
+      session.projects.length === 0
+    ) {
+      return;
+    }
+    const transcript = listenerStore
+      .getState()
+      .liveSegments.map((segment) => segment.text)
+      .join("\n");
+    const match = matchProjectInTranscript(session.projects, transcript);
+    if (match) {
+      liveAssistLog(
+        "project.rules",
+        {
+          decision: "named_in_call",
+          projectId: match.project.id,
+          mentions: match.mentions,
+        },
+        session.sessionId,
+      );
+      useLiveAssistStore
+        .getState()
+        .setAutoProject(session.sessionId, match.project.id);
+    }
   };
 
   const getProjectName = (session: RunningSession, projectId: string | null) =>
@@ -350,6 +434,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     sync();
     const session = current;
     const config = getConfig();
+    if (session) {
+      matchByTranscript(session);
+    }
     if (disposed || !session || session.running || !config.model) {
       return;
     }
@@ -404,6 +491,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         session.context,
         listTemplateCandidates(),
       ]);
+      if (current !== session) {
+        return;
+      }
       useLiveAssistStore.getState().setTemplates(
         sessionId,
         candidates.map(({ id, title }) => ({ id, title })),
@@ -413,13 +503,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         candidates.find((candidate) => candidate.id === before.template.id)
           ?.title ?? "Auto";
       const language = await resolveCallLanguage(config, window.text);
-      const projectCandidates =
-        before.project.source === "auto" && !before.project.id
-          ? session.projects
-          : [];
-      const projectBrief = before.project.id
-        ? await getBrief(session, before.project.id)
-        : "";
+      const projectBrief = await getBriefIfReady(session, before.project.id);
       const coverageLabels = getCoverageLabels(
         before.template,
         candidates,
@@ -436,7 +520,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         dismissed: before.dismissed,
         snapshot: before.snapshot,
         transcript: window.text,
-        projectCandidates,
         projectBrief,
       });
 
@@ -455,7 +538,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           project: {
             ...before.project,
             name: getProjectName(session, before.project.id),
-            candidates: projectCandidates.length,
             briefChars: projectBrief.length,
           },
           candidates: candidates.map(({ id, title, description }) => ({
@@ -500,7 +582,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       );
       const snapshot = mergeLiveAssistOutput(latest.snapshot, output, {
         dismissed: latest.dismissed,
-        newId: () => crypto.randomUUID(),
+        // Short ids: the model echoes every id of the state on each update.
+        newId: () => `i${(session.nextId += 1)}`,
       });
       const keptIds = new Set(
         snapshot.questions.map((question) => question.id),
@@ -515,22 +598,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       });
       session.processedEndMs = window.lastEndMs;
 
-      const projectDecision =
-        projectCandidates.length > 0
-          ? acceptProjectProposal(
-              output.project,
-              projectCandidates,
-              window.text,
-            )
-          : null;
-      const stillUnknown =
-        latest.project.source === "auto" && !latest.project.id;
-      if (projectDecision?.projectId && stillUnknown) {
-        useLiveAssistStore
-          .getState()
-          .setAutoProject(sessionId, projectDecision.projectId);
-      }
-
       liveAssistLog(
         "update.done",
         {
@@ -544,9 +611,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
             before: latest.template,
             after: decision.template,
           },
-          project: projectDecision
-            ? { proposal: output.project, decision: projectDecision.reason }
-            : { decision: "not_asked" },
           questions: {
             shown: snapshot.questions.map(({ id, text }) => ({ id, text })),
             added: snapshot.questions
@@ -645,7 +709,12 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         {
           question: question.text,
           turnEndedAtMs: question.endMs,
-          detectedAfterTurnEndMs: Date.now(),
+          latestAudioMs: listenerStore
+            .getState()
+            .liveSegments.reduce(
+              (max, segment) => Math.max(max, segment.end_ms),
+              0,
+            ),
         },
         session.sessionId,
       );
@@ -659,6 +728,20 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       return;
     }
     const { sessionId } = session;
+    const store = useLiveAssistStore.getState();
+    for (const stale of getLiveAssistSession(sessionId).answers.filter(
+      (answer) =>
+        answer.status === "queued" &&
+        answer.origin === "auto" &&
+        Date.now() - answer.createdAtMs > AUTO_ANSWER_MAX_WAIT_MS,
+    )) {
+      store.removeAnswer(sessionId, stale.id);
+      liveAssistLog(
+        "answer.expired",
+        { id: stale.id, question: stale.question },
+        sessionId,
+      );
+    }
     const next = getLiveAssistSession(sessionId)
       .answers.filter((answer) => answer.status === "queued")
       .sort(
@@ -670,8 +753,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       return;
     }
 
-    session.answering = true;
-    const store = useLiveAssistStore.getState();
+    const controller = new AbortController();
+    session.answering = { id: next.id, origin: next.origin, controller };
     store.updateAnswer(sessionId, next.id, { status: "answering" });
     const startedAt = Date.now();
     try {
@@ -692,7 +775,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         [
           session.context,
           session.pastMeetings,
-          projectId ? getBrief(session, projectId) : Promise.resolve(""),
+          getBriefIfReady(session, projectId),
           resolveCallLanguage(config, transcript),
         ],
       );
@@ -716,9 +799,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         origin: next.origin,
         language,
         callTitle: context.title,
-        callState: summarizeSnapshotForAnswers(
-          getLiveAssistSession(sessionId).snapshot,
-        ),
         transcript,
         projectName: getProjectName(session, projectId),
         projectBrief,
@@ -738,7 +818,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           pastMeetingsChars: pastMeetings.text.length,
           projectSearch: Boolean(projectSearch),
           waitedInQueueMs: startedAt - next.createdAtMs,
-          promptChars: prompt.length,
+          promptChars: prompt.context.length + prompt.request.length,
         },
         sessionId,
       );
@@ -751,11 +831,12 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         prompt,
         webTools,
         projectSearch,
+        signal: controller.signal,
         onText: (text) => {
           const now = Date.now();
           if (
             current !== session ||
-            now - lastRenderAt < ANSWER_RENDER_INTERVAL_MS
+            (text && now - lastRenderAt < ANSWER_RENDER_INTERVAL_MS)
           ) {
             return;
           }
@@ -793,11 +874,22 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         sessionId,
       );
     } catch (error) {
+      const interrupted = controller.signal.aborted;
       if (current === session) {
-        store.updateAnswer(sessionId, next.id, { status: "error" });
+        if (interrupted) {
+          store.removeAnswer(sessionId, next.id);
+        } else {
+          store.updateAnswer(sessionId, next.id, {
+            status: "error",
+            answer:
+              next.origin === "asked"
+                ? t`The AI model did not respond. Check your AI settings.`
+                : "",
+          });
+        }
       }
       liveAssistLog(
-        "answer.failed",
+        interrupted ? "answer.interrupted" : "answer.failed",
         {
           id: next.id,
           durationMs: Date.now() - startedAt,
@@ -806,7 +898,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         sessionId,
       );
     } finally {
-      session.answering = false;
+      session.answering = null;
       if (current === session) {
         void processAnswers(session);
       }
@@ -814,6 +906,19 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   };
 
   const interval = setInterval(() => void tick(), TICK_MS);
+  // Questions are looked for once the participants have been quiet for a
+  // moment; the user starting to reply does not hold them back.
+  const questionScan = setInterval(() => {
+    const session = current;
+    if (
+      session &&
+      session.remoteSignature !== session.scannedSignature &&
+      Date.now() - session.remoteChangedAt >= QUESTION_QUIET_MS
+    ) {
+      session.scannedSignature = session.remoteSignature;
+      scanQuestions();
+    }
+  }, QUESTION_SCAN_MS);
   const unsubscribeListener = listenerStore.subscribe((state, previous) => {
     if (
       state.live.status !== previous.live.status ||
@@ -824,11 +929,11 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       sync();
     }
     if (state.liveSegments !== previous.liveSegments && current) {
-      if (questionTimer) clearTimeout(questionTimer);
-      questionTimer = setTimeout(() => {
-        questionTimer = null;
-        scanQuestions();
-      }, QUESTION_QUIET_MS);
+      const signature = getRemoteSignature(state.liveSegments);
+      if (signature !== current.remoteSignature) {
+        current.remoteSignature = signature;
+        current.remoteChangedAt = Date.now();
+      }
     }
   });
   const unsubscribeStore = useLiveAssistStore.subscribe((state, previous) => {
@@ -842,6 +947,16 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       answers !== previous.sessions[sessionId]?.answers &&
       answers?.some((answer) => answer.status === "queued")
     ) {
+      // A question the user types goes before a suggestion still being
+      // written.
+      if (
+        session.answering?.origin === "auto" &&
+        answers.some(
+          (answer) => answer.status === "queued" && answer.origin === "asked",
+        )
+      ) {
+        session.answering.controller.abort();
+      }
       void processAnswers(session);
     }
     const project = state.sessions[sessionId]?.project;
@@ -881,7 +996,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     dispose: () => {
       disposed = true;
       clearInterval(interval);
-      if (questionTimer) clearTimeout(questionTimer);
+      clearInterval(questionScan);
       unsubscribeListener();
       unsubscribeStore();
       stop("engine_disposed");
@@ -939,6 +1054,19 @@ async function loadCallContext(sessionId: string): Promise<CallContext> {
   };
   liveAssistLog("context.loaded", context, sessionId);
   return context;
+}
+
+function getRemoteSignature(segments: LiveTranscriptSegment[]): string {
+  let last: LiveTranscriptSegment | null = null;
+  let count = 0;
+  for (const segment of segments) {
+    if (segment.key.channel === "DirectMic") continue;
+    count += 1;
+    if (!last || segment.end_ms >= last.end_ms) last = segment;
+  }
+  return last
+    ? `${count}:${last.id}:${last.text.length}:${last.words.filter((word) => word.is_final).length}`
+    : "";
 }
 
 function getEventName(event: unknown): string | null {

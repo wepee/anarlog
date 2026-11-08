@@ -27,6 +27,7 @@ const MAX_ANSWERS = 20;
 export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
   projects: LiveAssistProjectOption[];
+  projectsFailed: boolean;
   project: LiveAssistProject;
   answers: LiveAssistAnswer[];
   snapshot: LiveAssistSnapshot;
@@ -39,6 +40,7 @@ export type LiveAssistSessionState = {
 const EMPTY_SESSION: LiveAssistSessionState = {
   templates: [],
   projects: [],
+  projectsFailed: false,
   project: { id: null, source: "auto" },
   answers: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
@@ -62,6 +64,7 @@ type LiveAssistActions = {
     templates: LiveAssistTemplateOption[],
   ) => void;
   setProjects: (sessionId: string, projects: LiveAssistProjectOption[]) => void;
+  setProjectsFailed: (sessionId: string) => void;
   // A project found automatically never replaces one picked by hand.
   setAutoProject: (sessionId: string, projectId: string) => void;
   selectProject: (sessionId: string, projectId: string | null) => void;
@@ -112,6 +115,11 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
         updateSession(sessionId, (session) => ({ ...session, templates })),
       setProjects: (sessionId, projects) =>
         updateSession(sessionId, (session) => ({ ...session, projects })),
+      setProjectsFailed: (sessionId) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          projectsFailed: true,
+        })),
       setAutoProject: (sessionId, projectId) =>
         updateSession(sessionId, (session) =>
           session.project.source === "manual"

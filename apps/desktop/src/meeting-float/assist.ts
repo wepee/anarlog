@@ -33,7 +33,13 @@ export type FloatingAssist = {
     youAsked: string;
     projectMenu: string;
     projectFooter: string;
+    suggestedAnswer: string;
   };
+  // A problem the user should know about, shown above the tabs.
+  notice: string | null;
+  // The latest suggested answer, also shown on the Questions tab so it is
+  // seen without switching tabs.
+  spotlight: { question: string; answer: string } | null;
   template: { id: string | null; title: string; auto: boolean };
   templates: Array<{ id: string | null; title: string }>;
   // null when no projects command is set or it listed nothing.
@@ -94,11 +100,13 @@ export type FloatingAssistAction =
   | { action: "seenAnswers" };
 
 const SELF_OWNERS = new Set(["you", "vous", "moi", "me"]);
+const SPOTLIGHT_MS = 2 * 60_000;
 
 export function buildFloatingAssist(
   session: LiveAssistSessionState,
 ): FloatingAssist {
-  const { snapshot, template, templates, project, projects } = session;
+  const { snapshot, template, templates, project, projects, projectsFailed } =
+    session;
   const autoTitle = t`Auto`;
   const selfLabel = t`Me`;
   const noOwnerLabel = t`No owner`;
@@ -143,6 +151,13 @@ export function buildFloatingAssist(
   const visibleAnswers = session.answers.filter(
     (answer) => answer.origin === "asked" || answer.answer.length > 0,
   );
+  const spotlight = visibleAnswers.find(
+    (answer) =>
+      answer.isNew &&
+      answer.answer &&
+      answer.status !== "error" &&
+      Date.now() - answer.createdAtMs < SPOTLIGHT_MS,
+  );
 
   return {
     labels: {
@@ -170,8 +185,19 @@ export function buildFloatingAssist(
       emptyAnswers: t`Questions asked to you get a suggested answer here. You can also ask your own.`,
       youAsked: t`You asked`,
       projectMenu: t`Project`,
-      projectFooter: t`Answers use what you know about this project. Picked by hand, it no longer changes.`,
+      projectFooter:
+        projects.length === 0 && projectsFailed
+          ? t`The projects command failed. Check it in Settings › Meetings.`
+          : t`Answers use what you know about this project. Picked by hand, it no longer changes.`,
+      suggestedAnswer: t`Suggested answer`,
     },
+    notice:
+      session.status === "error"
+        ? t`Live Assist could not update. It retries on its own.`
+        : null,
+    spotlight: spotlight
+      ? { question: spotlight.question, answer: spotlight.answer }
+      : null,
     template: {
       id: template.id,
       title:
@@ -186,7 +212,9 @@ export function buildFloatingAssist(
     project:
       projects.length > 0
         ? { title: projectTitle, auto: project.source === "auto" }
-        : null,
+        : projectsFailed
+          ? { title: t`Projects unavailable`, auto: false }
+          : null,
     projectOptions:
       projects.length > 0
         ? [

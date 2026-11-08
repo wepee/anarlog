@@ -10,6 +10,7 @@ describe("buildFloatingAssist", () => {
       templates: [{ id: "sales", title: "Commercial" }],
       answers: [],
       projects: [],
+      projectsFailed: false,
       project: { id: null, source: "auto" },
       snapshot: {
         ...EMPTY_LIVE_ASSIST_SNAPSHOT,
@@ -56,6 +57,7 @@ describe("buildFloatingAssist", () => {
     const assist = buildFloatingAssist({
       templates: [],
       projects: [],
+      projectsFailed: false,
       project: { id: null, source: "auto" },
       answers: [
         {

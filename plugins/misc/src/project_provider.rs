@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -41,16 +42,27 @@ pub async fn run(command: &str, request: &ProjectProviderRequest) -> Result<Stri
         .next()
         .ok_or_else(|| "the projects command is empty".to_string())?;
     let program = expand_home(&program);
+    let search_path = search_path(Path::new(&program));
+    let resolved = resolve_program(&program, &search_path)
+        .ok_or_else(|| format!("{program} was not found"))?;
 
-    let mut child = tokio::process::Command::new(&program)
-        .args(words)
+    let mut command = tokio::process::Command::new(&resolved);
+    command
+        .args(words.map(|word| expand_home(&word)))
         .args(request.args())
+        .env("PATH", &search_path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    // Its own process group, so a timeout also stops what a wrapper script
+    // started (node, ripgrep...).
+    #[cfg(unix)]
+    command.process_group(0);
+    let mut child = command
         .spawn()
         .map_err(|error| format!("could not start {program}: {error}"))?;
+    let pid = child.id();
 
     let stdout = child.stdout.take().expect("stdout is piped");
     let stderr = child.stderr.take().expect("stderr is piped");
@@ -68,9 +80,13 @@ pub async fn run(command: &str, request: &ProjectProviderRequest) -> Result<Stri
         ))
     };
 
-    let (status, out, err) = tokio::time::timeout(request.timeout(), work)
-        .await
-        .map_err(|_| format!("timed out after {}s", request.timeout().as_secs()))??;
+    let (status, out, err) = match tokio::time::timeout(request.timeout(), work).await {
+        Ok(result) => result?,
+        Err(_) => {
+            kill_group(pid);
+            return Err(format!("timed out after {}s", request.timeout().as_secs()));
+        }
+    };
 
     if !status.success() {
         let stderr = String::from_utf8_lossy(&err);
@@ -100,11 +116,88 @@ async fn read_capped(
     }
 }
 
-fn expand_home(program: &str) -> String {
-    match (program.strip_prefix("~/"), std::env::var("HOME")) {
-        (Some(rest), Ok(home)) => format!("{home}/{rest}"),
-        _ => program.to_string(),
+#[cfg(unix)]
+fn kill_group(pid: Option<u32>) {
+    if let Some(pid) = pid {
+        let _ = std::process::Command::new("kill")
+            .args(["-KILL", &format!("-{pid}")])
+            .status();
     }
+}
+
+#[cfg(not(unix))]
+fn kill_group(_pid: Option<u32>) {}
+
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
+
+fn expand_home(word: &str) -> String {
+    match (word.strip_prefix("~/"), home_dir()) {
+        (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
+        _ => word.to_string(),
+    }
+}
+
+// An app opened from the Dock gets a bare PATH (/usr/bin:/bin...), so the
+// usual install folders for CLIs and their runtimes are added, after the
+// command's own folder.
+fn search_path(program: &Path) -> std::ffi::OsString {
+    let mut dirs = Vec::new();
+    if let Some(parent) = program
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        dirs.push(parent.to_path_buf());
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        dirs.extend(std::env::split_paths(&path));
+    }
+    dirs.extend([
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+    ]);
+    if let Some(home) = home_dir() {
+        for dir in [
+            ".local/bin",
+            ".bun/bin",
+            ".cargo/bin",
+            ".volta/bin",
+            ".asdf/shims",
+            ".npm-global/bin",
+            ".fnm/aliases/default/bin",
+        ] {
+            dirs.push(home.join(dir));
+        }
+        if let Ok(entries) = std::fs::read_dir(home.join(".nvm/versions/node")) {
+            let mut versions = entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path().join("bin"))
+                .collect::<Vec<_>>();
+            versions.sort();
+            dirs.extend(versions.into_iter().rev());
+        }
+    }
+    std::env::join_paths(dirs).unwrap_or_default()
+}
+
+fn resolve_program(program: &str, search_path: &std::ffi::OsStr) -> Option<PathBuf> {
+    let path = Path::new(program);
+    if path.components().count() > 1 {
+        return path.is_file().then(|| path.to_path_buf());
+    }
+    let names: Vec<String> = if cfg!(windows) {
+        vec![
+            format!("{program}.exe"),
+            format!("{program}.cmd"),
+            program.to_string(),
+        ]
+    } else {
+        vec![program.to_string()]
+    };
+    std::env::split_paths(search_path)
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .find(|candidate| candidate.is_file())
 }
 
 // Splits a command line the way a shell would for plain words and quotes,
@@ -198,6 +291,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(output, "search|lumen|$(touch pwned); prix ?|");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn finds_a_script_runtime_outside_the_inherited_path() {
+        let dir = std::env::temp_dir().join(format!("project-provider-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let runtime = dir.join("fake-runtime");
+        std::fs::write(&runtime, "#!/bin/sh\nshift\nprintf 'ran %s' \"$1\"\n").unwrap();
+        let script = dir.join("tool");
+        std::fs::write(&script, "#!/usr/bin/env fake-runtime\n").unwrap();
+        for file in [&runtime, &script] {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let output = run(script.to_str().unwrap(), &ProjectProviderRequest::Projects)
+            .await
+            .unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert_eq!(output, "ran projects");
     }
 
     #[cfg(unix)]

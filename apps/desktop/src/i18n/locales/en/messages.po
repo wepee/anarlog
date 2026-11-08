@@ -55,11 +55,6 @@ msgstr "{0} opened on"
 msgid "{0} pending edits"
 msgstr "{0} pending edits"
 
-#. placeholder {0}: projects.length
-#: src/settings/general/meeting-settings.tsx
-msgid "{0} projects found"
-msgstr "{0} projects found"
-
 #. placeholder {0}: Math.round((percentage ?? 0) * 100)
 #: src/session/components/note-input/transcript/screens/empty.tsx
 msgid "{0}% complete"
@@ -72,6 +67,13 @@ msgstr "{absDays} days ago"
 #: src/settings/stats/badge-collection.tsx
 msgid "{count} of {total} collected"
 msgstr "{count} of {total} collected"
+
+#. placeholder {0}: first.name
+#. placeholder {1}: first.chars
+#. placeholder {2}: first.ms
+#: src/settings/general/meeting-settings.tsx
+msgid "{count} projects in {listMs} ms. Brief of {0}: {1} characters in {2} ms."
+msgstr "{count} projects in {listMs} ms. Brief of {0}: {1} characters in {2} ms."
 
 #: src/settings/stats/index.tsx
 msgid "{date}. Conversations: {count}"
@@ -2264,6 +2266,10 @@ msgstr "Live"
 msgid "Live Assist"
 msgstr "Live Assist"
 
+#: src/meeting-float/assist.ts
+msgid "Live Assist could not update. It retries on its own."
+msgstr "Live Assist could not update. It retries on its own."
+
 #: src/settings/developers/live-assist-log.tsx
 msgid "Live Assist log"
 msgstr "Live Assist log"
@@ -3125,6 +3131,10 @@ msgstr "Project"
 #: src/settings/general/meeting-settings.tsx
 msgid "Projects command"
 msgstr "Projects command"
+
+#: src/meeting-float/assist.ts
+msgid "Projects unavailable"
+msgstr "Projects unavailable"
 
 #: src/settings/general/e2ee-setup.tsx
 msgid "Protect cloud sync"
@@ -4018,6 +4028,10 @@ msgstr "Suggest a Feature"
 msgid "Suggest what to ask next."
 msgstr "Suggest what to ask next."
 
+#: src/meeting-float/assist.ts
+msgid "Suggested answer"
+msgstr "Suggested answer"
+
 #: src/settings/general/meeting-settings.tsx
 msgid "Suggested answers"
 msgstr "Suggested answers"
@@ -4133,9 +4147,21 @@ msgstr "Test failed ({0})"
 msgid "Test runs are not available yet."
 msgstr "Test runs are not available yet."
 
+#: src/session/live-assist/engine.ts
+msgid "The AI model did not respond. Check your AI settings."
+msgstr "The AI model did not respond. Check your AI settings."
+
+#: src/settings/general/meeting-settings.tsx
+msgid "The command ran but listed no projects."
+msgstr "The command ran but listed no projects."
+
 #: src/shared/control.tsx
 msgid "The page you're looking for doesn't exist."
 msgstr "The page you're looking for doesn't exist."
+
+#: src/meeting-float/assist.ts
+msgid "The projects command failed. Check it in Settings › Meetings."
+msgstr "The projects command failed. Check it in Settings › Meetings."
 
 #: src/meeting-float/assist.ts
 msgid "The summary after the call will use this template."

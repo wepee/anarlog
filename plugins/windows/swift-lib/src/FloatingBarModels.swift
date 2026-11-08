@@ -65,7 +65,12 @@ struct FloatingAssistPayload: Codable, Equatable {
     let due, toClarify, dismiss, templateMenu, templateFooter, auto: String
     let emptyQuestions, emptyTodo, emptySummary: String
     let answers, askPlaceholder, answering, noAnswer, emptyAnswers, youAsked: String
-    let projectMenu, projectFooter: String
+    let projectMenu, projectFooter, suggestedAnswer: String
+  }
+
+  struct Spotlight: Codable, Equatable {
+    let question: String
+    let answer: String
   }
 
   struct Template: Codable, Equatable {
@@ -141,6 +146,8 @@ struct FloatingAssistPayload: Codable, Equatable {
   }
 
   let labels: Labels
+  let notice: String?
+  let spotlight: Spotlight?
   let template: Template
   let templates: [TemplateOption]
   let project: Project?
