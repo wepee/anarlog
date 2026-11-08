@@ -280,6 +280,36 @@ export const SETTING_DEFINITIONS = {
   live_assist_enabled: {
     type: "boolean",
     path: ["general", "live_assist_enabled"],
+    default: true as boolean,
+  },
+  live_llm_provider: {
+    type: "string",
+    path: ["ai", "live_llm_provider"],
+    default: "" as string,
+  },
+  live_llm_model: {
+    type: "string",
+    path: ["ai", "live_llm_model"],
+    default: "" as string,
+  },
+  live_assist_web_research: {
+    type: "boolean",
+    path: ["general", "live_assist_web_research"],
+    default: true as boolean,
+  },
+  live_assist_auto_answers: {
+    type: "boolean",
+    path: ["general", "live_assist_auto_answers"],
+    default: true as boolean,
+  },
+  projects_command: {
+    type: "string",
+    path: ["general", "projects_command"],
+    default: "" as string,
+  },
+  call_templates_seeded: {
+    type: "boolean",
+    path: ["general", "call_templates_seeded"],
     default: false as boolean,
   },
   capture_shared_screens: {
@@ -291,6 +321,11 @@ export const SETTING_DEFINITIONS = {
     type: "boolean",
     path: ["general", "cloud_sync_enabled"],
     default: true as boolean,
+  },
+  app_language: {
+    type: "string",
+    path: ["language", "app_language"],
+    default: "" as string,
   },
   ai_language: {
     type: "string",

@@ -39,3 +39,12 @@ pub async fn opinionated_md_to_html<R: tauri::Runtime>(
 ) -> Result<String, String> {
     app.misc().opinionated_md_to_html(&text)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn run_project_provider(
+    command: String,
+    request: crate::ProjectProviderRequest,
+) -> Result<String, String> {
+    crate::project_provider::run(&command, &request).await
+}

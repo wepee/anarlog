@@ -48,6 +48,7 @@ export type FloatingRouteState = {
   liveCaptionToggleVisible: boolean;
   transcriptBubbles: FloatingTranscriptBubble[];
   transcriptNotice?: string | null;
+  assistJson?: string | null;
 };
 const FLOATING_TRANSCRIPT_OVERLAP_THRESHOLD_MS = 300;
 
@@ -63,8 +64,10 @@ export function getFloatingRouteState(
     speakerLabels,
     transcriptBubbles,
     sttProvider,
+    assistJson,
   }: {
     sttProvider?: string | null;
+    assistJson?: string | null;
     sessionId?: string;
     colorScheme?: FloatingBarColorScheme;
     settings?: FloatingOverlaySettings;
@@ -118,6 +121,7 @@ export function getFloatingRouteState(
             sttProvider,
           })
         : null),
+    ...(assistJson ? { assistJson } : {}),
   };
 }
 
@@ -346,6 +350,7 @@ export function isSameFloatingRouteState(
     left?.liveCaptionToggleVisible === right?.liveCaptionToggleVisible &&
     left?.title === right?.title &&
     (left?.transcriptNotice ?? null) === (right?.transcriptNotice ?? null) &&
+    (left?.assistJson ?? null) === (right?.assistJson ?? null) &&
     left?.dictation?.sessionId === right?.dictation?.sessionId &&
     left?.dictation?.phase === right?.dictation?.phase &&
     left?.dictation?.microphone === right?.dictation?.microphone &&

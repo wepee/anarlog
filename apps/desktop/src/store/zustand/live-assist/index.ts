@@ -1,100 +1,247 @@
 import { create } from "zustand";
 
-import type { LiveAssistKind } from "~/session/insights/live-assist";
+import {
+  EMPTY_LIVE_ASSIST_SNAPSHOT,
+  type LiveAssistSnapshot,
+  type LiveAssistTemplate,
+} from "~/session/insights/live-assist";
+import type { LiveAnswerSource } from "~/session/live-assist/answers";
 
-export type LiveAssistCardStatus = "generating" | "ready" | "error";
+export type LiveAssistTemplateOption = { id: string; title: string };
+export type LiveAssistProjectOption = { id: string; title: string };
 
-export type LiveAssistCard = {
+export type LiveAssistAnswer = {
   id: string;
-  kind: LiveAssistKind;
+  question: string;
+  origin: "auto" | "asked";
+  // Who asked, as labelled in the transcript, for a question heard in the call.
+  speaker?: string;
+  status: "queued" | "answering" | "ready" | "error";
+  answer: string;
+  sources: LiveAnswerSource[];
+  isNew: boolean;
   createdAtMs: number;
-  status: LiveAssistCardStatus;
-  items?: string[];
-  errorMessage?: string;
 };
 
-// A very long meeting should not let this grow unbounded in memory; cards
-// are not persisted, so trimming the oldest ones is a safe, simple cap.
-const MAX_CARDS_PER_SESSION = 20;
+const MAX_ANSWERS = 20;
 
-const EMPTY_CARDS: LiveAssistCard[] = [];
+export type LiveAssistSessionState = {
+  templates: LiveAssistTemplateOption[];
+  projects: LiveAssistProjectOption[];
+  projectsFailed: boolean;
+  // Found by the projects command ("auto") or picked by hand ("manual");
+  // a project picked by hand never changes on its own.
+  project: { id: string | null; source: "auto" | "manual" };
+  answers: LiveAssistAnswer[];
+  snapshot: LiveAssistSnapshot;
+  template: LiveAssistTemplate;
+  dismissed: string[];
+  updatedAtMs: number | null;
+  status: "idle" | "updating" | "error";
+};
+
+const EMPTY_SESSION: LiveAssistSessionState = {
+  templates: [],
+  projects: [],
+  projectsFailed: false,
+  project: { id: null, source: "auto" },
+  answers: [],
+  snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
+  template: { id: null, source: "auto" },
+  dismissed: [],
+  updatedAtMs: null,
+  status: "idle",
+};
 
 type LiveAssistState = {
-  cardsBySession: Record<string, LiveAssistCard[]>;
+  sessions: Record<string, LiveAssistSessionState>;
 };
 
 type LiveAssistActions = {
-  addGeneratingCard: (
+  setStatus: (
     sessionId: string,
-    card: Pick<LiveAssistCard, "id" | "kind" | "createdAtMs">,
+    status: LiveAssistSessionState["status"],
   ) => void;
-  resolveCard: (
+  setTemplates: (
     sessionId: string,
-    cardId: string,
-    result:
-      | { status: "ready"; items: string[] }
-      | { status: "error"; errorMessage: string },
+    templates: LiveAssistTemplateOption[],
   ) => void;
-  removeCard: (sessionId: string, cardId: string) => void;
+  setProjects: (sessionId: string, projects: LiveAssistProjectOption[]) => void;
+  setProjectsFailed: (sessionId: string) => void;
+  setAutoProject: (sessionId: string, projectId: string) => void;
+  // null goes back to finding the project automatically.
+  selectProject: (sessionId: string, projectId: string | null) => void;
+  queueAnswer: (
+    sessionId: string,
+    answer: Pick<LiveAssistAnswer, "id" | "question" | "origin" | "speaker">,
+  ) => void;
+  updateAnswer: (
+    sessionId: string,
+    answerId: string,
+    patch: Partial<Pick<LiveAssistAnswer, "status" | "answer" | "sources">>,
+  ) => void;
+  removeAnswer: (sessionId: string, answerId: string) => void;
+  markAnswersSeen: (sessionId: string) => void;
+  applyUpdate: (
+    sessionId: string,
+    update: {
+      snapshot: LiveAssistSnapshot;
+      template: LiveAssistTemplate;
+      updatedAtMs: number;
+    },
+  ) => void;
+  dismissQuestion: (sessionId: string, questionId: string) => void;
+  selectTemplate: (sessionId: string, templateId: string | null) => void;
+  markQuestionsSeen: (sessionId: string) => void;
   clearSession: (sessionId: string) => void;
 };
 
 export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
-  (set) => ({
-    cardsBySession: {},
-    addGeneratingCard: (sessionId, card) =>
-      set((state) => {
-        const existing = state.cardsBySession[sessionId] ?? EMPTY_CARDS;
-        const newCard: LiveAssistCard = { ...card, status: "generating" };
-        const next: LiveAssistCard[] = [newCard, ...existing].slice(
-          0,
-          MAX_CARDS_PER_SESSION,
-        );
-        return {
-          cardsBySession: { ...state.cardsBySession, [sessionId]: next },
-        };
-      }),
-    resolveCard: (sessionId, cardId, result) =>
-      set((state) => {
-        const existing = state.cardsBySession[sessionId];
-        if (!existing) {
-          return state;
-        }
-        return {
-          cardsBySession: {
-            ...state.cardsBySession,
-            [sessionId]: existing.map((card) =>
-              card.id === cardId ? { ...card, ...result } : card,
+  (set) => {
+    const updateSession = (
+      sessionId: string,
+      update: (session: LiveAssistSessionState) => LiveAssistSessionState,
+    ) =>
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [sessionId]: update(state.sessions[sessionId] ?? EMPTY_SESSION),
+        },
+      }));
+
+    return {
+      sessions: {},
+      setStatus: (sessionId, status) =>
+        updateSession(sessionId, (session) => ({ ...session, status })),
+      setTemplates: (sessionId, templates) =>
+        updateSession(sessionId, (session) => ({ ...session, templates })),
+      setProjects: (sessionId, projects) =>
+        updateSession(sessionId, (session) => ({ ...session, projects })),
+      setProjectsFailed: (sessionId) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          projectsFailed: true,
+        })),
+      setAutoProject: (sessionId, projectId) =>
+        updateSession(sessionId, (session) =>
+          session.project.source === "manual"
+            ? session
+            : { ...session, project: { id: projectId, source: "auto" } },
+        ),
+      selectProject: (sessionId, projectId) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          project: projectId
+            ? { id: projectId, source: "manual" }
+            : { id: null, source: "auto" },
+        })),
+      queueAnswer: (sessionId, answer) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          answers: [
+            {
+              ...answer,
+              status: "queued" as const,
+              answer: "",
+              sources: [],
+              isNew: answer.origin === "auto",
+              createdAtMs: Date.now(),
+            },
+            ...session.answers,
+          ].slice(0, MAX_ANSWERS),
+        })),
+      updateAnswer: (sessionId, answerId, patch) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          answers: session.answers.map((answer) =>
+            answer.id === answerId ? { ...answer, ...patch } : answer,
+          ),
+        })),
+      removeAnswer: (sessionId, answerId) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          answers: session.answers.filter((answer) => answer.id !== answerId),
+        })),
+      markAnswersSeen: (sessionId) =>
+        updateSession(sessionId, (session) =>
+          session.answers.some((answer) => answer.isNew)
+            ? {
+                ...session,
+                answers: session.answers.map((answer) => ({
+                  ...answer,
+                  isNew: false,
+                })),
+              }
+            : session,
+        ),
+      applyUpdate: (sessionId, { snapshot, template, updatedAtMs }) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          snapshot: {
+            ...snapshot,
+            questions: snapshot.questions.filter(
+              (question) => !session.dismissed.includes(question.text),
             ),
           },
-        };
-      }),
-    removeCard: (sessionId, cardId) =>
-      set((state) => {
-        const existing = state.cardsBySession[sessionId];
-        if (!existing) {
-          return state;
-        }
-        return {
-          cardsBySession: {
-            ...state.cardsBySession,
-            [sessionId]: existing.filter((card) => card.id !== cardId),
-          },
-        };
-      }),
-    clearSession: (sessionId) =>
-      set((state) => {
-        if (!(sessionId in state.cardsBySession)) {
-          return state;
-        }
-        const { [sessionId]: _removed, ...rest } = state.cardsBySession;
-        return { cardsBySession: rest };
-      }),
-  }),
+          // A choice made by hand while this update was running wins.
+          template:
+            session.template.source === "manual" ? session.template : template,
+          updatedAtMs,
+          status: "idle",
+        })),
+      dismissQuestion: (sessionId, questionId) =>
+        updateSession(sessionId, (session) => {
+          const question = session.snapshot.questions.find(
+            (item) => item.id === questionId,
+          );
+          if (!question) {
+            return session;
+          }
+          return {
+            ...session,
+            dismissed: [...session.dismissed, question.text],
+            snapshot: {
+              ...session.snapshot,
+              questions: session.snapshot.questions.filter(
+                (item) => item.id !== questionId,
+              ),
+            },
+          };
+        }),
+      selectTemplate: (sessionId, templateId) =>
+        updateSession(sessionId, (session) => ({
+          ...session,
+          template: { id: templateId, source: "manual" },
+        })),
+      markQuestionsSeen: (sessionId) =>
+        updateSession(sessionId, (session) =>
+          session.snapshot.questions.some((question) => question.isNew)
+            ? {
+                ...session,
+                snapshot: {
+                  ...session.snapshot,
+                  questions: session.snapshot.questions.map((question) => ({
+                    ...question,
+                    isNew: false,
+                  })),
+                },
+              }
+            : session,
+        ),
+      clearSession: (sessionId) =>
+        set((state) => {
+          if (!(sessionId in state.sessions)) {
+            return state;
+          }
+          const { [sessionId]: _removed, ...rest } = state.sessions;
+          return { sessions: rest };
+        }),
+    };
+  },
 );
 
-export function useLiveAssistCards(sessionId: string): LiveAssistCard[] {
-  return useLiveAssistStore(
-    (state) => state.cardsBySession[sessionId] ?? EMPTY_CARDS,
-  );
+export function getLiveAssistSession(
+  sessionId: string,
+): LiveAssistSessionState {
+  return useLiveAssistStore.getState().sessions[sessionId] ?? EMPTY_SESSION;
 }

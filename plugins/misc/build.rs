@@ -4,6 +4,7 @@ const COMMANDS: &[&str] = &[
     "get_device_info",
     "get_process_memory_bytes",
     "opinionated_md_to_html",
+    "run_project_provider",
     "delete_session_folder",
     "audio_open",
     "audio_exist",

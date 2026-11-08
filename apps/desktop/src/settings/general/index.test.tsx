@@ -52,6 +52,7 @@ vi.mock("./audio-settings", () => ({
   AudioSettingsView: () => <span>Audio settings</span>,
 }));
 vi.mock("./main-language", () => ({
+  AppLanguageView: () => null,
   MainLanguageView: ({ value }: { value: string }) => (
     <span data-testid="main-language">{value}</span>
   ),

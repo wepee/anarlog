@@ -3,7 +3,11 @@ import { renderHook } from "@testing-library/react";
 import { generateText, streamText } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { normalizeLLMProviderId, useLanguageModel } from "./useLLMConnection";
+import {
+  normalizeLLMProviderId,
+  resolveLiveModelId,
+  useLanguageModel,
+} from "./useLLMConnection";
 
 const mocks = vi.hoisted(() => ({ provider: "custom" as string }));
 const managed = vi.hoisted(() => ({ ready: true, disabled: false }));
@@ -154,3 +158,39 @@ it.each([
     }
   },
 );
+
+describe("resolveLiveModelId", () => {
+  it("uses the fast model unless a live model was picked for the current provider", () => {
+    const base = { providerId: "anthropic", mainModelId: "claude-opus-5-5" };
+
+    expect(
+      resolveLiveModelId({
+        ...base,
+        liveProviderId: undefined,
+        liveModelId: undefined,
+      }),
+    ).toBe("claude-haiku-5-5");
+    expect(
+      resolveLiveModelId({
+        ...base,
+        liveProviderId: "openai",
+        liveModelId: "gpt-5-mini",
+      }),
+    ).toBe("claude-haiku-5-5");
+    expect(
+      resolveLiveModelId({
+        ...base,
+        liveProviderId: "anthropic",
+        liveModelId: "claude-sonnet-5-5",
+      }),
+    ).toBe("claude-sonnet-5-5");
+    expect(
+      resolveLiveModelId({
+        providerId: "custom",
+        mainModelId: "llama",
+        liveProviderId: undefined,
+        liveModelId: undefined,
+      }),
+    ).toBe("llama");
+  });
+});

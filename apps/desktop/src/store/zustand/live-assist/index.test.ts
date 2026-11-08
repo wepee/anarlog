@@ -1,111 +1,73 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { useLiveAssistStore } from "./index";
+import { getLiveAssistSession, useLiveAssistStore } from ".";
 
-describe("useLiveAssistStore", () => {
+import { EMPTY_LIVE_ASSIST_SNAPSHOT } from "~/session/insights/live-assist";
+
+const question = (id: string, text: string) => ({
+  id,
+  text,
+  why: "why",
+  isNew: true,
+});
+
+describe("live assist store", () => {
   beforeEach(() => {
-    useLiveAssistStore.setState({ cardsBySession: {} });
+    useLiveAssistStore.setState({ sessions: {} });
   });
 
-  it("adds a generating card to the front of the session's list", () => {
-    const { addGeneratingCard } = useLiveAssistStore.getState();
-    addGeneratingCard("session-1", {
-      id: "a",
-      kind: "catch_up",
-      createdAtMs: 1,
+  it("keeps a dismissed question out of later updates", () => {
+    const store = useLiveAssistStore.getState();
+    store.applyUpdate("s1", {
+      snapshot: {
+        ...EMPTY_LIVE_ASSIST_SNAPSHOT,
+        questions: [question("q1", "Qui décide ?")],
+      },
+      template: { id: null, source: "auto" },
+      updatedAtMs: 1,
     });
-    addGeneratingCard("session-1", {
-      id: "b",
-      kind: "action_items",
-      createdAtMs: 2,
+    store.dismissQuestion("s1", "q1");
+    store.applyUpdate("s1", {
+      snapshot: {
+        ...EMPTY_LIVE_ASSIST_SNAPSHOT,
+        questions: [question("q2", "Qui décide ?")],
+      },
+      template: { id: null, source: "auto" },
+      updatedAtMs: 2,
     });
 
-    const cards = useLiveAssistStore.getState().cardsBySession["session-1"];
-    expect(cards?.map((card) => card.id)).toEqual(["b", "a"]);
-    expect(cards?.every((card) => card.status === "generating")).toBe(true);
+    expect(getLiveAssistSession("s1").snapshot.questions).toEqual([]);
   });
 
-  it("resolves a card to ready or error in place", () => {
-    const { addGeneratingCard, resolveCard } = useLiveAssistStore.getState();
-    addGeneratingCard("session-1", {
-      id: "a",
-      kind: "catch_up",
-      createdAtMs: 1,
+  it("does not let an update override a template picked by hand", () => {
+    const store = useLiveAssistStore.getState();
+    store.selectTemplate("s1", "team");
+    store.applyUpdate("s1", {
+      snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
+      template: { id: "sales", source: "auto" },
+      updatedAtMs: 1,
     });
 
-    resolveCard("session-1", "a", { status: "ready", items: ["Item one."] });
-
-    expect(
-      useLiveAssistStore.getState().cardsBySession["session-1"]?.[0],
-    ).toMatchObject({ status: "ready", items: ["Item one."] });
-
-    resolveCard("session-1", "a", {
-      status: "error",
-      errorMessage: "failed",
+    expect(getLiveAssistSession("s1").template).toEqual({
+      id: "team",
+      source: "manual",
     });
-
-    expect(
-      useLiveAssistStore.getState().cardsBySession["session-1"]?.[0],
-    ).toMatchObject({ status: "error", errorMessage: "failed" });
   });
 
-  it("removes a single card without touching others", () => {
-    const { addGeneratingCard, removeCard } = useLiveAssistStore.getState();
-    addGeneratingCard("session-1", {
-      id: "a",
-      kind: "catch_up",
-      createdAtMs: 1,
-    });
-    addGeneratingCard("session-1", {
-      id: "b",
-      kind: "follow_up",
-      createdAtMs: 2,
+  it("never lets a project found automatically replace one picked by hand", () => {
+    const store = useLiveAssistStore.getState();
+    store.selectProject("s1", "globex");
+    store.setAutoProject("s1", "lumen");
+    expect(getLiveAssistSession("s1").project).toEqual({
+      id: "globex",
+      source: "manual",
     });
 
-    removeCard("session-1", "a");
-
-    expect(
-      useLiveAssistStore
-        .getState()
-        .cardsBySession["session-1"]?.map((card) => card.id),
-    ).toEqual(["b"]);
-  });
-
-  it("caps the number of cards retained per session", () => {
-    const { addGeneratingCard } = useLiveAssistStore.getState();
-    for (let index = 0; index < 25; index += 1) {
-      addGeneratingCard("session-1", {
-        id: `card-${index}`,
-        kind: "catch_up",
-        createdAtMs: index,
-      });
-    }
-
-    expect(
-      useLiveAssistStore.getState().cardsBySession["session-1"],
-    ).toHaveLength(20);
-    expect(
-      useLiveAssistStore.getState().cardsBySession["session-1"]?.[0]?.id,
-    ).toBe("card-24");
-  });
-
-  it("clears only the requested session", () => {
-    const { addGeneratingCard, clearSession } = useLiveAssistStore.getState();
-    addGeneratingCard("session-1", {
-      id: "a",
-      kind: "catch_up",
-      createdAtMs: 1,
+    store.selectProject("s1", null);
+    store.setAutoProject("s1", "lumen");
+    expect(getLiveAssistSession("s1").project).toEqual({
+      id: "lumen",
+      source: "auto",
     });
-    addGeneratingCard("session-2", {
-      id: "b",
-      kind: "catch_up",
-      createdAtMs: 1,
-    });
-
-    clearSession("session-1");
-
-    const { cardsBySession } = useLiveAssistStore.getState();
-    expect(cardsBySession["session-1"]).toBeUndefined();
-    expect(cardsBySession["session-2"]).toHaveLength(1);
   });
 });

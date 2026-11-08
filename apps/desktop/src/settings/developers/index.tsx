@@ -5,6 +5,7 @@ import { ArrowSquareOut } from "@anlg/ui/components/icons";
 import { Button } from "@anlg/ui/components/ui/button";
 
 import { CliSettingsSections } from "./cli";
+import { LiveAssistLogSection } from "./live-assist-log";
 import { WebhooksSection } from "./webhooks";
 
 import { SettingsPageTitle } from "~/settings/page-title";
@@ -32,6 +33,7 @@ export function SettingsDevelopers() {
       </div>
       <CliSettingsSections />
       <WebhooksSection />
+      <LiveAssistLogSection />
     </div>
   );
 }

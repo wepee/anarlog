@@ -25,6 +25,7 @@ import {
   listSubscriptionModels,
 } from "./subscriptions";
 
+import { resolveLiveModelId } from "~/ai/hooks";
 import {
   normalizeReasoningEffort,
   supportsReasoningEffort,
@@ -482,6 +483,85 @@ export function SelectProviderAndModel() {
           )}
         </SettingRow>
       ) : null}
+
+      {effectiveSelection.provider && isConfigured ? (
+        <LiveModelRow
+          provider={effectiveSelection.provider}
+          mainModel={effectiveSelection.model}
+          listModels={
+            configuredProviders[effectiveSelection.provider]?.listModels
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function LiveModelRow({
+  provider,
+  mainModel,
+  listModels,
+}: {
+  provider: string;
+  mainModel: string;
+  listModels?: () => Promise<ListModelsResult>;
+}) {
+  const { live_llm_provider, live_llm_model } = useConfigValues([
+    "live_llm_provider",
+    "live_llm_model",
+  ] as const);
+  const isCustom = Boolean(live_llm_model) && live_llm_provider === provider;
+  const value = resolveLiveModelId({
+    providerId: provider,
+    mainModelId: mainModel,
+    liveProviderId: live_llm_provider,
+    liveModelId: live_llm_model,
+  });
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <h3 className="mb-1 text-sm font-medium">
+          <Trans>Model for live calls</Trans>
+        </h3>
+        <p className="text-muted-foreground text-xs">
+          <Trans>
+            Used by Live Assist and live answers, which must reply within
+            seconds; summaries keep the model above. Pick a fast model from your
+            provider. Without a choice: Claude Haiku with Anthropic, the model
+            above with others, always with minimal reasoning.
+          </Trans>
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <ModelCombobox
+            providerId={provider}
+            value={value}
+            onChange={(model) =>
+              void setSettingValues({
+                live_llm_provider: provider,
+                live_llm_model: model,
+              })
+            }
+            listModels={listModels}
+          />
+        </div>
+        {isCustom ? (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground shrink-0 text-xs"
+            onClick={() =>
+              void setSettingValues({
+                live_llm_provider: "",
+                live_llm_model: "",
+              })
+            }
+          >
+            <Trans>Reset</Trans>
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

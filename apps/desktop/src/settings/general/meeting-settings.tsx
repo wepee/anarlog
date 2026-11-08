@@ -1,7 +1,16 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { useForm } from "@tanstack/react-form";
+import { useMutation } from "@tanstack/react-query";
 import { platform } from "@tauri-apps/plugin-os";
 
-import { SettingSwitchRow } from "~/settings/setting-row";
+import { Button } from "@anlg/ui/components/ui/button";
+import { Input } from "@anlg/ui/components/ui/input";
+import { toast } from "@anlg/ui/components/ui/toast";
+
+import { loadProjectContext, routeCall } from "~/session/live-assist/projects";
+import { setSettingValue } from "~/settings/queries";
+import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
+import { useConfigValue } from "~/shared/config";
 
 interface SettingItem {
   value: boolean;
@@ -17,6 +26,8 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost,
   captureMeetingChat,
   liveAssistEnabled,
+  liveAssistWebResearch,
+  liveAssistAutoAnswers,
   captureSharedScreens,
 }: {
   autoJoinScheduledMeetings: SettingItem;
@@ -27,6 +38,8 @@ export function MeetingSettingsView({
   meetingDisclosureAutoPost: SettingItem;
   captureMeetingChat: SettingItem;
   liveAssistEnabled: SettingItem;
+  liveAssistWebResearch: SettingItem;
+  liveAssistAutoAnswers: SettingItem;
   captureSharedScreens: SettingItem;
 }) {
   const currentPlatform = platform();
@@ -125,14 +138,148 @@ export function MeetingSettingsView({
         title={<Trans>Live Assist</Trans>}
         description={
           <Trans>
-            Show AI suggestions (catch-up, action items, follow-up questions) in
-            a side panel while a meeting is being transcribed live. Sends
-            transcript excerpts to your configured AI provider every minute.
+            While a meeting is transcribed live, the floating bar suggests the
+            questions to ask, drafts the to-do and keeps a running summary.
+            Sends the new transcript to your configured AI provider about once a
+            minute.
           </Trans>
         }
         checked={liveAssistEnabled.value}
         onChange={liveAssistEnabled.onChange}
       />
+      {liveAssistEnabled.value && (
+        <SettingSwitchRow
+          title={<Trans>Suggested answers</Trans>}
+          description={
+            <Trans>
+              When someone asks you a question during the call, the floating bar
+              suggests a short answer, using the call, your past meetings with
+              the same people and the project's context. You can always ask your
+              own questions in the Answers tab.
+            </Trans>
+          }
+          checked={liveAssistAutoAnswers.value}
+          onChange={liveAssistAutoAnswers.onChange}
+        />
+      )}
+      {liveAssistEnabled.value && (
+        <SettingSwitchRow
+          title={<Trans>Web search for answers</Trans>}
+          description={
+            <Trans>
+              Lets the model search the web when a question needs a recent or
+              precise fact, through your AI provider's web search (Anthropic,
+              OpenAI or Google). Each search is billed by your provider.
+            </Trans>
+          }
+          checked={liveAssistWebResearch.value}
+          onChange={liveAssistWebResearch.onChange}
+        />
+      )}
+      {liveAssistEnabled.value && <ProjectsCommandRow />}
     </div>
+  );
+}
+
+function ProjectsCommandRow() {
+  const { t } = useLingui();
+  const command = useConfigValue("projects_command");
+  const save = useMutation({
+    mutationFn: (value: string) =>
+      setSettingValue("projects_command", value.trim()),
+    onError: (error) => toast.error(error.message),
+  });
+  // Runs what a call will run: routing, then the first project's context.
+  const test = useMutation({
+    mutationFn: async (value: string) => {
+      const command = value.trim();
+      const startedAt = Date.now();
+      const routed = await routeCall(command, {
+        call: { title: null, participants: [] },
+        transcript: "",
+      });
+      const routeMs = Date.now() - startedAt;
+      const first = routed.projects[0];
+      if (!first) {
+        return { count: 0, routeMs, first: null };
+      }
+      const contextStartedAt = Date.now();
+      const context = await loadProjectContext(command, first.id);
+      return {
+        count: routed.projects.length,
+        routeMs,
+        first: {
+          label: first.label,
+          chars: context.length,
+          ms: Date.now() - contextStartedAt,
+        },
+      };
+    },
+    onSuccess: ({ count, routeMs, first }) =>
+      first
+        ? toast.success(
+            t`${count} projects in ${routeMs} ms. Context of ${first.label}: ${first.chars} characters in ${first.ms} ms.`,
+          )
+        : toast.error(t`The command ran but listed no projects.`),
+    onError: (error) => toast.error(error.message),
+  });
+  const form = useForm({
+    defaultValues: { command },
+    onSubmit: ({ value }) => {
+      if (value.command.trim() !== command) {
+        save.mutate(value.command);
+      }
+    },
+  });
+
+  return (
+    <SettingRow
+      title={<Trans>Projects command</Trans>}
+      description={
+        <Trans>
+          A command that gives answers the context of your projects. BlackMushi
+          runs it with route (finds the call's project), context (what you know
+          about it, loaded once per call) and read (more notes, when the AI
+          asks). What it prints is sent to your AI provider.
+        </Trans>
+      }
+      controlWidth="content"
+    >
+      {() => (
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void form.handleSubmit();
+          }}
+        >
+          <form.Field name="command">
+            {(field) => (
+              <Input
+                className="h-8 w-64 font-mono text-xs"
+                placeholder="/usr/local/bin/my-tool anarlog"
+                value={field.state.value}
+                onChange={(event) => field.handleChange(event.target.value)}
+                onBlur={() => void form.handleSubmit()}
+              />
+            )}
+          </form.Field>
+          <form.Subscribe selector={(state) => state.values.command}>
+            {(value) => (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!value.trim() || test.isPending}
+                onClick={() => test.mutate(value)}
+              >
+                <Trans>Test</Trans>
+              </Button>
+            )}
+          </form.Subscribe>
+        </form>
+      )}
+    </SettingRow>
   );
 }

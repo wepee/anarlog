@@ -14,7 +14,7 @@ import {
   CORE_TRANSCRIPTION_LANGUAGE_CODES,
   getAdditionalSpokenLanguages,
 } from "./language";
-import { MainLanguageView } from "./main-language";
+import { AppLanguageView, MainLanguageView } from "./main-language";
 import { MeetingSettingsView } from "./meeting-settings";
 import { NotificationSettingsView } from "./notification";
 import { Permissions } from "./permissions";
@@ -47,7 +47,10 @@ const SETTINGS_FORM_KEYS = [
   "consent_auto_send_chat",
   "capture_meeting_chat",
   "live_assist_enabled",
+  "live_assist_web_research",
+  "live_assist_auto_answers",
   "capture_shared_screens",
+  "app_language",
   "ai_language",
   "spoken_languages",
   "summary_use_main_language",
@@ -76,7 +79,10 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
       consent_auto_send_chat: settingsValue.consent_auto_send_chat,
       capture_meeting_chat: settingsValue.capture_meeting_chat,
       live_assist_enabled: settingsValue.live_assist_enabled,
+      live_assist_web_research: settingsValue.live_assist_web_research,
+      live_assist_auto_answers: settingsValue.live_assist_auto_answers,
       capture_shared_screens: settingsValue.capture_shared_screens,
+      app_language: settingsValue.app_language,
       ai_language: settingsValue.ai_language,
       summary_use_main_language: settingsValue.summary_use_main_language,
       spoken_languages: getAdditionalSpokenLanguages(
@@ -121,7 +127,10 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         consent_auto_send_chat: normalizedValue.consent_auto_send_chat,
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         live_assist_enabled: normalizedValue.live_assist_enabled,
+        live_assist_web_research: normalizedValue.live_assist_web_research,
+        live_assist_auto_answers: normalizedValue.live_assist_auto_answers,
         capture_shared_screens: normalizedValue.capture_shared_screens,
+        app_language: normalizedValue.app_language,
         ai_language: normalizedValue.ai_language,
         summary_use_main_language: normalizedValue.summary_use_main_language,
         spoken_languages: JSON.stringify(normalizedValue.spoken_languages),
@@ -145,6 +154,8 @@ function useSettingsForm(storedSettings: StoredSettingValues) {
         consent_auto_send_chat: normalizedValue.consent_auto_send_chat,
         capture_meeting_chat: normalizedValue.capture_meeting_chat,
         live_assist_enabled: normalizedValue.live_assist_enabled,
+        live_assist_web_research: normalizedValue.live_assist_web_research,
+        live_assist_auto_answers: normalizedValue.live_assist_auto_answers,
         capture_shared_screens: normalizedValue.capture_shared_screens,
       });
     },
@@ -262,6 +273,14 @@ function SettingsSectionContent({
             </h2>
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-4">
+                <form.Field name="app_language">
+                  {(field) => (
+                    <AppLanguageView
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                    />
+                  )}
+                </form.Field>
                 <form.Field name="ai_language">
                   {(field) => (
                     <MainLanguageView
@@ -368,6 +387,16 @@ function SettingsSectionContent({
                   value: values.live_assist_enabled,
                   onChange: (value) =>
                     submitFieldValue("live_assist_enabled", value),
+                }}
+                liveAssistAutoAnswers={{
+                  value: values.live_assist_auto_answers,
+                  onChange: (value) =>
+                    submitFieldValue("live_assist_auto_answers", value),
+                }}
+                liveAssistWebResearch={{
+                  value: values.live_assist_web_research,
+                  onChange: (value) =>
+                    submitFieldValue("live_assist_web_research", value),
                 }}
                 captureSharedScreens={{
                   value: values.capture_shared_screens,

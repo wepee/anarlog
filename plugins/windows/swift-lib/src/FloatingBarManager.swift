@@ -137,6 +137,13 @@ final class FloatingBarManager {
     if model.transcriptNotice != state.transcriptNotice {
       model.transcriptNotice = state.transcriptNotice
     }
+    if model.sessionId != state.sessionId {
+      model.sessionId = state.sessionId
+    }
+    let assist = state.assist
+    if model.assist != assist {
+      model.assist = assist
+    }
     settingsModel.apply(floatingBarState: state)
     let minimized =
       state.dictation == nil ? settingsModel.liveCaptionMinimized : state.liveCaptionMinimized
@@ -245,14 +252,16 @@ final class FloatingBarManager {
   private func layout(isExpanded: Bool) -> FloatingBarWindowLayout {
     FloatingBarWindowLayout(
       isExpanded: isExpanded,
-      showsExpand: model.liveCaptionToggleVisible
+      showsExpand: model.liveCaptionToggleVisible,
+      hasAssist: model.assist != nil
     )
   }
 
   private func size(for layout: FloatingBarWindowLayout) -> NSSize {
     FloatingBarLayout.containerSize(
       isExpanded: layout.isExpanded,
-      showsExpand: layout.showsExpand
+      showsExpand: layout.showsExpand,
+      hasAssist: layout.hasAssist
     )
   }
 
@@ -288,6 +297,7 @@ final class FloatingBarManager {
 private struct FloatingBarWindowLayout {
   let isExpanded: Bool
   let showsExpand: Bool
+  let hasAssist: Bool
 }
 
 final class FloatingBarPanel: NSPanel {

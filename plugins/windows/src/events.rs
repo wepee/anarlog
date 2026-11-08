@@ -249,6 +249,32 @@ pub struct FloatingBarDictationAction {
     pub action: DictationPanelAction,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct FloatingBarAssistAction {
+    pub session_id: String,
+    pub action: AssistPanelAction,
+    /// The question or answer to dismiss, the template to select (null for
+    /// Auto), the project to select (null for Auto), or the text of a
+    /// question to ask.
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum AssistPanelAction {
+    DismissQuestion,
+    SelectTemplate,
+    SeenQuestions,
+    /// Ask a question to the LLM; the question text travels in `id`.
+    Ask,
+    SeenAnswers,
+    /// The project to use, null to let the projects command pick.
+    SelectProject,
+    DismissAnswer,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum DictationPanelAction {

@@ -307,6 +307,28 @@ describe("EnhancerService", () => {
     );
   });
 
+  it("uses the template detected for the call over the global default", async () => {
+    const ai = createMockAITaskStore();
+    const resolveAutoTemplateId = vi.fn(async () => "detected-template");
+    const service = new EnhancerService(
+      createDeps({
+        aiTaskStore: ai.store,
+        getSelectedTemplateId: () => "global-template",
+        resolveAutoTemplateId,
+      }),
+    );
+
+    await service.enhance("session-1");
+
+    expect(resolveAutoTemplateId).toHaveBeenCalledWith("session-1");
+    expect(ai.generate).toHaveBeenCalledWith(
+      "note-1-enhance",
+      expect.objectContaining({
+        args: expect.objectContaining({ templateId: "detected-template" }),
+      }),
+    );
+  });
+
   it("returns already_active while the note task is generating", async () => {
     snapshot = createSnapshot({ notes: [createNote()] });
     const ai = createMockAITaskStore(() => ({ status: "generating" }));

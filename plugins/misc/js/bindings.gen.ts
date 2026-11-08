@@ -45,6 +45,14 @@ async opinionatedMdToHtml(text: string) : Promise<Result<string, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async runProjectProvider(command: string, request: ProjectProviderRequest) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:misc|run_project_provider", { command, request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -59,6 +67,7 @@ async opinionatedMdToHtml(text: string) : Promise<Result<string, string>> {
 /** user-defined types **/
 
 export type DeviceInfo = { platform: string; arch: string; totalMemoryBytes: number; osVersion: string; appVersion: string; buildHash?: string | null; locale?: string | null }
+export type ProjectProviderRequest = { kind: "route"; input: string } | { kind: "context"; project: string } | { kind: "read"; project: string; section: string | null; search: string | null }
 
 /** tauri-specta globals **/
 

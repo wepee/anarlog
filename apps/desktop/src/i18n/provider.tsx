@@ -11,7 +11,10 @@ import { useConfigValue } from "~/shared/config";
 
 export function AppI18nProvider({ children }: { children: ReactNode }) {
   const mainLanguage = useConfigValue("ai_language");
-  const locale = resolveDisplayLocale(mainLanguage);
+  const appLanguage = useConfigValue("app_language");
+  // The interface follows the main (transcription and AI) language unless
+  // an app language was picked on its own.
+  const locale = resolveDisplayLocale(appLanguage || mainLanguage);
   const { data: i18n } = useQuery({
     queryKey: ["i18n-catalog", locale],
     queryFn: () => createI18n(locale),

@@ -66,6 +66,9 @@ type EnhancerDeps = {
   getModel: () => LanguageModel | null;
   getLLMConn: () => { providerId?: string; modelId?: string } | null;
   getSelectedTemplateId: () => string | undefined;
+  // Picks the template when nothing explicit was asked for (Auto): see
+  // services/enhancer/auto-template.ts. Falls back to the selected template.
+  resolveAutoTemplateId?: (sessionId: string) => Promise<string | undefined>;
 };
 
 const UUID_TITLE_RE =
@@ -197,7 +200,7 @@ export class EnhancerService {
       const snapshot = await this.loadSession(sessionId);
       const templateId = resolveTemplateId(
         undefined,
-        this.deps.getSelectedTemplateId,
+        await this.defaultTemplateGetter(sessionId, snapshot.rawTemplateId),
         snapshot.rawTemplateId,
       );
       const existingNote = getAutoEnhancedNote(snapshot, templateId);
@@ -239,7 +242,7 @@ export class EnhancerService {
         const snapshot = await this.loadSession(sessionId);
         const selectedTemplateId = resolveTemplateId(
           undefined,
-          this.deps.getSelectedTemplateId,
+          await this.defaultTemplateGetter(sessionId, snapshot.rawTemplateId),
           snapshot.rawTemplateId,
         );
         const existingNote = getAutoEnhancedNote(snapshot, selectedTemplateId);
@@ -259,6 +262,18 @@ export class EnhancerService {
     }
 
     await this.queueAutoEnhanceIfSummaryEmpty(sessionId);
+  }
+
+  private async defaultTemplateGetter(
+    sessionId: string,
+    memoTemplateId: string | undefined,
+  ): Promise<() => string | undefined> {
+    const { getSelectedTemplateId, resolveAutoTemplateId } = this.deps;
+    if (memoTemplateId || !resolveAutoTemplateId) {
+      return getSelectedTemplateId;
+    }
+    const resolved = await resolveAutoTemplateId(sessionId);
+    return () => resolved;
   }
 
   private runAutoEnhance(sessionId: string, attempt: number) {
@@ -481,7 +496,9 @@ export class EnhancerService {
 
     let templateId = resolveTemplateId(
       opts,
-      getSelectedTemplateId,
+      opts?.templateId === undefined
+        ? await this.defaultTemplateGetter(sessionId, snapshot.rawTemplateId)
+        : getSelectedTemplateId,
       snapshot.rawTemplateId,
     );
     const pendingAutoEnhanceNote = opts?.pendingAutoEnhance

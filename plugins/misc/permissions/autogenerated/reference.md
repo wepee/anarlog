@@ -9,6 +9,7 @@ Default permissions for the plugin
 - `allow-get-device-info`
 - `allow-get-process-memory-bytes`
 - `allow-opinionated-md-to-html`
+- `allow-run-project-provider`
 
 ## Permission Table
 
@@ -327,6 +328,32 @@ Enables the reveal_session_in_finder command without any pre-configured scope.
 <td>
 
 Denies the reveal_session_in_finder command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`misc:allow-run-project-provider`
+
+</td>
+<td>
+
+Enables the run_project_provider command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`misc:deny-run-project-provider`
+
+</td>
+<td>
+
+Denies the run_project_provider command without any pre-configured scope.
 
 </td>
 </tr>

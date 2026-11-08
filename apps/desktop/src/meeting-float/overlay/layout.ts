@@ -15,6 +15,7 @@ export const FLOATING_BAR_HOVER_HANDLE_RESERVED_HEIGHT =
 export const FLOATING_BAR_CONTROL_RADIUS = 10;
 export const FLOATING_BAR_COMPACT_RADIUS = 14;
 export const FLOATING_BAR_EXPANDED_RADIUS = 21;
+export const FLOATING_BAR_ASSIST_RADIUS = 28;
 
 export function compactControlsWidth(showsExpand: boolean) {
   return showsExpand

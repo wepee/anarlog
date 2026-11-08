@@ -75,6 +75,11 @@ pub struct FloatingBarState {
     pub layout: Option<FloatingBarOverlayLayout>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Live Assist panel content, serialized by the main window. Kept as an
+    /// opaque JSON string so the native panel and the webview overlay can
+    /// evolve it without a Rust type for every field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assist_json: Option<String>,
 }
 
 pub const WINDOW_LABEL: &str = "floating-bar";
@@ -93,6 +98,8 @@ pub(crate) mod layout {
     pub const COMPACT_HORIZONTAL_PADDING: f64 = 4.0;
     pub const EXPANDED_WIDTH: f64 = 360.0;
     pub const EXPANDED_HEIGHT: f64 = 430.0;
+    pub const ASSIST_EXPANDED_WIDTH: f64 = 384.0;
+    pub const ASSIST_EXPANDED_HEIGHT: f64 = 548.0;
     pub const HOVER_HANDLE_TOP_PADDING: f64 = 7.0;
     pub const HOVER_HANDLE_HEIGHT: f64 = 12.0;
     pub const HOVER_HANDLE_GAP: f64 = 2.0;
@@ -117,6 +124,18 @@ pub(crate) mod layout {
 
     pub fn dictation_container_size(expanded: bool) -> (f64, f64) {
         container_size(expanded, true)
+    }
+
+    pub fn meeting_container_size(state: &FloatingBarState) -> (f64, f64) {
+        let shows_expand = state.live_caption_toggle_visible;
+        if is_expanded(state) && state.assist_json.is_some() {
+            (
+                ASSIST_EXPANDED_WIDTH + INSET * 2.0,
+                ASSIST_EXPANDED_HEIGHT + HOVER_HANDLE_RESERVED_HEIGHT + INSET * 2.0,
+            )
+        } else {
+            container_size(is_expanded(state), shows_expand)
+        }
     }
 
     pub fn container_size(is_expanded: bool, shows_expand: bool) -> (f64, f64) {
@@ -268,6 +287,22 @@ mod platform {
         if let (Some(app), Ok(event)) = (
             APP_HANDLE.get(),
             serde_json::from_str::<crate::events::FloatingBarDictationAction>(json),
+        ) {
+            let _ = event.emit(app);
+        }
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rust_on_floating_bar_assist_action(payload: *const c_char) {
+        if payload.is_null() {
+            return;
+        }
+        let Ok(json) = (unsafe { CStr::from_ptr(payload) }).to_str() else {
+            return;
+        };
+        if let (Some(app), Ok(event)) = (
+            APP_HANDLE.get(),
+            serde_json::from_str::<crate::events::FloatingBarAssistAction>(json),
         ) {
             let _ = event.emit(app);
         }
@@ -451,10 +486,10 @@ mod cross_platform {
         let shows_expand = state.is_some_and(|value| value.live_caption_toggle_visible);
         let dictation = state.is_some_and(|state| state.dictation.is_some());
         window.set_focusable(!dictation)?;
-        let (width, height) = if dictation {
-            super::layout::dictation_container_size(is_expanded)
-        } else {
-            container_size(is_expanded, shows_expand)
+        let (width, height) = match state {
+            Some(_) if dictation => super::layout::dictation_container_size(is_expanded),
+            Some(state) => super::layout::meeting_container_size(state),
+            None => container_size(is_expanded, shows_expand),
         };
         let next_size = LogicalSize::new(width, height);
         let scale = window.scale_factor()?;
@@ -606,6 +641,34 @@ pub fn update_amplitude(amplitude: f64) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::layout;
+
+    fn meeting_state(assist_json: Option<&str>, minimized: bool) -> super::FloatingBarState {
+        serde_json::from_value(serde_json::json!({
+            "amplitude": 0.0,
+            "title": "Call",
+            "status": "recording",
+            "colorScheme": "dark",
+            "opacity": 0.8,
+            "liveCaptionOpacity": 0.8,
+            "liveCaptionWidth": 400.0,
+            "liveCaptionLineCount": 2,
+            "liveCaptionPosition": "bottomCenter",
+            "liveCaptionMinimized": minimized,
+            "liveCaptionToggleVisible": true,
+            "assistJson": assist_json,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn live_assist_opens_a_larger_panel_only_when_expanded() {
+        let transcript = layout::meeting_container_size(&meeting_state(None, false));
+        let assist = layout::meeting_container_size(&meeting_state(Some("{}"), false));
+        let collapsed = layout::meeting_container_size(&meeting_state(Some("{}"), true));
+
+        assert!(assist.0 > transcript.0 && assist.1 > transcript.1);
+        assert_eq!(collapsed, layout::container_size(false, true));
+    }
 
     #[test]
     fn controls_dragged_near_vertical_edges_keep_the_panel_visible() {

@@ -2,6 +2,8 @@ export { useAITaskTask } from "./useAITaskTask";
 export {
   type LLMConnectionStatus,
   useLanguageModel,
+  useLiveModel,
+  resolveLiveModelId,
   useLLMConnection,
   useLLMConnectionStatus,
 } from "./useLLMConnection";

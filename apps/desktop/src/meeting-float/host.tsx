@@ -6,6 +6,7 @@ import {
 } from "@anlg/plugin-windows";
 import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
+import { buildFloatingAssist } from "./assist";
 import {
   createMeetingFloatLabelContext,
   createMeetingFloatRenderRequest,
@@ -42,6 +43,8 @@ import {
 
 import { getDictationPanelState } from "~/dictation/panel";
 import { useDictationStatus } from "~/dictation/state";
+import { setManualTemplateChoice } from "~/services/enhancer/auto-template";
+import { liveAssistLog } from "~/session/live-assist/journal";
 import {
   getStoredSettingValues,
   setSettingValue,
@@ -51,6 +54,7 @@ import {
 import { useConfigValue, useConfigValues } from "~/shared/config";
 import { useLatestRef } from "~/shared/hooks/useLatestRef";
 import { listenerStore } from "~/store/zustand/listener/instance";
+import { useLiveAssistStore } from "~/store/zustand/live-assist";
 import type { RenderLabelContext } from "~/stt/live-segment";
 
 export {
@@ -302,8 +306,62 @@ function FloatingMeetingWindowSync({
         if (cancelled) unlisten();
         else unlisteners.push(unlisten);
       });
+    windowsEvents.floatingBarAssistAction
+      .listen(({ payload }) => {
+        if (cancelled) return;
+        liveAssistLog(
+          "panel.action",
+          { action: payload.action, id: payload.id ?? null },
+          payload.sessionId,
+        );
+        const store = useLiveAssistStore.getState();
+        if (!store.sessions[payload.sessionId]) {
+          liveAssistLog(
+            "panel.action_ignored",
+            { reason: "no_live_assist_session" },
+            payload.sessionId,
+          );
+          return;
+        }
+        if (payload.action === "dismissQuestion" && payload.id) {
+          store.dismissQuestion(payload.sessionId, payload.id);
+        } else if (payload.action === "selectTemplate") {
+          const templateId = payload.id ?? null;
+          setManualTemplateChoice(payload.sessionId, templateId);
+          store.selectTemplate(payload.sessionId, templateId);
+        } else if (payload.action === "selectProject") {
+          store.selectProject(payload.sessionId, payload.id ?? null);
+        } else if (payload.action === "dismissAnswer" && payload.id) {
+          store.removeAnswer(payload.sessionId, payload.id);
+        } else if (payload.action === "seenQuestions") {
+          store.markQuestionsSeen(payload.sessionId);
+        } else if (payload.action === "seenAnswers") {
+          store.markAnswersSeen(payload.sessionId);
+        } else if (payload.action === "ask" && payload.id?.trim()) {
+          store.queueAnswer(payload.sessionId, {
+            id: crypto.randomUUID(),
+            question: payload.id.trim(),
+            origin: "asked",
+          });
+        }
+      })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else unlisteners.push(unlisten);
+      });
     resolveSpeakerLabels();
     refreshCurrentRouteState();
+    const unsubscribeAssist = useLiveAssistStore.subscribe(
+      (state, previous) => {
+        const sessionId = listenerStore.getState().live.sessionId;
+        if (
+          sessionId &&
+          state.sessions[sessionId] !== previous.sessions[sessionId]
+        ) {
+          refreshCurrentRouteState();
+        }
+      },
+    );
     const unsubscribeDictation = useDictationStatus.subscribe(() =>
       refreshCurrentRouteState(),
     );
@@ -355,6 +413,7 @@ function FloatingMeetingWindowSync({
       refreshSettingsRef.current = () => {};
       speakerLabeler.dispose();
       unsubscribe();
+      unsubscribeAssist();
       unsubscribeDictation();
       unsubscribeAppliedTheme();
       window.removeEventListener("online", handleConnectivityChange);
@@ -402,7 +461,44 @@ function getCurrentFloatingRouteState(
     speakerLabelContext: getFloatingSpeakerLabelContext(state, meetingData),
     speakerLabels,
     transcriptBubbles,
+    assistJson: getFloatingAssistJson(state),
   });
+}
+
+let lastLoggedAssistJson: string | null = null;
+
+function getFloatingAssistJson(state: ListenerState): string | null {
+  const sessionId = state.live.sessionId;
+  const session = sessionId
+    ? useLiveAssistStore.getState().sessions[sessionId]
+    : undefined;
+  if (!session) {
+    return null;
+  }
+  const assist = buildFloatingAssist(session);
+  const json = JSON.stringify(assist);
+  if (json !== lastLoggedAssistJson) {
+    lastLoggedAssistJson = json;
+    liveAssistLog(
+      "panel.content_sent",
+      {
+        bytes: json.length,
+        template: assist.template,
+        questions: assist.questions.length,
+        newQuestions: assist.newQuestions,
+        todoGroups: assist.todoGroups.map((group) => ({
+          owner: group.owner,
+          items: group.items.length,
+        })),
+        coverage: assist.coverage.map(
+          ({ label, status }) => `${label}: ${status}`,
+        ),
+        topics: assist.topics.length,
+      },
+      sessionId ?? undefined,
+    );
+  }
+  return json;
 }
 
 export function haveFloatingRouteInputsChanged(

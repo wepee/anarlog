@@ -83,6 +83,16 @@ export function FloatingBarOverlayScreen() {
             void windowsEvents.floatingBarStop.emit({});
           }
         }}
+        onAssistAction={(action) => {
+          if (!state.sessionId) {
+            return;
+          }
+          void windowsEvents.floatingBarAssistAction.emit({
+            sessionId: state.sessionId,
+            action: action.action,
+            id: "id" in action ? action.id : null,
+          });
+        }}
         onToggleExpanded={(expanded) => {
           if (state.dictation) {
             void windowsEvents.floatingBarDictationAction.emit({
