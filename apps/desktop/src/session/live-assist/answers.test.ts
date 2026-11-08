@@ -21,17 +21,44 @@ function text(id: string, value: string) {
   ];
 }
 
+function finish(reason: "stop" | "tool-calls") {
+  return {
+    type: "finish",
+    finishReason: { unified: reason, raw: reason },
+    usage,
+  };
+}
+
 function modelReplying(reply: string) {
   return new MockLanguageModelV3({
     doStream: async () => ({
       stream: convertArrayToReadableStream<unknown>([
         ...text("t1", reply),
-        {
-          type: "finish",
-          finishReason: { unified: "stop", raw: "end_turn" },
-          usage,
-        },
+        finish("stop"),
       ]) as never,
+    }),
+  });
+}
+
+// First step: a sentence then a read of the notes; second step: the reply.
+function modelReadingThen(reply: string) {
+  const steps: unknown[][] = [
+    [
+      ...text("t1", "Je regarde les notes."),
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "read_notes",
+        input: JSON.stringify({ search: "prix tarif TJM" }),
+      },
+      finish("tool-calls"),
+    ],
+    [...text("t2", reply), finish("stop")],
+  ];
+  let call = 0;
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: convertArrayToReadableStream(steps[call++]!) as never,
     }),
   });
 }
@@ -48,6 +75,7 @@ async function answer(reply: string) {
         "The user's notes for this question:\n[MEMORY.md › Tarification]\nTJM 600 € HT",
     },
     webTools: null,
+    projectRead: null,
     onText: (value) => shown.push(value),
   });
   return { result, shown };
@@ -99,5 +127,35 @@ describe("live answers", () => {
     expect(extractCitations("Voir l'article [1]", "").text).toBe(
       "Voir l'article [1]",
     );
+  });
+
+  it("reads the notes when asked, shows only the final step and cites by label", async () => {
+    const shown: string[] = [];
+    const reads: unknown[] = [];
+    const ref =
+      "[[projects/lumen/MEMORY.md#Tarification|MEMORY › Tarification]]";
+    const result = await streamLiveAnswer({
+      model: modelReadingThen(`La V1 est à 18 000 € HT. ${ref}`),
+      providerId: "anthropic",
+      modelId: "claude-haiku-5-5",
+      prompt: {
+        context: "The user's notes on this project:\n(none)",
+        request: "",
+      },
+      webTools: null,
+      projectRead: async (query) => {
+        reads.push(query);
+        return [{ ref, text: "V1 : 18 000 € HT" }];
+      },
+      onText: (value) => shown.push(value),
+    });
+
+    expect(reads).toEqual([{ search: "prix tarif TJM" }]);
+    expect(result.text).toBe("La V1 est à 18 000 € HT.");
+    expect(result.sources).toEqual([
+      { kind: "project", label: "MEMORY › Tarification", url: null },
+    ]);
+    expect(shown[shown.length - 1]).toBe("La V1 est à 18 000 € HT.");
+    expect(shown).toContain("");
   });
 });

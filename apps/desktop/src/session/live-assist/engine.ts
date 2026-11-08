@@ -10,7 +10,12 @@ import {
   NO_PAST_MEETINGS,
   type PastMeetings,
 } from "./past-meetings";
-import { askProject, listProjects, type ProjectOption } from "./projects";
+import {
+  loadProjectContext,
+  type ProjectOption,
+  readProject,
+  routeCall,
+} from "./projects";
 import { getWebSearchTools } from "./research";
 
 import { listTemplateCandidates } from "~/services/enhancer/auto-template";
@@ -46,6 +51,10 @@ const QUESTION_QUIET_MS = 1_200;
 const QUESTION_MAX_WAIT_MS = 4_000;
 const QUESTION_SCAN_MS = 400;
 const ANSWER_RENDER_INTERVAL_MS = 120;
+// Until the call's project is known, it is looked for again this often.
+const ROUTE_INTERVAL_MS = 45_000;
+// An answer waits this long at most for a project context still loading.
+const CONTEXT_WAIT_MS = 3_000;
 
 type EngineConfig = {
   enabled: boolean;
@@ -77,6 +86,9 @@ type RunningSession = {
   context: Promise<CallContext> | null;
   pastMeetings: Promise<PastMeetings> | null;
   projects: ProjectOption[];
+  projectContexts: Map<string, Promise<string>>;
+  routing: boolean;
+  routedAt: number | null;
   questionsScannedEndMs: number;
   seenQuestions: Set<string>;
   autoAnswers: number;
@@ -189,6 +201,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         context: null,
         pastMeetings: null,
         projects: [],
+        projectContexts: new Map(),
+        routing: false,
+        routedAt: null,
         questionsScannedEndMs: 0,
         seenQuestions: new Set(),
         autoAnswers: 0,
@@ -204,7 +219,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       // before the first question.
       session.context = loadCallContext(activeSessionId);
       session.pastMeetings = loadPastMeetingsFor(session);
-      void loadProjects(session, config);
+      void route(session);
     }
   };
 
@@ -232,55 +247,150 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     return past;
   };
 
-  const loadProjects = async (
-    session: RunningSession,
-    config: EngineConfig,
-  ) => {
-    const command = config.projectsCommand.trim();
+  // Finds the call's project with the user's projects command, and the list
+  // of projects sorted by fit for the picker.
+  const route = async (session: RunningSession) => {
+    const command = getConfig().projectsCommand.trim();
     if (!command) {
-      liveAssistLog("projects.not_configured", undefined, session.sessionId);
+      if (session.routedAt === null) {
+        liveAssistLog("projects.not_configured", undefined, session.sessionId);
+      }
+      session.routedAt = Date.now();
       return;
     }
+    session.routing = true;
+    session.routedAt = Date.now();
     const startedAt = Date.now();
-    let projects: ProjectOption[];
     try {
-      projects = await listProjects(command);
+      session.context ??= loadCallContext(session.sessionId);
+      const context = await session.context;
+      const result = await routeCall(command, {
+        call: { title: context.title, participants: context.participants },
+        transcript: buildLiveAssistWindow(
+          listenerStore.getState().liveSegments,
+          0,
+          Number.MAX_SAFE_INTEGER,
+        ).text,
+      });
+      if (current !== session) {
+        return;
+      }
+      session.projects = result.projects;
+      const store = useLiveAssistStore.getState();
+      store.setProjects(
+        session.sessionId,
+        result.projects.map(({ id, label }) => ({ id, title: label })),
+      );
+      if (result.projectId) {
+        store.setAutoProject(session.sessionId, result.projectId);
+      }
+      liveAssistLog(
+        "project.routed",
+        {
+          durationMs: Date.now() - startedAt,
+          projectId: result.projectId,
+          reason: result.reason,
+          suggestions: result.projects.slice(0, 3).map(({ label }) => label),
+          projects: result.projects.length,
+        },
+        session.sessionId,
+      );
     } catch (error) {
       liveAssistLog(
-        "projects.failed",
+        "project.route_failed",
         { durationMs: Date.now() - startedAt, error: describeError(error) },
         session.sessionId,
       );
-      if (current === session) {
+      if (current === session && session.projects.length === 0) {
         useLiveAssistStore.getState().setProjectsFailed(session.sessionId);
       }
-      return;
+    } finally {
+      session.routing = false;
     }
-    if (current !== session) {
-      return;
+  };
+
+  // Loaded once per project and kept for the whole call.
+  const getProjectContext = (session: RunningSession, projectId: string) => {
+    const cached = session.projectContexts.get(projectId);
+    if (cached) {
+      return cached;
     }
-    session.projects = projects;
-    useLiveAssistStore.getState().setProjects(
-      session.sessionId,
-      projects.map(({ id, name }) => ({ id, title: name })),
-    );
-    liveAssistLog(
-      "projects.loaded",
-      {
-        durationMs: Date.now() - startedAt,
-        count: projects.length,
-      },
-      session.sessionId,
-    );
+    const startedAt = Date.now();
+    const loading = loadProjectContext(
+      getConfig().projectsCommand.trim(),
+      projectId,
+    )
+      .then((text) => {
+        liveAssistLog(
+          "project.context_loaded",
+          {
+            projectId,
+            durationMs: Date.now() - startedAt,
+            chars: text.length,
+            text,
+          },
+          session.sessionId,
+        );
+        return text;
+      })
+      .catch((error) => {
+        liveAssistLog(
+          "project.context_failed",
+          {
+            projectId,
+            durationMs: Date.now() - startedAt,
+            error: describeError(error),
+          },
+          session.sessionId,
+        );
+        // Tried again with the next question.
+        session.projectContexts.delete(projectId);
+        return "";
+      });
+    session.projectContexts.set(projectId, loading);
+    return loading;
+  };
+
+  const getProjectContextIfReady = async (
+    session: RunningSession,
+    projectId: string | null,
+  ): Promise<string> => {
+    if (!projectId) {
+      return "";
+    }
+    const text = await Promise.race([
+      getProjectContext(session, projectId),
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), CONTEXT_WAIT_MS),
+      ),
+    ]);
+    if (text === null) {
+      liveAssistLog(
+        "project.context_not_ready",
+        { projectId },
+        session.sessionId,
+      );
+      return "";
+    }
+    return text;
   };
 
   const getProjectName = (session: RunningSession, projectId: string | null) =>
-    session.projects.find((project) => project.id === projectId)?.name ?? null;
+    session.projects.find((project) => project.id === projectId)?.label ?? null;
 
   const tick = async () => {
     sync();
     const session = current;
     const config = getConfig();
+    if (
+      session &&
+      !session.routing &&
+      !getLiveAssistSession(session.sessionId).project.id &&
+      session.routedAt !== null &&
+      Date.now() - session.routedAt >= ROUTE_INTERVAL_MS
+    ) {
+      void route(session);
+    }
     if (disposed || !session || session.running || !config.model) {
       return;
     }
@@ -585,7 +695,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     try {
       session.context ??= loadCallContext(sessionId);
       session.pastMeetings ??= loadPastMeetingsFor(session);
-      const { projectId } = getLiveAssistSession(sessionId);
+      const projectId = getLiveAssistSession(sessionId).project.id;
       const command = config.projectsCommand.trim();
       const segments = listenerStore.getState().liveSegments;
       const lastEndMs = segments.reduce(
@@ -597,43 +707,23 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         lastEndMs - ANSWER_CONTEXT_MS + 120_000,
       ).text;
       const context = await session.context;
-      const notesStartedAt = Date.now();
       const [pastMeetings, notes, language] = await Promise.all([
         session.pastMeetings,
-        command
-          ? askProject(command, {
-              question: next.question,
-              origin: next.origin,
-              projectId,
-              call: {
-                title: context.title,
-                participants: context.participants,
-              },
-              transcript,
-            }).catch((error) => {
-              liveAssistLog(
-                "answer.notes_failed",
-                { id: next.id, error: describeError(error) },
-                sessionId,
-              );
-              return "";
-            })
-          : Promise.resolve(""),
+        getProjectContextIfReady(session, projectId),
         resolveCallLanguage(config, transcript),
       ]);
-      if (command) {
-        liveAssistLog(
-          "answer.notes_loaded",
-          {
-            id: next.id,
-            projectId,
-            durationMs: Date.now() - notesStartedAt,
-            chars: notes.length,
-            notes,
-          },
-          sessionId,
-        );
-      }
+      const projectRead =
+        projectId && command
+          ? (query: { section?: string; search?: string }) =>
+              readProject(command, projectId, query).catch((error) => {
+                liveAssistLog(
+                  "answer.read_failed",
+                  { id: next.id, query, error: describeError(error) },
+                  sessionId,
+                );
+                return [];
+              })
+          : null;
       const webTools = config.webSearch
         ? getWebSearchTools(config.model)
         : null;
@@ -644,6 +734,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         callTitle: context.title,
         transcript,
         speaker: next.speaker ?? null,
+        projectName: getProjectName(session, projectId),
         notes,
         pastMeetings: pastMeetings.text,
       });
@@ -672,6 +763,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         modelId: config.modelId,
         prompt,
         webTools,
+        projectRead,
         signal: controller.signal,
         onText: (text) => {
           const now = Date.now();
@@ -710,6 +802,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           durationMs: Date.now() - startedAt,
           text: result.text,
           sources: result.sources,
+          reads: result.reads,
         },
         sessionId,
       );
@@ -792,16 +885,18 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     ) {
       void processAnswers(session);
     }
-    const projectId = state.sessions[sessionId]?.projectId;
-    if (projectId !== previous.sessions[sessionId]?.projectId) {
+    const project = state.sessions[sessionId]?.project;
+    if (project && project !== previous.sessions[sessionId]?.project) {
       liveAssistLog(
-        "project.picked",
-        {
-          projectId: projectId ?? null,
-          name: getProjectName(session, projectId ?? null),
-        },
+        "project.changed",
+        { ...project, name: getProjectName(session, project.id) },
         sessionId,
       );
+      if (project.id) {
+        void getProjectContext(session, project.id);
+      } else {
+        void route(session);
+      }
     }
     const next = state.sessions[sessionId]?.template;
     const before = previous.sessions[sessionId]?.template;

@@ -459,6 +459,10 @@ function speakerKey(key: SegmentKey): string {
 const QUESTION_OPENING =
   /^(?:et |mais |alors |donc |du coup |ok |d'accord )?(?:est-ce qu|qu'est-ce|c'est quoi|combien|comment|pourquoi|what |how |why |do you|did you|can you|could you)/i;
 
+// Questions with no object, set aside before any model call.
+const SMALL_TALK =
+  /(?:(?:tu|vous) m'entend\w*|(?:ça|ca) va(?: bien)?(?: de (?:ton|votre) côté| et toi| et vous)?\s*\?|tu vas bien|vous allez bien|comment (?:ça|ca) va|(?:tu|vous) (?:me )?(?:vois|voyez) (?:bien|mon écran)|c'est bon pour (?:toi|vous)|can you (?:hear|see) me|how are you)/i;
+
 function splitSentences(text: string): string[] {
   return (text.match(/[^.!?]+[.!?]*/g) ?? [])
     .map((sentence) => sentence.trim())
@@ -513,7 +517,9 @@ export function detectIncomingQuestions(
     const text = turn.map((segment) => segment.text.trim()).join(" ");
     const asked = splitSentences(text).filter(
       (sentence) =>
-        countWords(sentence) >= QUESTION_MIN_WORDS && isQuestion(sentence),
+        countWords(sentence) >= QUESTION_MIN_WORDS &&
+        isQuestion(sentence) &&
+        !SMALL_TALK.test(sentence),
     );
     if (asked.length > 0) {
       questions.push({

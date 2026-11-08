@@ -29,8 +29,9 @@ export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
   projects: LiveAssistProjectOption[];
   projectsFailed: boolean;
-  // Picked by hand; null lets the projects command find it.
-  projectId: string | null;
+  // Found by the projects command ("auto") or picked by hand ("manual");
+  // a project picked by hand never changes on its own.
+  project: { id: string | null; source: "auto" | "manual" };
   answers: LiveAssistAnswer[];
   snapshot: LiveAssistSnapshot;
   template: LiveAssistTemplate;
@@ -43,7 +44,7 @@ const EMPTY_SESSION: LiveAssistSessionState = {
   templates: [],
   projects: [],
   projectsFailed: false,
-  projectId: null,
+  project: { id: null, source: "auto" },
   answers: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
   template: { id: null, source: "auto" },
@@ -67,6 +68,8 @@ type LiveAssistActions = {
   ) => void;
   setProjects: (sessionId: string, projects: LiveAssistProjectOption[]) => void;
   setProjectsFailed: (sessionId: string) => void;
+  setAutoProject: (sessionId: string, projectId: string) => void;
+  // null goes back to finding the project automatically.
   selectProject: (sessionId: string, projectId: string | null) => void;
   queueAnswer: (
     sessionId: string,
@@ -119,8 +122,19 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
           ...session,
           projectsFailed: true,
         })),
+      setAutoProject: (sessionId, projectId) =>
+        updateSession(sessionId, (session) =>
+          session.project.source === "manual"
+            ? session
+            : { ...session, project: { id: projectId, source: "auto" } },
+        ),
       selectProject: (sessionId, projectId) =>
-        updateSession(sessionId, (session) => ({ ...session, projectId })),
+        updateSession(sessionId, (session) => ({
+          ...session,
+          project: projectId
+            ? { id: projectId, source: "manual" }
+            : { id: null, source: "auto" },
+        })),
       queueAnswer: (sessionId, answer) =>
         updateSession(sessionId, (session) => ({
           ...session,

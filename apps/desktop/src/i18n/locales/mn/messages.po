@@ -68,8 +68,11 @@ msgstr ""
 msgid "{count} of {total} collected"
 msgstr ""
 
+#. placeholder {0}: first.label
+#. placeholder {1}: first.chars
+#. placeholder {2}: first.ms
 #: src/settings/general/meeting-settings.tsx
-msgid "{count} projects in {listMs} ms. A test question returned {chars} characters in {askMs} ms."
+msgid "{count} projects in {routeMs} ms. Context of {0}: {1} characters in {2} ms."
 msgstr ""
 
 #: src/settings/stats/index.tsx
@@ -146,7 +149,7 @@ msgid "7 days"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx
-msgid "A command that gives answers the context of your projects. BlackMushi runs it with projects (a JSON list to pick from) and ask (the question and the call as JSON on stdin; it prints the project's overview and the notes about the question). What it prints is sent to your AI provider."
+msgid "A command that gives answers the context of your projects. BlackMushi runs it with route (finds the call's project), context (what you know about it, loaded once per call) and read (more notes, when the AI asks). What it prints is sent to your AI provider."
 msgstr ""
 
 #: src/sidebar/folder-name-dialog.tsx
@@ -399,7 +402,7 @@ msgid "Answers"
 msgstr ""
 
 #: src/meeting-float/assist.ts
-msgid "Answers use your notes on this project. On Auto, your projects command finds it."
+msgid "Answers use your notes on this project. On Auto, your projects command finds it from emails or its name said in the call."
 msgstr ""
 
 #: src/settings/ai/shared/index.tsx
@@ -3121,6 +3124,10 @@ msgstr ""
 msgid "Project"
 msgstr ""
 
+#: src/meeting-float/assist.ts
+msgid "Project?"
+msgstr ""
+
 #: src/settings/general/meeting-settings.tsx
 msgid "Projects command"
 msgstr ""
@@ -4144,6 +4151,10 @@ msgstr ""
 msgid "The AI model did not respond. Check your AI settings."
 msgstr ""
 
+#: src/settings/general/meeting-settings.tsx
+msgid "The command ran but listed no projects."
+msgstr ""
+
 #: src/shared/control.tsx
 msgid "The page you're looking for doesn't exist."
 msgstr ""
@@ -4564,10 +4575,6 @@ msgstr ""
 
 #: src/templates/template-form.tsx
 msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
-msgstr ""
-
-#: src/settings/general/meeting-settings.tsx
-msgid "Where does this project stand?"
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx

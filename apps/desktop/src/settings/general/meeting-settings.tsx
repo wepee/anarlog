@@ -7,7 +7,7 @@ import { Button } from "@anlg/ui/components/ui/button";
 import { Input } from "@anlg/ui/components/ui/input";
 import { toast } from "@anlg/ui/components/ui/toast";
 
-import { askProject, listProjects } from "~/session/live-assist/projects";
+import { loadProjectContext, routeCall } from "~/session/live-assist/projects";
 import { setSettingValue } from "~/settings/queries";
 import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
 import { useConfigValue } from "~/shared/config";
@@ -189,32 +189,38 @@ function ProjectsCommandRow() {
       setSettingValue("projects_command", value.trim()),
     onError: (error) => toast.error(error.message),
   });
-  // Runs what a call will run: the list, then one question.
+  // Runs what a call will run: routing, then the first project's context.
   const test = useMutation({
     mutationFn: async (value: string) => {
       const command = value.trim();
       const startedAt = Date.now();
-      const projects = await listProjects(command);
-      const listMs = Date.now() - startedAt;
-      const askStartedAt = Date.now();
-      const notes = await askProject(command, {
-        question: t`Where does this project stand?`,
-        origin: "asked",
-        projectId: projects[0]?.id ?? null,
+      const routed = await routeCall(command, {
         call: { title: null, participants: [] },
         transcript: "",
       });
+      const routeMs = Date.now() - startedAt;
+      const first = routed.projects[0];
+      if (!first) {
+        return { count: 0, routeMs, first: null };
+      }
+      const contextStartedAt = Date.now();
+      const context = await loadProjectContext(command, first.id);
       return {
-        count: projects.length,
-        listMs,
-        chars: notes.length,
-        askMs: Date.now() - askStartedAt,
+        count: routed.projects.length,
+        routeMs,
+        first: {
+          label: first.label,
+          chars: context.length,
+          ms: Date.now() - contextStartedAt,
+        },
       };
     },
-    onSuccess: ({ count, listMs, chars, askMs }) =>
-      toast.success(
-        t`${count} projects in ${listMs} ms. A test question returned ${chars} characters in ${askMs} ms.`,
-      ),
+    onSuccess: ({ count, routeMs, first }) =>
+      first
+        ? toast.success(
+            t`${count} projects in ${routeMs} ms. Context of ${first.label}: ${first.chars} characters in ${first.ms} ms.`,
+          )
+        : toast.error(t`The command ran but listed no projects.`),
     onError: (error) => toast.error(error.message),
   });
   const form = useForm({
@@ -232,10 +238,9 @@ function ProjectsCommandRow() {
       description={
         <Trans>
           A command that gives answers the context of your projects. BlackMushi
-          runs it with projects (a JSON list to pick from) and ask (the question
-          and the call as JSON on stdin; it prints the project's overview and
-          the notes about the question). What it prints is sent to your AI
-          provider.
+          runs it with route (finds the call's project), context (what you know
+          about it, loaded once per call) and read (more notes, when the AI
+          asks). What it prints is sent to your AI provider.
         </Trans>
       }
       controlWidth="content"

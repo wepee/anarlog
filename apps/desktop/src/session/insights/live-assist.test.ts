@@ -242,4 +242,22 @@ describe("detectIncomingQuestions", () => {
     ]);
     expect(result.lastEndMs).toBe(3_000);
   });
+
+  it("sets aside small talk", () => {
+    const result = detectIncomingQuestions(
+      [
+        segment(
+          "h",
+          1_000,
+          3_000,
+          "Salut, tu m'entends bien ? Et ça va bien de ton côté ? Vous avez prévu quel budget pour la V2 ?",
+        ),
+      ],
+      0,
+    );
+
+    expect(result.questions.map((question) => question.text)).toEqual([
+      "Vous avez prévu quel budget pour la V2 ?",
+    ]);
+  });
 });

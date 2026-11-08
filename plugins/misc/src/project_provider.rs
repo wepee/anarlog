@@ -8,35 +8,61 @@ const MAX_STDOUT_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_STDERR_BYTES: u64 = 8 * 1024;
 
 // The app only ever calls the user's projects command with one of these
-// subcommands. Nothing goes through a shell: what comes from the call (the
-// question, the transcript) is written to the command's stdin as JSON, so it
-// cannot run anything.
+// subcommands. Nothing goes through a shell: options are separate arguments,
+// and what comes from the call (title, participants, transcript) is written
+// to the command's stdin as JSON, so it cannot run anything.
 #[derive(Debug, Clone, serde::Deserialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ProjectProviderRequest {
-    Projects,
-    Ask { input: String },
+    Route {
+        input: String,
+    },
+    Context {
+        project: String,
+    },
+    Read {
+        project: String,
+        section: Option<String>,
+        search: Option<String>,
+    },
 }
 
 impl ProjectProviderRequest {
     fn args(&self) -> Vec<String> {
         match self {
-            Self::Projects => vec!["projects".into()],
-            Self::Ask { .. } => vec!["ask".into()],
+            Self::Route { .. } => vec!["route".into()],
+            Self::Context { project } => {
+                vec!["context".into(), "--project".into(), project.clone()]
+            }
+            Self::Read {
+                project,
+                section,
+                search,
+            } => {
+                let mut args = vec!["read".into(), "--project".into(), project.clone()];
+                if let Some(section) = section {
+                    args.extend(["--section".into(), section.clone()]);
+                }
+                if let Some(search) = search {
+                    args.extend(["--search".into(), search.clone()]);
+                }
+                args
+            }
         }
     }
 
     fn stdin(&self) -> Option<&str> {
         match self {
-            Self::Projects => None,
-            Self::Ask { input } => Some(input),
+            Self::Route { input } => Some(input),
+            _ => None,
         }
     }
 
     fn timeout(&self) -> Duration {
         match self {
-            Self::Projects => Duration::from_secs(10),
-            Self::Ask { .. } => Duration::from_secs(15),
+            Self::Route { .. } => Duration::from_secs(10),
+            Self::Context { .. } => Duration::from_secs(15),
+            Self::Read { .. } => Duration::from_secs(8),
         }
     }
 }
@@ -297,17 +323,17 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn passes_the_question_on_stdin_without_a_shell() {
+    async fn passes_the_call_on_stdin_without_a_shell() {
         let output = run(
             "sh -c 'printf \"$0 \"; cat'",
-            &ProjectProviderRequest::Ask {
-                input: r#"{"question":"$(touch pwned); prix ?"}"#.into(),
+            &ProjectProviderRequest::Route {
+                input: r#"{"transcript":"$(touch pwned); prix ?"}"#.into(),
             },
         )
         .await
         .unwrap();
 
-        assert_eq!(output, r#"ask {"question":"$(touch pwned); prix ?"}"#);
+        assert_eq!(output, r#"route {"transcript":"$(touch pwned); prix ?"}"#);
     }
 
     #[cfg(unix)]
@@ -324,20 +350,50 @@ mod tests {
             std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let output = run(script.to_str().unwrap(), &ProjectProviderRequest::Projects)
-            .await
-            .unwrap();
+        let output = run(
+            script.to_str().unwrap(),
+            &ProjectProviderRequest::Context {
+                project: "lumen".into(),
+            },
+        )
+        .await
+        .unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
 
-        assert_eq!(output, "ran projects");
+        assert_eq!(output, "ran context");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn passes_read_options_as_separate_arguments() {
+        let output = run(
+            "printf %s|",
+            &ProjectProviderRequest::Read {
+                project: "projects/lumen optique".into(),
+                section: None,
+                search: Some("prix; tarif $(id)".into()),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            output,
+            "read|--project|projects/lumen optique|--search|prix; tarif $(id)|"
+        );
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn reports_a_failing_command() {
-        let error = run("false", &ProjectProviderRequest::Projects)
-            .await
-            .unwrap_err();
+        let error = run(
+            "false",
+            &ProjectProviderRequest::Context {
+                project: "lumen".into(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(error.starts_with("exited with"), "{error}");
     }
 }
