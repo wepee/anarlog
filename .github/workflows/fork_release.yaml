@@ -91,11 +91,20 @@ jobs:
       # rust-cache only restores dependencies, so every release recompiled the
       # workspace's own crates. sccache keeps those between releases too, in
       # the Actions cache of the default branch, which PR runs cannot write.
-      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+      # The cache only saves time; a failed download (GitHub answers 504 at
+      # times) must not fail the release, which then builds without it.
+      - id: sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+        continue-on-error: true
         with:
           version: "v0.19.0"
       - name: Compile Rust through sccache
+        if: steps.sccache.outcome == 'success'
         run: |
+          if ! sccache --version; then
+            echo "::warning::sccache is not usable; building without the compilation cache."
+            exit 0
+          fi
           {
             echo "SCCACHE_GHA_ENABLED=true"
             echo "RUSTC_WRAPPER=sccache"
