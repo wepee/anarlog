@@ -1,37 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  parseContext,
-  parsePassages,
-  parseRouteResult,
-  routeTranscript,
-} from "./projects";
+import { parseContext, parsePassages, parseProjects } from "./projects";
 
 // Shaped like the contract's examples; to be replaced by real, anonymized
 // outputs of the user's command once it exists.
-const route = {
-  projectId: "projects/lumen-optique",
-  reason: "email",
-  projects: [
-    { id: "projects/lumen-optique", label: "Lumen Optique", icon: "👓" },
-    { id: "projects/globex", label: "Globex" },
-    { id: "broken" },
-  ],
-};
-
 describe("project command outputs", () => {
-  it("keeps a routed project only if it is in the list", () => {
-    expect(parseRouteResult(route)).toEqual({
-      projectId: "projects/lumen-optique",
-      reason: "email",
-      projects: [
-        { id: "projects/lumen-optique", label: "Lumen Optique" },
-        { id: "projects/globex", label: "Globex" },
-      ],
-    });
+  it("keeps projects with an id and a label, in the command's order", () => {
     expect(
-      parseRouteResult({ ...route, projectId: "projects/unknown" }).projectId,
-    ).toBeNull();
+      parseProjects([
+        { id: "projects/lumen-optique", label: "Lumen Optique", icon: "👓" },
+        { id: "broken" },
+        { id: "projects/globex", label: "Globex" },
+      ]),
+    ).toEqual([
+      { id: "projects/lumen-optique", label: "Lumen Optique" },
+      { id: "projects/globex", label: "Globex" },
+    ]);
   });
 
   it("reads the context and the passages, ignoring malformed entries", () => {
@@ -53,14 +37,5 @@ describe("project command outputs", () => {
         text: "TJM 600 € HT",
       },
     ]);
-  });
-
-  it("keeps the start and the end of a long call for routing", () => {
-    const transcript = `${"a".repeat(30_000)}${"b".repeat(30_000)}`;
-    const sent = routeTranscript(transcript);
-
-    expect(sent.length).toBeLessThanOrEqual(40_003);
-    expect(sent.startsWith("a")).toBe(true);
-    expect(sent.endsWith("b")).toBe(true);
   });
 });

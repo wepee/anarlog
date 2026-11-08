@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  acceptTemplateProposal,
+  explainTemplateProposal,
   formatTemplateCandidates,
   isEvidenceInTranscript,
 } from "./detect";
@@ -16,10 +16,10 @@ const transcript = [
   "Speaker 1: Oui. Alors on cherche un outil pour gérer nos devis, c'est vraiment notre priorité.",
 ].join("\n");
 
-describe("acceptTemplateProposal", () => {
+describe("explainTemplateProposal", () => {
   it("applies a template backed by a sentence that was said", () => {
     expect(
-      acceptTemplateProposal(
+      explainTemplateProposal(
         {
           templateId: "sales",
           confidence: "high",
@@ -27,13 +27,13 @@ describe("acceptTemplateProposal", () => {
         },
         candidates,
         transcript,
-      ),
+      ).templateId,
     ).toBe("sales");
   });
 
   it("ignores a proposal whose quote was never said", () => {
     expect(
-      acceptTemplateProposal(
+      explainTemplateProposal(
         {
           templateId: "team",
           confidence: "high",
@@ -41,25 +41,25 @@ describe("acceptTemplateProposal", () => {
         },
         candidates,
         transcript,
-      ),
+      ).templateId,
     ).toBeNull();
   });
 
   it("ignores medium confidence and unknown templates", () => {
     const evidence = "on cherche un outil pour gérer nos devis";
     expect(
-      acceptTemplateProposal(
+      explainTemplateProposal(
         { templateId: "sales", confidence: "medium", evidence },
         candidates,
         transcript,
-      ),
+      ).templateId,
     ).toBeNull();
     expect(
-      acceptTemplateProposal(
+      explainTemplateProposal(
         { templateId: "deleted", confidence: "high", evidence },
         candidates,
         transcript,
-      ),
+      ).templateId,
     ).toBeNull();
   });
 });

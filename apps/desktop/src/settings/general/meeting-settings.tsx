@@ -7,7 +7,10 @@ import { Button } from "@anlg/ui/components/ui/button";
 import { Input } from "@anlg/ui/components/ui/input";
 import { toast } from "@anlg/ui/components/ui/toast";
 
-import { loadProjectContext, routeCall } from "~/session/live-assist/projects";
+import {
+  listProjects,
+  loadProjectContext,
+} from "~/session/live-assist/projects";
 import { setSettingValue } from "~/settings/queries";
 import { SettingRow, SettingSwitchRow } from "~/settings/setting-row";
 import { useConfigValue } from "~/shared/config";
@@ -206,25 +209,25 @@ function ProjectsCommandRow() {
       setSettingValue("projects_command", value.trim()),
     onError: (error) => toast.error(error.message),
   });
-  // Runs what a call will run: routing, then the first project's context.
+  // Runs what a call will run: the list, then the first project's context.
   const test = useMutation({
     mutationFn: async (value: string) => {
       const command = value.trim();
       const startedAt = Date.now();
-      const routed = await routeCall(command, {
-        call: { title: null, participants: [] },
-        transcript: "",
+      const projects = await listProjects(command, {
+        title: null,
+        participants: [],
       });
-      const routeMs = Date.now() - startedAt;
-      const first = routed.projects[0];
+      const listMs = Date.now() - startedAt;
+      const first = projects[0];
       if (!first) {
-        return { count: 0, routeMs, first: null };
+        return { count: 0, listMs, first: null };
       }
       const contextStartedAt = Date.now();
       const context = await loadProjectContext(command, first.id);
       return {
-        count: routed.projects.length,
-        routeMs,
+        count: projects.length,
+        listMs,
         first: {
           label: first.label,
           chars: context.length,
@@ -232,10 +235,10 @@ function ProjectsCommandRow() {
         },
       };
     },
-    onSuccess: ({ count, routeMs, first }) =>
+    onSuccess: ({ count, listMs, first }) =>
       first
         ? toast.success(
-            t`${count} projects in ${routeMs} ms. Context of ${first.label}: ${first.chars} characters in ${first.ms} ms.`,
+            t`${count} projects in ${listMs} ms. Context of ${first.label}: ${first.chars} characters in ${first.ms} ms.`,
           )
         : toast.error(t`The command ran but listed no projects.`),
     onError: (error) => toast.error(error.message),
@@ -255,9 +258,9 @@ function ProjectsCommandRow() {
       description={
         <Trans>
           A command that gives answers the context of your projects. BlackMushi
-          runs it with route (finds the call's project), context (what you know
-          about it, loaded once per call) and read (more notes, when the AI
-          asks). What it prints is sent to your AI provider.
+          runs it with projects (the list you pick the call's project from),
+          context (what you know about it, loaded once per call) and read (more
+          notes, when the AI asks). What it prints is sent to your AI provider.
         </Trans>
       }
       controlWidth="content"

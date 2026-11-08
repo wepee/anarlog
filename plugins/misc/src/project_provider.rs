@@ -9,12 +9,12 @@ const MAX_STDERR_BYTES: u64 = 8 * 1024;
 
 // The app only ever calls the user's projects command with one of these
 // subcommands. Nothing goes through a shell: options are separate arguments,
-// and what comes from the call (title, participants, transcript) is written
-// to the command's stdin as JSON, so it cannot run anything.
+// and what comes from the call (title, participants) is written to the
+// command's stdin as JSON, so it cannot run anything.
 #[derive(Debug, Clone, serde::Deserialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ProjectProviderRequest {
-    Route {
+    Projects {
         input: String,
     },
     Context {
@@ -30,7 +30,7 @@ pub enum ProjectProviderRequest {
 impl ProjectProviderRequest {
     fn args(&self) -> Vec<String> {
         match self {
-            Self::Route { .. } => vec!["route".into()],
+            Self::Projects { .. } => vec!["projects".into()],
             Self::Context { project } => {
                 vec!["context".into(), "--project".into(), project.clone()]
             }
@@ -53,14 +53,14 @@ impl ProjectProviderRequest {
 
     fn stdin(&self) -> Option<&str> {
         match self {
-            Self::Route { input } => Some(input),
+            Self::Projects { input } => Some(input),
             _ => None,
         }
     }
 
     fn timeout(&self) -> Duration {
         match self {
-            Self::Route { .. } => Duration::from_secs(10),
+            Self::Projects { .. } => Duration::from_secs(10),
             Self::Context { .. } => Duration::from_secs(15),
             Self::Read { .. } => Duration::from_secs(8),
         }
@@ -326,14 +326,14 @@ mod tests {
     async fn passes_the_call_on_stdin_without_a_shell() {
         let output = run(
             "sh -c 'printf \"$0 \"; cat'",
-            &ProjectProviderRequest::Route {
-                input: r#"{"transcript":"$(touch pwned); prix ?"}"#.into(),
+            &ProjectProviderRequest::Projects {
+                input: r#"{"title":"$(touch pwned); point"}"#.into(),
             },
         )
         .await
         .unwrap();
 
-        assert_eq!(output, r#"route {"transcript":"$(touch pwned); prix ?"}"#);
+        assert_eq!(output, r#"projects {"title":"$(touch pwned); point"}"#);
     }
 
     #[cfg(unix)]

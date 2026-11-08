@@ -181,7 +181,3 @@ export function resetLiveAssistJournalForTests() {
   entries.length = 0;
   unwritten = [];
 }
-
-export function getLiveAssistJournalEntries(): readonly JournalEntry[] {
-  return entries;
-}

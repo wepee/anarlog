@@ -7,10 +7,10 @@ import {
 } from "~/session/insights/live-assist";
 import type { LiveAnswerSource } from "~/session/live-assist/answers";
 
-export type LiveAssistTemplateOption = { id: string; title: string };
-export type LiveAssistProjectOption = { id: string; title: string };
+type LiveAssistTemplateOption = { id: string; title: string };
+type LiveAssistProjectOption = { id: string; title: string };
 
-export type LiveAssistAnswer = {
+type LiveAssistAnswer = {
   id: string;
   question: string;
   origin: "auto" | "asked";
@@ -29,9 +29,8 @@ export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
   projects: LiveAssistProjectOption[];
   projectsFailed: boolean;
-  // Found by the projects command ("auto") or picked by hand ("manual");
-  // a project picked by hand never changes on its own.
-  project: { id: string | null; source: "auto" | "manual" };
+  // Picked by hand in the floating bar; never set automatically.
+  projectId: string | null;
   answers: LiveAssistAnswer[];
   snapshot: LiveAssistSnapshot;
   template: LiveAssistTemplate;
@@ -44,7 +43,7 @@ const EMPTY_SESSION: LiveAssistSessionState = {
   templates: [],
   projects: [],
   projectsFailed: false,
-  project: { id: null, source: "auto" },
+  projectId: null,
   answers: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
   template: { id: null, source: "auto" },
@@ -68,8 +67,6 @@ type LiveAssistActions = {
   ) => void;
   setProjects: (sessionId: string, projects: LiveAssistProjectOption[]) => void;
   setProjectsFailed: (sessionId: string) => void;
-  setAutoProject: (sessionId: string, projectId: string) => void;
-  // null goes back to finding the project automatically.
   selectProject: (sessionId: string, projectId: string | null) => void;
   queueAnswer: (
     sessionId: string,
@@ -122,19 +119,8 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
           ...session,
           projectsFailed: true,
         })),
-      setAutoProject: (sessionId, projectId) =>
-        updateSession(sessionId, (session) =>
-          session.project.source === "manual"
-            ? session
-            : { ...session, project: { id: projectId, source: "auto" } },
-        ),
       selectProject: (sessionId, projectId) =>
-        updateSession(sessionId, (session) => ({
-          ...session,
-          project: projectId
-            ? { id: projectId, source: "manual" }
-            : { id: null, source: "auto" },
-        })),
+        updateSession(sessionId, (session) => ({ ...session, projectId })),
       queueAnswer: (sessionId, answer) =>
         updateSession(sessionId, (session) => ({
           ...session,

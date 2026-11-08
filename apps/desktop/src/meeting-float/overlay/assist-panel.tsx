@@ -67,7 +67,7 @@ export function AssistPanel({
           {assist.project ? (
             <MenuChip
               title={assist.project.title}
-              auto={assist.project.auto ? labels.auto : null}
+              auto={null}
               open={menu === "project"}
               dark={dark}
               muted={muted}

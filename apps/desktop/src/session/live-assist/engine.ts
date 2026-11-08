@@ -11,10 +11,10 @@ import {
   type PastMeetings,
 } from "./past-meetings";
 import {
+  listProjects,
   loadProjectContext,
   type ProjectOption,
   readProject,
-  routeCall,
 } from "./projects";
 import { getWebSearchTools } from "./research";
 
@@ -28,6 +28,7 @@ import {
   detectIncomingQuestions,
   getCoverageLabels,
   LIVE_ASSIST_MIN_INTERVAL_MS,
+  LIVE_ASSIST_OVERLAP_MS,
   LIVE_ASSIST_MIN_NEW_WORDS,
   LIVE_ASSIST_SYSTEM_PROMPT,
   liveAssistOutputSchema,
@@ -51,8 +52,6 @@ const QUESTION_QUIET_MS = 1_200;
 const QUESTION_MAX_WAIT_MS = 4_000;
 const QUESTION_SCAN_MS = 400;
 const ANSWER_RENDER_INTERVAL_MS = 120;
-// Until the call's project is known, it is looked for again this often.
-const ROUTE_INTERVAL_MS = 45_000;
 // An answer waits this long at most for a project context still loading.
 const CONTEXT_WAIT_MS = 3_000;
 
@@ -88,8 +87,6 @@ type RunningSession = {
   pastMeetings: Promise<PastMeetings> | null;
   projects: ProjectOption[];
   projectContexts: Map<string, Promise<string>>;
-  routing: boolean;
-  routedAt: number | null;
   questionsScannedEndMs: number;
   seenQuestions: Set<string>;
   autoAnswers: number;
@@ -203,8 +200,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         pastMeetings: null,
         projects: [],
         projectContexts: new Map(),
-        routing: false,
-        routedAt: null,
         questionsScannedEndMs: 0,
         seenQuestions: new Set(),
         autoAnswers: 0,
@@ -220,7 +215,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       // before the first question.
       session.context = loadCallContext(activeSessionId);
       session.pastMeetings = loadPastMeetingsFor(session);
-      void route(session);
+      void loadProjects(session);
     }
   };
 
@@ -252,65 +247,45 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     return past;
   };
 
-  // Finds the call's project with the user's projects command, and the list
-  // of projects sorted by fit for the picker.
-  const route = async (session: RunningSession) => {
+  // The projects for the picker, most likely first. The user picks the
+  // call's project by hand; it is never chosen automatically.
+  const loadProjects = async (session: RunningSession) => {
     const command = getConfig().projectsCommand.trim();
     if (!command) {
-      if (session.routedAt === null) {
-        liveAssistLog("projects.not_configured", undefined, session.sessionId);
-      }
-      session.routedAt = Date.now();
+      liveAssistLog("projects.not_configured", undefined, session.sessionId);
       return;
     }
-    session.routing = true;
-    session.routedAt = Date.now();
     const startedAt = Date.now();
     try {
       session.context ??= loadCallContext(session.sessionId);
-      const context = await session.context;
-      const result = await routeCall(command, {
-        call: { title: context.title, participants: context.participants },
-        transcript: buildLiveAssistWindow(
-          listenerStore.getState().liveSegments,
-          0,
-          Number.MAX_SAFE_INTEGER,
-        ).text,
-      });
+      const { title, participants } = await session.context;
+      const projects = await listProjects(command, { title, participants });
       if (current !== session) {
         return;
       }
-      session.projects = result.projects;
-      const store = useLiveAssistStore.getState();
-      store.setProjects(
+      session.projects = projects;
+      useLiveAssistStore.getState().setProjects(
         session.sessionId,
-        result.projects.map(({ id, label }) => ({ id, title: label })),
+        projects.map(({ id, label }) => ({ id, title: label })),
       );
-      if (result.projectId) {
-        store.setAutoProject(session.sessionId, result.projectId);
-      }
       liveAssistLog(
-        "project.routed",
+        "projects.loaded",
         {
           durationMs: Date.now() - startedAt,
-          projectId: result.projectId,
-          reason: result.reason,
-          suggestions: result.projects.slice(0, 3).map(({ label }) => label),
-          projects: result.projects.length,
+          count: projects.length,
+          first: projects.slice(0, 3).map(({ label }) => label),
         },
         session.sessionId,
       );
     } catch (error) {
       liveAssistLog(
-        "project.route_failed",
+        "projects.failed",
         { durationMs: Date.now() - startedAt, error: describeError(error) },
         session.sessionId,
       );
-      if (current === session && session.projects.length === 0) {
+      if (current === session) {
         useLiveAssistStore.getState().setProjectsFailed(session.sessionId);
       }
-    } finally {
-      session.routing = false;
     }
   };
 
@@ -387,15 +362,6 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     sync();
     const session = current;
     const config = getConfig();
-    if (
-      session &&
-      !session.routing &&
-      !getLiveAssistSession(session.sessionId).project.id &&
-      session.routedAt !== null &&
-      Date.now() - session.routedAt >= ROUTE_INTERVAL_MS
-    ) {
-      void route(session);
-    }
     if (disposed || !session || session.running || !config.model) {
       return;
     }
@@ -700,7 +666,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     try {
       session.context ??= loadCallContext(sessionId);
       session.pastMeetings ??= loadPastMeetingsFor(session);
-      const projectId = getLiveAssistSession(sessionId).project.id;
+      const { projectId } = getLiveAssistSession(sessionId);
       const command = config.projectsCommand.trim();
       const segments = listenerStore.getState().liveSegments;
       const lastEndMs = segments.reduce(
@@ -709,7 +675,8 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       );
       const transcript = buildLiveAssistWindow(
         segments,
-        lastEndMs - ANSWER_CONTEXT_MS + 120_000,
+        // The window starts its overlap before the point given.
+        lastEndMs - ANSWER_CONTEXT_MS + LIVE_ASSIST_OVERLAP_MS,
       ).text;
       const context = await session.context;
       const [pastMeetings, notes, language] = await Promise.all([
@@ -890,17 +857,18 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     ) {
       void processAnswers(session);
     }
-    const project = state.sessions[sessionId]?.project;
-    if (project && project !== previous.sessions[sessionId]?.project) {
+    const projectId = state.sessions[sessionId]?.projectId;
+    if (projectId !== previous.sessions[sessionId]?.projectId) {
       liveAssistLog(
-        "project.changed",
-        { ...project, name: getProjectName(session, project.id) },
+        "project.picked",
+        {
+          projectId: projectId ?? null,
+          name: getProjectName(session, projectId ?? null),
+        },
         sessionId,
       );
-      if (project.id) {
-        void getProjectContext(session, project.id);
-      } else {
-        void route(session);
+      if (projectId) {
+        void getProjectContext(session, projectId);
       }
     }
     const next = state.sessions[sessionId]?.template;

@@ -10,9 +10,9 @@ export type CallTemplateCandidate = {
   targets?: string[];
 };
 
-export type TemplateConfidence = "high" | "medium" | "low";
+type TemplateConfidence = "high" | "medium" | "low";
 
-export type TemplateProposal = {
+type TemplateProposal = {
   templateId: string | null;
   confidence: TemplateConfidence;
   evidence: string | null;
@@ -30,19 +30,7 @@ export const templateProposalSchema = z.object({
   evidence: z.string().nullable(),
 });
 
-// The rule that came out of the simulation on real calls: a template is
-// applied on the strength of one sentence that was actually said, never on a
-// clock and never on the calendar title alone. The quote is checked against
-// the transcript so a paraphrased or invented "proof" does not count.
-export function acceptTemplateProposal(
-  proposal: TemplateProposal | null | undefined,
-  candidates: CallTemplateCandidate[],
-  transcript: string,
-): string | null {
-  return explainTemplateProposal(proposal, candidates, transcript).templateId;
-}
-
-export type TemplateDecision = {
+type TemplateDecision = {
   templateId: string | null;
   reason:
     | "accepted"
@@ -52,6 +40,10 @@ export type TemplateDecision = {
     | "evidence_not_in_transcript";
 };
 
+// The rule that came out of the simulation on real calls: a template is
+// applied on the strength of one sentence that was actually said, never on a
+// clock and never on the calendar title alone. The quote is checked against
+// the transcript so a paraphrased or invented "proof" does not count.
 export function explainTemplateProposal(
   proposal: TemplateProposal | null | undefined,
   candidates: CallTemplateCandidate[],
@@ -138,7 +130,7 @@ export const TEMPLATE_RULES = `Choosing the template:
 - The calendar title and the participants are hints, never evidence: with only them, confidence is at most "medium" and evidence is null.
 - Small talk, greetings, audio checks, waiting for someone, or an internal chat before the guest joins prove nothing.`;
 
-export function sampleTranscript(text: string): string {
+function sampleTranscript(text: string): string {
   if (text.length <= DETECTION_HEAD_CHARS + DETECTION_TAIL_CHARS) {
     return text;
   }
