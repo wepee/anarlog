@@ -85,10 +85,6 @@ where
                 let _ = std::fs::remove_file(&wav_path);
                 result
             }
-            #[cfg(not(target_os = "macos"))]
-            {
-                Err(_first_err)
-            }
         }
     }
 }

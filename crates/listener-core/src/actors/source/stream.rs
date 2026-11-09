@@ -75,11 +75,8 @@ fn resolve_capture_settings(
     }
 }
 
-// The mic opens by the provider's device name, which only matches the device layer's name on
-// macOS and Windows. On Linux the mic goes through cpal/ALSA, whose names are ALSA PCM hints and
-// never match PulseAudio source names, so a replacement could not be opened; avoiding HFP there
-// needs a PulseAudio/PipeWire mic capture path.
-const SWAPS_BLUETOOTH_DEFAULT_MIC: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+// The mic opens by the provider's device name, which matches the device layer's name on macOS.
+const SWAPS_BLUETOOTH_DEFAULT_MIC: bool = cfg!(target_os = "macos");
 
 // An explicit selection is always respected. Otherwise the system default is replaced when it is
 // not the mic the user talks into: the meeting app captures from another mic, or the default is
@@ -202,11 +199,6 @@ enum StreamResult {
 }
 
 async fn run_stream_loop(mut ctx: StreamContext, mode: ChannelMode) {
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    if mode == ChannelMode::MicOnly {
-        return;
-    }
-
     let sample_rate = crate::actors::SAMPLE_RATE;
     let chunk_size = chunk_size_for_stt(sample_rate);
 

@@ -130,18 +130,6 @@ pub fn archive(
     Ok(ArchiveOutcome::Archived(target))
 }
 
-#[cfg(not(unix))]
-pub fn archive(
-    _session_dir: &Path,
-    _archive_dir: &Path,
-    _session_id: &str,
-) -> std::io::Result<ArchiveOutcome> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "audio archiving needs symlinks",
-    ))
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioAvailability {
@@ -177,11 +165,6 @@ pub fn is_offloaded(metadata: &std::fs::Metadata) -> bool {
     // SF_DATALESS from <sys/stat.h>.
     const SF_DATALESS: u32 = 0x4000_0000;
     metadata.st_flags() & SF_DATALESS != 0
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn is_offloaded(_metadata: &std::fs::Metadata) -> bool {
-    false
 }
 
 /// Brings an archived recording back onto this disk. Reading the file is what

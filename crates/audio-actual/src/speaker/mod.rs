@@ -1,7 +1,7 @@
 use anyhow::Result;
-#[cfg(any(test, not(target_os = "macos")))]
+#[cfg(test)]
 use futures_util::Stream;
-#[cfg(any(test, not(target_os = "macos")))]
+#[cfg(test)]
 use pin_project::pin_project;
 
 pub(super) const CHUNK_SIZE: usize = 256;
@@ -12,25 +12,8 @@ mod macos;
 #[cfg(target_os = "macos")]
 type PlatformSpeakerInput = macos::SpeakerInput;
 
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-type PlatformSpeakerInput = windows::SpeakerInput;
-#[cfg(all(target_os = "windows", not(test)))]
-type PlatformSpeakerStream = windows::SpeakerStream;
-
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
-type PlatformSpeakerInput = linux::SpeakerInput;
-#[cfg(all(target_os = "linux", not(test)))]
-type PlatformSpeakerStream = linux::SpeakerStream;
-
 #[cfg(test)]
 mod mock;
-
-#[cfg(all(any(target_os = "windows", target_os = "linux"), not(test)))]
-type InnerStream = PlatformSpeakerStream;
 
 #[cfg(test)]
 type InnerStream = mock::MockInnerStream;
@@ -58,18 +41,6 @@ impl SpeakerInput {
         self.inner.stream()
     }
 
-    #[cfg(all(not(target_os = "macos"), not(test)))]
-    pub fn stream(self) -> Result<SpeakerStream> {
-        let inner = self.inner.stream()?;
-        let initial_rate = inner.sample_rate();
-        Ok(SpeakerStream {
-            inner,
-            buffer: Vec::new(),
-            buffer_idx: 0,
-            buffer_rate: initial_rate,
-        })
-    }
-
     #[cfg(test)]
     pub fn stream(self) -> Result<SpeakerStream> {
         let initial_rate = self.inner.sample_rate();
@@ -83,7 +54,7 @@ impl SpeakerInput {
 }
 
 // https://github.com/floneum/floneum/blob/50afe10/interfaces/kalosm-sound/src/source/mic.rs#L140
-#[cfg(any(test, not(target_os = "macos")))]
+#[cfg(test)]
 #[pin_project]
 pub struct SpeakerStream {
     #[pin]
@@ -114,7 +85,7 @@ impl SpeakerStream {
     }
 }
 
-#[cfg(any(test, not(target_os = "macos")))]
+#[cfg(test)]
 impl Stream for SpeakerStream {
     type Item = f32;
 
@@ -149,7 +120,7 @@ impl Stream for SpeakerStream {
     }
 }
 
-#[cfg(any(test, not(target_os = "macos")))]
+#[cfg(test)]
 impl anlg_audio_interface::AsyncSource for SpeakerStream {
     fn as_stream(&mut self) -> impl Stream<Item = f32> + '_ {
         self

@@ -157,8 +157,6 @@ impl E2eeWitnessClient {
         {
             return Err(invalid_data("E2EE witness configuration is invalid"));
         }
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        let _ = rustls::crypto::ring::default_provider().install_default();
         Ok(Self {
             client: http_client(READ_IDLE_TIMEOUT)?,
             accepted_support: Arc::default(),

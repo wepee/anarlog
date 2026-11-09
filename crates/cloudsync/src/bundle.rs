@@ -1,21 +1,15 @@
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::fs;
 #[cfg(target_os = "macos")]
 use std::path::Path;
 use std::path::PathBuf;
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::sync::atomic::{AtomicU64, Ordering};
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use crate::CLOUDSYNC_VERSION;
 use crate::error::Error;
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 const CLOUDSYNC_BUNDLE_REVISION: &str = "anarlog-bounded-send-2";
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 macro_rules! configure_cloudsync_target {
     ($target:literal, $file_name:literal, $path:literal) => {
         const CLOUDSYNC_TARGET: &str = $target;
@@ -66,57 +60,26 @@ configure_cloudsync_target!(
     "../vendor/cloudsync/linux/musl/x86_64/cloudsync.so"
 );
 
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-configure_cloudsync_target!(
-    "windows/x86_64",
-    "cloudsync.dll",
-    "../vendor/cloudsync/windows/x86_64/cloudsync.dll"
-);
-
 pub fn bundled_extension_path() -> Result<PathBuf, Error> {
     #[cfg(not(any(
         all(target_os = "macos", target_arch = "aarch64"),
         all(target_os = "macos", target_arch = "x86_64"),
-        all(target_os = "ios", target_arch = "aarch64"),
-        all(target_os = "ios", target_arch = "x86_64"),
-        all(target_os = "android", target_arch = "aarch64"),
-        all(target_os = "android", target_arch = "arm"),
-        all(target_os = "android", target_arch = "x86_64"),
         all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
         all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
         all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-        all(target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-        all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
     )))]
     {
         Err(Error::UnsupportedBundledCloudsync)
     }
 
     #[cfg(any(
-        all(target_os = "ios", target_arch = "aarch64"),
-        all(target_os = "ios", target_arch = "x86_64"),
-    ))]
-    {
-        bundled_ios_framework_path()
-    }
-
-    #[cfg(all(
-        target_os = "android",
-        any(target_arch = "aarch64", target_arch = "arm", target_arch = "x86_64")
-    ))]
-    {
-        // Android resolves this inside the app's native library namespace, including APKs.
-        Ok(PathBuf::from("libcloudsync.so"))
-    }
-
-    #[cfg(any(
         all(target_os = "macos", target_arch = "aarch64"),
         all(target_os = "macos", target_arch = "x86_64"),
         all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
         all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
         all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-        all(target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-        all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
     ))]
     {
         #[cfg(target_os = "macos")]
@@ -203,34 +166,4 @@ mod tests {
 
         assert_eq!(macos_extension_path(&executable), Some(extension));
     }
-}
-
-#[cfg(any(
-    all(target_os = "ios", target_arch = "aarch64"),
-    all(target_os = "ios", target_arch = "x86_64"),
-))]
-fn bundled_ios_framework_path() -> Result<PathBuf, Error> {
-    if let Some(path) = std::env::var_os("CLOUDSYNC_IOS_FRAMEWORK_PATH") {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            return Ok(path);
-        }
-    }
-
-    let exe = std::env::current_exe()?;
-    let candidates = [
-        exe.parent()
-            .map(|dir| dir.join("Frameworks/CloudSync.framework/CloudSync")),
-        exe.parent()
-            .and_then(|dir| dir.parent())
-            .map(|dir| dir.join("Frameworks/CloudSync.framework/CloudSync")),
-    ];
-
-    for candidate in candidates.into_iter().flatten() {
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(Error::UnsupportedBundledCloudsync)
 }

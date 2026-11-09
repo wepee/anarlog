@@ -75,11 +75,6 @@ pub fn list_installed_apps() -> Vec<InstalledApp> {
     apps
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn list_installed_apps() -> Vec<InstalledApp> {
-    Vec::new()
-}
-
 #[cfg(target_os = "macos")]
 pub fn list_mic_using_apps() -> Result<Vec<InstalledApp>, crate::Error> {
     let processes =

@@ -12,11 +12,6 @@ pub(crate) fn prepare_binaries() -> Result<()> {
         Ok(v) => v,
         Err(_) => rustc_host_triple()?,
     };
-    let ext = if triple.contains("windows") {
-        ".exe"
-    } else {
-        ""
-    };
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
 
     let sh = Shell::new()?;
@@ -33,11 +28,11 @@ pub(crate) fn prepare_binaries() -> Result<()> {
         .join("target")
         .join(&triple)
         .join("release")
-        .join(format!("char-chrome-native-host{ext}"));
-    let dst = binaries_dir.join(format!("char-chrome-native-host-{triple}{ext}"));
+        .join("char-chrome-native-host");
+    let dst = binaries_dir.join(format!("char-chrome-native-host-{triple}"));
     fs::copy(&src, &dst).with_context(|| format!("copy {} -> {}", src.display(), dst.display()))?;
 
-    println!("prepare-binaries: binaries/char-chrome-native-host-{triple}{ext}");
+    println!("prepare-binaries: binaries/char-chrome-native-host-{triple}");
 
     cmd!(
         sh,
@@ -51,11 +46,11 @@ pub(crate) fn prepare_binaries() -> Result<()> {
         .join("target")
         .join(&triple)
         .join("release")
-        .join(format!("anarlog{ext}"));
-    let dst = embedded_cli_dir.join(format!("anarlog-cli-{triple}{ext}"));
+        .join("anarlog");
+    let dst = embedded_cli_dir.join(format!("anarlog-cli-{triple}"));
     fs::copy(&src, &dst).with_context(|| format!("copy {} -> {}", src.display(), dst.display()))?;
 
-    println!("prepare-binaries: resources/cli/anarlog-cli-{triple}{ext}");
+    println!("prepare-binaries: resources/cli/anarlog-cli-{triple}");
     Ok(())
 }
 

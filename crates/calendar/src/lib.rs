@@ -19,8 +19,6 @@ pub fn start(runtime: impl runtime::CalendarRuntime) {
             runtime.emit_changed();
         });
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = runtime;
 }
 
 #[cfg(target_os = "macos")]
@@ -34,17 +32,11 @@ pub struct ProviderConnectionIds {
 }
 
 pub fn available_providers() -> Vec<CalendarProviderType> {
-    #[cfg(target_os = "macos")]
-    let providers = vec![
+    vec![
         CalendarProviderType::Apple,
         CalendarProviderType::Google,
         CalendarProviderType::Outlook,
-    ];
-
-    #[cfg(not(target_os = "macos"))]
-    let providers = vec![CalendarProviderType::Google, CalendarProviderType::Outlook];
-
-    providers
+    ]
 }
 
 pub async fn list_connection_ids(
@@ -64,9 +56,6 @@ pub async fn list_connection_ids(
             map.insert(CalendarProviderType::Apple, vec!["apple".to_string()]);
         }
     }
-
-    #[cfg(not(target_os = "macos"))]
-    let _ = apple_authorized;
 
     if let Some(token) = access_token.filter(|t| !t.is_empty()) {
         match fetch::list_all_connection_ids(api_base_url, token).await {
@@ -355,36 +344,6 @@ fn parse_datetime(value: &str, field: &'static str) -> Result<DateTime<Utc>, Err
             field,
             value: value.to_string(),
         })
-}
-
-#[cfg(not(target_os = "macos"))]
-fn open_apple_calendar() -> Result<(), Error> {
-    Err(Error::ProviderUnavailable {
-        provider: CalendarProviderType::Apple,
-    })
-}
-
-#[cfg(not(target_os = "macos"))]
-fn list_apple_calendars() -> Result<Vec<anlg_apple_calendar::types::AppleCalendar>, Error> {
-    Err(Error::ProviderUnavailable {
-        provider: CalendarProviderType::Apple,
-    })
-}
-
-#[cfg(not(target_os = "macos"))]
-fn list_apple_events(
-    _filter: EventFilter,
-) -> Result<Vec<anlg_apple_calendar::types::AppleEvent>, Error> {
-    Err(Error::ProviderUnavailable {
-        provider: CalendarProviderType::Apple,
-    })
-}
-
-#[cfg(not(target_os = "macos"))]
-fn create_apple_event(_input: CreateEventInput) -> Result<String, Error> {
-    Err(Error::ProviderUnavailable {
-        provider: CalendarProviderType::Apple,
-    })
 }
 
 #[cfg(test)]

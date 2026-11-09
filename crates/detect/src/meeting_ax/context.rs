@@ -1,5 +1,3 @@
-#![cfg_attr(target_os = "windows", allow(dead_code))]
-
 #[cfg(target_os = "macos")]
 use super::analysis::meeting_chat_surface_is_visible;
 use super::analysis::{candidate_chat_target, is_explicit_chat_input, is_zoom_chat_scope_node};
@@ -252,7 +250,6 @@ pub(super) fn is_platform_send_button(
     })
 }
 
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn is_open_meeting_chat_control(node: &AxNode) -> bool {
     candidate_chat_target(node).is_some_and(|target| target.kind == "openChatControl")
         && node.enabled != Some(false)
@@ -406,7 +403,7 @@ fn browser_meeting_identity(root: &BrowserMeetingRoot) -> Option<String> {
         return Some(format!("https://meet.google.com/{code}"));
     }
 
-    #[cfg(any(test, target_os = "linux", target_os = "windows"))]
+    #[cfg(test)]
     {
         let title = root.window_title.as_deref()?;
         let title_platforms = super::browser_title_platform_signals(title);

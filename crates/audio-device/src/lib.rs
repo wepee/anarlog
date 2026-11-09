@@ -4,35 +4,11 @@ mod error;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
-#[cfg(target_os = "linux")]
-pub mod linux;
-
-#[cfg(target_os = "windows")]
-pub mod windows;
-
 pub use device::*;
 pub use error::*;
 
 pub fn backend() -> impl AudioDeviceBackend {
-    #[cfg(target_os = "macos")]
-    {
-        macos::MacOSBackend
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        linux::LinuxBackend
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        windows::WindowsBackend
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    {
-        compile_error!("Unsupported platform for audio-device crate")
-    }
+    macos::MacOSBackend
 }
 
 /// Returns a headphone when every output device that is currently playing audio is one.
@@ -198,11 +174,6 @@ pub fn built_in_mic_silenced_by_closed_lid() -> bool {
     #[cfg(target_os = "macos")]
     {
         macos::lid_closed()
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        false
     }
 }
 
@@ -448,18 +419,9 @@ pub fn default_input_device_name() -> Option<String> {
 /// endpoint when handoff is visible; `None` means open the live system default instead of the
 /// A2DP-named device, which is usually still silent.
 ///
-/// Returns `None` when `name` is not a Bluetooth input, or on platforms where opening the
-/// device already negotiates the call profile.
+/// Returns `None` when `name` is not a Bluetooth input.
 pub fn prepare_bluetooth_input_for_capture(name: &str) -> Option<BluetoothInputActivation> {
-    #[cfg(target_os = "macos")]
-    {
-        prepare_macos_bluetooth_input(name)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = name;
-        None
-    }
+    prepare_macos_bluetooth_input(name)
 }
 
 #[cfg(target_os = "macos")]

@@ -71,13 +71,6 @@ fn staging_directory(vault: &Path, database: &Path) -> Result<PathBuf> {
         use std::os::unix::ffi::OsStrExt;
         hash.update(database.as_os_str().as_bytes());
     }
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-        for unit in database.as_os_str().encode_wide() {
-            hash.update(unit.to_le_bytes());
-        }
-    }
     let namespace: String = hash
         .finalize()
         .iter()

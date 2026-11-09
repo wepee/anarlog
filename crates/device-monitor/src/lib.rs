@@ -4,12 +4,8 @@ use std::time::Duration;
 
 mod debounce;
 
-#[cfg(target_os = "linux")]
-mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(target_os = "windows")]
-mod windows;
 
 #[derive(Debug, Clone)]
 pub enum DeviceSwitch {
@@ -134,23 +130,6 @@ impl DeviceSwitchMonitor {
             {
                 macos::monitor_device_change(raw_tx, stop_rx);
             }
-
-            #[cfg(target_os = "linux")]
-            {
-                linux::monitor_device_change(raw_tx, stop_rx);
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                windows::monitor_device_change(raw_tx, stop_rx);
-            }
-
-            #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-            {
-                let _ = raw_tx;
-                tracing::warn!("device_monitoring_unsupported");
-                let _ = stop_rx.recv();
-            }
         });
 
         DeviceMonitorHandle {
@@ -170,23 +149,6 @@ impl DeviceUpdateMonitor {
             #[cfg(target_os = "macos")]
             {
                 macos::monitor_volume_mute(event_tx, stop_rx);
-            }
-
-            #[cfg(target_os = "linux")]
-            {
-                linux::monitor_volume_mute(event_tx, stop_rx);
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                windows::monitor_volume_mute(event_tx, stop_rx);
-            }
-
-            #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-            {
-                let _ = event_tx;
-                tracing::warn!("device_monitoring_unsupported");
-                let _ = stop_rx.recv();
             }
         });
 
@@ -227,23 +189,6 @@ impl DeviceMonitor {
             #[cfg(target_os = "macos")]
             {
                 macos::monitor(raw_tx, stop_rx);
-            }
-
-            #[cfg(target_os = "linux")]
-            {
-                linux::monitor(raw_tx, stop_rx);
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                windows::monitor(raw_tx, stop_rx);
-            }
-
-            #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-            {
-                let _ = raw_tx;
-                tracing::warn!("device_monitoring_unsupported");
-                let _ = stop_rx.recv();
             }
         });
 

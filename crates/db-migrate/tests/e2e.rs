@@ -275,8 +275,7 @@ async fn cloudsync_alter_scope_falls_back_to_plain_when_cloudsync_is_disabled() 
         target_env = "musl",
         target_arch = "aarch64"
     ),
-    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(test, target_os = "windows", target_arch = "x86_64"),
+    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn cloudsync_alter_scope_falls_back_to_plain_for_an_uninitialized_table() {
@@ -312,8 +311,7 @@ async fn cloudsync_alter_scope_falls_back_to_plain_for_an_uninitialized_table() 
         target_env = "musl",
         target_arch = "aarch64"
     ),
-    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(test, target_os = "windows", target_arch = "x86_64"),
+    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn cloudsync_alter_scope_preserves_an_initialized_cloudsync_table() {
@@ -360,8 +358,7 @@ async fn cloudsync_alter_scope_preserves_an_initialized_cloudsync_table() {
         target_env = "musl",
         target_arch = "aarch64"
     ),
-    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(test, target_os = "windows", target_arch = "x86_64"),
+    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn failed_cloudsync_alter_leaves_no_partial_schema_and_can_be_retried() {

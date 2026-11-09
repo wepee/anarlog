@@ -263,17 +263,10 @@ fn path_for_binary(binary: &Path) -> std::ffi::OsString {
 }
 
 fn find_plaud_in_dirs(dirs: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
-    let names = if cfg!(windows) {
-        ["plaud.exe", "plaud.cmd", "plaud"].as_slice()
-    } else {
-        ["plaud"].as_slice()
-    };
     for dir in dirs {
-        for name in names {
-            let candidate = dir.join(name);
-            if candidate.is_file() && is_allowed_binary(&candidate) {
-                return Some(candidate);
-            }
+        let candidate = dir.join("plaud");
+        if candidate.is_file() && is_allowed_binary(&candidate) {
+            return Some(candidate);
         }
     }
     None

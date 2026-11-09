@@ -291,15 +291,7 @@ pub fn target() -> Option<String> {
 }
 
 pub fn updater_os() -> Option<&'static str> {
-    if cfg!(target_os = "linux") {
-        Some("linux")
-    } else if cfg!(target_os = "macos") {
-        Some("darwin")
-    } else if cfg!(target_os = "windows") {
-        Some("windows")
-    } else {
-        None
-    }
+    Some("darwin")
 }
 
 pub fn updater_arch() -> Option<&'static str> {
