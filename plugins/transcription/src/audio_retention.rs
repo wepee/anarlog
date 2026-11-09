@@ -342,21 +342,31 @@ struct ArchiveTally {
     failed: usize,
 }
 
+/// `first_pass`: the first pass of a launch always reports, so a log shows
+/// whether archiving is configured and running even when it has nothing to do.
 async fn archive_sweep<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     pool: &SqlitePool,
     evict: bool,
+    first_pass: bool,
 ) -> Result<(), String> {
     let Some(settings) = load_archive_settings(pool)
         .await
         .map_err(|e| e.to_string())?
     else {
+        if first_pass {
+            tracing::info!("audio_archive_not_configured");
+        }
         return Ok(());
     };
     // An unplugged drive or a folder that is gone must never turn into a
     // freshly created local directory that silently keeps the audio here.
     if !settings.directory.is_dir() {
-        tracing::debug!(directory = %settings.directory.display(), "audio_archive_directory_unreachable");
+        if first_pass {
+            tracing::warn!(directory = %settings.directory.display(), "audio_archive_directory_unreachable");
+        } else {
+            tracing::debug!(directory = %settings.directory.display(), "audio_archive_directory_unreachable");
+        }
         return Ok(());
     }
 
@@ -412,9 +422,9 @@ async fn archive_sweep<R: tauri::Runtime>(
             }
         }
     }
-    // One line per pass that changed something or hit a wall, so a recording
-    // that never leaves the Mac shows why in the log.
-    if tally.archived + tally.relocated + tally.busy + tally.failed > 0 {
+    // One line per pass that changed something or hit a wall, plus the first
+    // pass of each launch, so a recording that never leaves the Mac shows why.
+    if first_pass || tally.archived + tally.relocated + tally.busy + tally.failed > 0 {
         tracing::info!(
             directory = %settings.directory.display(),
             archived = tally.archived,
@@ -471,21 +481,27 @@ pub(crate) fn spawn<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
         let mut last_voiceprint_cleanup: Option<Instant> = None;
         let mut last_archive: Option<Instant> = None;
         let mut last_evict: Option<Instant> = None;
+        let mut waiting_logged = false;
         loop {
             interval.tick().await;
             let Some(pool) = db_pool(&app) else {
+                if !waiting_logged {
+                    waiting_logged = true;
+                    tracing::info!("audio_retention_waiting_for_database");
+                }
                 continue;
             };
             if let Err(error) = sweep(&app, &pool).await {
                 tracing::warn!(%error, "audio_retention_sweep_failed");
             }
             if last_archive.is_none_or(|at| at.elapsed() >= ARCHIVE_INTERVAL) {
+                let first_pass = last_archive.is_none();
                 last_archive = Some(Instant::now());
                 let evict = last_evict.is_none_or(|at| at.elapsed() >= ARCHIVE_EVICT_INTERVAL);
                 if evict {
                     last_evict = Some(Instant::now());
                 }
-                if let Err(error) = archive_sweep(&app, &pool, evict).await {
+                if let Err(error) = archive_sweep(&app, &pool, evict, first_pass).await {
                     tracing::warn!(%error, "audio_archive_sweep_failed");
                 }
             }
