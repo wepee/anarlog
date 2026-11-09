@@ -132,7 +132,6 @@ build that exposes the action.
 | `crates/db-app`  | SQLite schema and migrations                            |
 | `supabase`       | Hosted database schema, functions, and tests            |
 | `skills/anarlog` | Published CLI and MCP agent skill                       |
-| `enterprise`     | Commercially licensed capture and deployment components |
 | `docs`           | Mintlify product and reference documentation            |
 
 Sessions are the core data entity. Notes, transcripts, and summaries are all backed by sessions. ProseMirror documents use the TipTap JSON dialect.
@@ -186,6 +185,7 @@ Check the affected workflow under `.github/workflows/` for stricter package-spec
 
 ## Licensing and contribution boundary
 
-By submitting a contribution outside `enterprise/`, you agree that it may be distributed under the repository's [MIT License](LICENSE). Only submit material you have the right to license this way.
+By submitting a contribution, you agree that it may be distributed under the repository's [MIT License](LICENSE). Only submit material you have the right to license this way.
 
-Do not submit changes under `enterprise/` unless Fastrepl has confirmed the applicable contribution terms in writing. Never include customer configuration, credentials, confidential material, or untracked third-party code. Record the immutable upstream revision and license before reusing third-party material. See [Licensing and product boundary](LICENSING.md) for the component-placement and provenance rules.
+Never include customer configuration, credentials, confidential material, or untracked third-party code. Record the immutable upstream revision and license before reusing third-party material.
+

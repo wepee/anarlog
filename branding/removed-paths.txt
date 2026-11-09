@@ -146,3 +146,14 @@ apps/desktop/src/routes/app/live-caption.tsx
 apps/desktop/src/settings/general/tier-actions.test.ts
 packages/pricing/
 packages/supabase/
+
+# Enterprise capture (commercial licence, Linux servers) and what only it used.
+enterprise/
+crates/meeting-capture/
+crates/cloudsync/vendor/cloudsync/linux/
+crates/cloudsync/scripts/rebuild-linux.sh
+LICENSE.enterprise
+LICENSING.md
+.github/workflows/enterprise_ci.yaml
+.github/scripts/check_license_boundary.py
+.github/scripts/test_check_license_boundary.py

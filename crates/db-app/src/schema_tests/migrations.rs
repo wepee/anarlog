@@ -395,11 +395,7 @@ async fn personal_workspace_migration_preserves_existing_session_workspace_ids()
 
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
+    all(target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn workspace_tables_can_be_initialized_by_cloudsync() {
@@ -418,11 +414,7 @@ async fn workspace_tables_can_be_initialized_by_cloudsync() {
 
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
+    all(target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn search_index_migrations_apply_before_cloudsync_initialization() {
@@ -457,11 +449,7 @@ async fn search_index_migrations_apply_before_cloudsync_initialization() {
 
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
+    all(target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn search_index_migrations_apply_to_initialized_cloudsync_tables() {

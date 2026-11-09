@@ -32,42 +32,10 @@ configure_cloudsync_target!(
     "../vendor/cloudsync/macos/x86_64/cloudsync.dylib"
 );
 
-#[cfg(all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"))]
-configure_cloudsync_target!(
-    "linux/gnu/aarch64",
-    "cloudsync.so",
-    "../vendor/cloudsync/linux/gnu/aarch64/cloudsync.so"
-);
-
-#[cfg(all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"))]
-configure_cloudsync_target!(
-    "linux/gnu/x86_64",
-    "cloudsync.so",
-    "../vendor/cloudsync/linux/gnu/x86_64/cloudsync.so"
-);
-
-#[cfg(all(target_os = "linux", target_env = "musl", target_arch = "aarch64"))]
-configure_cloudsync_target!(
-    "linux/musl/aarch64",
-    "cloudsync.so",
-    "../vendor/cloudsync/linux/musl/aarch64/cloudsync.so"
-);
-
-#[cfg(all(target_os = "linux", target_env = "musl", target_arch = "x86_64"))]
-configure_cloudsync_target!(
-    "linux/musl/x86_64",
-    "cloudsync.so",
-    "../vendor/cloudsync/linux/musl/x86_64/cloudsync.so"
-);
-
 pub fn bundled_extension_path() -> Result<PathBuf, Error> {
     #[cfg(not(any(
         all(target_os = "macos", target_arch = "aarch64"),
-        all(target_os = "macos", target_arch = "x86_64"),
-        all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-        all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-        all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-        all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
+        all(target_os = "macos", target_arch = "x86_64")
     )))]
     {
         Err(Error::UnsupportedBundledCloudsync)
@@ -75,11 +43,7 @@ pub fn bundled_extension_path() -> Result<PathBuf, Error> {
 
     #[cfg(any(
         all(target_os = "macos", target_arch = "aarch64"),
-        all(target_os = "macos", target_arch = "x86_64"),
-        all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-        all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-        all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-        all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
+        all(target_os = "macos", target_arch = "x86_64")
     ))]
     {
         #[cfg(target_os = "macos")]

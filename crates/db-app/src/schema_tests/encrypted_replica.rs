@@ -1003,11 +1003,7 @@ async fn e2ee_apply_guard_suppresses_only_the_guarded_write() {
 
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64")
+    all(target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn e2ee_dirty_triggers_apply_to_initialized_cloudsync_tables() {
@@ -1134,16 +1130,7 @@ async fn torn_e2ee_payload_hash_local_state_migration_is_repaired() {
 // The prebuilt sqlite-sync extension only ships for these targets.
 #[cfg(any(
     all(test, target_os = "macos", target_arch = "aarch64"),
-    all(test, target_os = "macos", target_arch = "x86_64"),
-    all(test, target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(test, target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(
-        test,
-        target_os = "linux",
-        target_env = "musl",
-        target_arch = "aarch64"
-    ),
-    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64")
+    all(test, target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn torn_e2ee_payload_hash_repair_refreshes_the_cloudsync_schema_hash() {
@@ -1382,16 +1369,7 @@ async fn prepare_schema_still_drops_an_already_applied_payload_hash_column() {
 
 #[cfg(any(
     all(test, target_os = "macos", target_arch = "aarch64"),
-    all(test, target_os = "macos", target_arch = "x86_64"),
-    all(test, target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(test, target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(
-        test,
-        target_os = "linux",
-        target_env = "musl",
-        target_arch = "aarch64"
-    ),
-    all(test, target_os = "linux", target_env = "musl", target_arch = "x86_64")
+    all(test, target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn prepare_schema_does_not_rewrite_cloudsync_for_net_zero_payload_hash_alters() {

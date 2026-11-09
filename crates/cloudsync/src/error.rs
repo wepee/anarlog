@@ -1,7 +1,4 @@
-const SUPPORTED_CLOUDSYNC_TARGETS: &str = concat!(
-    "macos/{aarch64,x86_64}, ",
-    "linux/{gnu,musl}/{aarch64,x86_64}"
-);
+const SUPPORTED_CLOUDSYNC_TARGETS: &str = "macos/{aarch64,x86_64}";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorKind {

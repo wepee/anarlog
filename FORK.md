@@ -145,9 +145,8 @@ plugins `bedrock` et `attachment-sync`. Ils emportaient notamment `async-stripe`
 `aws-sdk-*` et `uniffi`. Tous sont listés dans `branding/removed-paths.txt` pour
 que `scripts/merge-upstream.sh` réapplique la suppression.
 
-Restent volontairement : `chrome-native-host` (sidecar livré avec l'app),
-`meeting-capture` (utilisé par `enterprise/`), et les grosses dépendances qui
-servent : export (`typst`), recherche (`tantivy`), calendrier, `api-client`.
+Restent volontairement : `chrome-native-host` (sidecar livré avec l'app) et
+les grosses dépendances qui servent : export (`typst`), recherche (`tantivy`), calendrier, `api-client`.
 
 ## 4 bis. Archivage des enregistrements
 
@@ -188,10 +187,12 @@ Intel). Tout ce qui ne servait qu'à Windows ou Linux est retiré :
   dépendances `[target.…]`, dans `crates/`, `plugins/`, `apps/desktop/src-tauri`
   et `apps/cli`. Les branches `cfg(unix)` restent (macOS en fait partie).
   `apps/desktop/src-tauri/src/lib.rs` refuse de compiler hors macOS
-  (`compile_error!`). `enterprise/` n'est pas concerné : ses workers tournent
-  sur des serveurs Linux, donc les crates qu'il utilise (`cloudsync`,
-  `db-core`, `db-app`, `db-migrate`, `agent-access`…) gardent leurs branches
-  Linux ; seuls Windows et le mobile y sont retirés.
+  (`compile_error!`).
+- **`enterprise/`** : capture de réunions côté serveur (robots Meet/Zoom,
+  control-plane), sous licence commerciale Fastrepl et inutilisée par le fork.
+  Supprimée avec `crates/meeting-capture`, les binaires Linux de `cloudsync`,
+  `LICENSE.enterprise`, `LICENSING.md`, le check de frontière de licence et
+  `enterprise_ci.yaml`. Plus aucun crate ne garde de branche Linux.
 - **Front** : branches `platform() === "windows" | "linux"`, barre de titre
   Windows, libellés « Ctrl » / « Show in folder ». La barre flottante et le
   sous-titrage en webview (`meeting-float/overlay/`, routes `/app/floating-bar`
@@ -212,6 +213,12 @@ restent vérifiables ailleurs. Les chemins supprimés sont listés dans
 `branding/removed-paths.txt` ; les suppressions *dans* des fichiers partagés
 avec upstream, elles, produiront des conflits à chaque merge qui touche ces
 lignes : les résoudre en gardant la version sans branche Windows/Linux.
+
+`scripts/check-macos-only.mjs` le vérifie : il échoue si un chemin de
+`removed-paths.txt` réapparaît, ou si une branche Windows/Linux revient dans le
+Rust (`crates/`, `plugins/`, `apps/`) ou le front (`platform() === "windows"`).
+`scripts/merge-upstream.sh` le lance avant de committer le merge, et `ci.yaml`
+à chaque PR.
 
 ## 5. Après une mise à jour upstream
 
