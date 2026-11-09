@@ -91,7 +91,14 @@ pub fn archive(
     std::fs::create_dir_all(&target_dir)?;
     let target = target_dir.join(filename);
 
-    let source_len = std::fs::metadata(&source)?.len();
+    let source_metadata = std::fs::metadata(&source)?;
+    // An archive folder chosen inside the app's own sessions folder resolves
+    // onto the recording itself; linking it there would replace the only copy
+    // with a link to itself.
+    if std::fs::metadata(&target).is_ok_and(|target| same_file(&source_metadata, &target)) {
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    }
+    let source_len = source_metadata.len();
     let reuse_existing = std::fs::metadata(&target).is_ok_and(|metadata| {
         metadata.len() == source_len && same_content(&source, &target).unwrap_or(false)
     });
@@ -158,6 +165,12 @@ pub fn relocate(
         return Ok(ArchiveOutcome::Busy);
     }
 
+    // The same folder under another spelling (case, firmlink) that
+    // `same_dir` missed: the move would delete the only copy.
+    if std::fs::metadata(&target).is_ok_and(|target| same_file(&current_metadata, &target)) {
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    }
+
     std::fs::create_dir_all(&target_dir)?;
     match std::fs::symlink_metadata(&target) {
         // Left by a relocation that stopped before relinking.
@@ -189,6 +202,12 @@ pub fn relocate(
         let _ = std::fs::remove_dir(old_dir);
     }
     Ok(ArchiveOutcome::Relocated(target))
+}
+
+#[cfg(unix)]
+fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    a.dev() == b.dev() && a.ino() == b.ino()
 }
 
 #[cfg(unix)]
@@ -568,6 +587,20 @@ mod tests {
         assert_eq!(
             archive(&session_dir, &new_dir, "session-1").unwrap(),
             ArchiveOutcome::AlreadyArchived
+        );
+    }
+
+    #[test]
+    fn an_archive_folder_set_to_the_sessions_folder_keeps_the_recording() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+
+        let outcome = archive(&session_dir, &temp.path().join("sessions"), "session-1").unwrap();
+
+        assert_eq!(outcome, ArchiveOutcome::AlreadyArchived);
+        assert_eq!(
+            std::fs::read(session_dir.join("audio.mp3")).unwrap(),
+            b"meeting audio"
         );
     }
 
