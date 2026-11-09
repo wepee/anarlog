@@ -521,6 +521,9 @@ export function buildMeetingStatements({
         ...(speaker ? { speaker: speaker.name } : {}),
       };
     });
+    // Word offsets are relative to the transcript start, which is wall-clock
+    // time like a live capture; stats and ordering read it as a date.
+    const transcriptStartedAtMs = Date.parse(createdAt) || Date.parse(now);
     const speakerHints = buildImportedSpeakerHints(
       meeting.transcript,
       words,
@@ -557,8 +560,8 @@ export function buildMeetingStatements({
       params: [
         `${sessionId}:transcript`,
         providerId,
-        words[0]?.start_ms ?? 0,
-        words[words.length - 1]?.end_ms ?? null,
+        transcriptStartedAtMs,
+        transcriptStartedAtMs + (words[words.length - 1]?.end_ms ?? 0),
         JSON.stringify(words),
         JSON.stringify(speakerHints),
         metadata,
