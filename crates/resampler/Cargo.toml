@@ -23,7 +23,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 anlg-data = { workspace = true }
-hound = { workspace = true }
 rodio = { workspace = true, features = ["symphonia-all"] }
 tokio = { workspace = true, features = ["full"] }
 

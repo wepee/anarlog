@@ -150,12 +150,9 @@ jobs:
             --exclude transcribe-whisper-local \
             --exclude device-monitor \
             --exclude local-llm-core \
-            --exclude mobile-bridge \
             --exclude tauri-plugin-analytics\
             --exclude tauri-plugin-apple-calendar \
-            --exclude tauri-plugin-audio-priority \
             --exclude tauri-plugin-auth \
-            --exclude tauri-plugin-bedrock \
             --exclude tauri-plugin-db2 \
             --exclude tauri-plugin-deeplink2 \
             --exclude tauri-plugin-detect \
@@ -165,7 +162,6 @@ jobs:
             --exclude tauri-plugin-hooks \
             --exclude tauri-plugin-icon \
             --exclude tauri-plugin-importer \
-            --exclude tauri-plugin-js \
             --exclude tauri-plugin-listener \
             --exclude tauri-plugin-listener2 \
             --exclude tauri-plugin-local-auth \
@@ -175,8 +171,6 @@ jobs:
             --exclude tauri-plugin-notification \
             --exclude tauri-plugin-notify \
             --exclude tauri-plugin-opener2 \
-            --exclude tauri-plugin-overlay \
-            --exclude tauri-plugin-path2 \
             --exclude tauri-plugin-pdf \
             --exclude tauri-plugin-permissions \
             --exclude tauri-plugin-settings \

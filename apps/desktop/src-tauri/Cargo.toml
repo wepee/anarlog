@@ -24,7 +24,6 @@ tauri = { workspace = true, features = ["specta", "protocol-asset"] }
 
 tauri-plugin-agent = { workspace = true }
 tauri-plugin-analytics = { workspace = true }
-tauri-plugin-audio-priority = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 tauri-plugin-calendar = { workspace = true }
 tauri-plugin-clipboard-manager = { workspace = true }
@@ -42,21 +41,16 @@ tauri-plugin-hooks = { workspace = true }
 tauri-plugin-http = { workspace = true }
 tauri-plugin-icon = { workspace = true }
 tauri-plugin-importer = { workspace = true }
-tauri-plugin-js = { workspace = true }
 tauri-plugin-local-api = { workspace = true }
 tauri-plugin-local-auth = { workspace = true }
 tauri-plugin-local-llm = { workspace = true }
 tauri-plugin-local-stt = { workspace = true }
-tauri-plugin-mcp = { workspace = true }
-tauri-plugin-messenger = { workspace = true }
 tauri-plugin-misc = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-notify = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tauri-plugin-opener2 = { workspace = true }
 tauri-plugin-os = { workspace = true }
-tauri-plugin-overlay = { workspace = true }
-tauri-plugin-path2 = { workspace = true }
 tauri-plugin-permissions = { workspace = true }
 tauri-plugin-prevent-default = { workspace = true }
 tauri-plugin-process = { workspace = true }

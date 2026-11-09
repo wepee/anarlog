@@ -28,6 +28,5 @@ tokio = { workspace = true, features = ["sync", "time"], optional = true }
 anlg-storage = { workspace = true, optional = true }
 
 [dev-dependencies]
-axum = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time", "test-util"] }
 wiremock = { workspace = true }

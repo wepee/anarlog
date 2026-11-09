@@ -10,9 +10,6 @@ linux-examples = []
 name = "test_notification"
 required-features = ["linux-examples"]
 
-[dev-dependencies]
-tokio = { workspace = true }
-
 [dependencies]
 anlg-notification-interface = { workspace = true }
 

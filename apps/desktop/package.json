@@ -33,7 +33,6 @@
     "@anlg/db-tauri": "workspace:*",
     "@anlg/editor": "workspace:^",
     "@anlg/plugin-analytics": "workspace:*",
-    "@anlg/plugin-attachment-sync": "workspace:*",
     "@anlg/plugin-auth": "workspace:*",
     "@anlg/plugin-calendar": "workspace:*",
     "@anlg/plugin-db": "workspace:*",

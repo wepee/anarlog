@@ -17,5 +17,4 @@ htmd = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }
 
 [dev-dependencies]
-anlg-data = { workspace = true }
 insta = { workspace = true }

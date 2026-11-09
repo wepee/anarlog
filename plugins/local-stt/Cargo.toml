@@ -22,16 +22,10 @@ openmp = ["whisper-cpp", "anlg-transcribe-whisper-local/openmp"]
 tauri-plugin = { workspace = true, features = ["build"] }
 
 [dev-dependencies]
-anlg-data = { workspace = true }
-
 dirs = { workspace = true }
 reqwest = { workspace = true }
-rodio = { workspace = true }
-similar = { workspace = true }
 specta-typescript = { workspace = true }
 tempfile = { workspace = true }
-tokio-tungstenite = { workspace = true }
-tower = { workspace = true }
 
 [dependencies]
 anlg-am = { workspace = true }

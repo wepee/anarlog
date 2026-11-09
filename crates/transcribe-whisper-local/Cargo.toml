@@ -15,10 +15,7 @@ vulkan = ["anlg-whisper-local/vulkan"]
 openmp = ["anlg-whisper-local/openmp"]
 [dev-dependencies]
 anlg-data = { workspace = true }
-bytes = { workspace = true }
-dirs = { workspace = true }
 futures-util = { workspace = true }
-owhisper-client = { workspace = true }
 reqwest = { workspace = true, features = ["json", "stream"] }
 tokio-tungstenite = { workspace = true }
 
@@ -33,8 +30,6 @@ anlg-whisper = { workspace = true }
 anlg-whisper-local = { workspace = true }
 anlg-ws-utils = { workspace = true }
 owhisper-interface = { workspace = true }
-
-bytes = { workspace = true }
 serde_html_form = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
