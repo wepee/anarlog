@@ -80,7 +80,9 @@ comportement d'origine, un élément par secret, reprend.
 Cette demande par build disparaît avec une signature stable. Sans Developer ID,
 `fork_release.yaml` signe avec un certificat auto-signé (secrets
 `FORK_SIGNING_CERTIFICATE` / `FORK_SIGNING_CERTIFICATE_PASSWORD`, créés une
-fois par `scripts/fork-signing-certificate.sh`). L'exigence désignée devient
+fois par `scripts/fork-signing-certificate.sh`), et refuse de publier sans l'un
+ou l'autre : une release ad-hoc a déjà coûté leurs autorisations aux
+utilisateurs (1.4.28). L'exigence désignée devient
 « identifiant + certificat » au lieu du cdhash : le trousseau et les
 autorisations TCC (Accessibilité, micro, écran) passent d'une mise à jour à
 l'autre. Signé ad-hoc, chaque mise à jour laisse dans Réglages Système une
