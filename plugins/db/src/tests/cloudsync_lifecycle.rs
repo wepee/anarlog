@@ -10,11 +10,6 @@ use super::support::{setup_enabled_cloudsync_runtime, setup_runtime, unreachable
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64"),
 ))]
 #[tokio::test]
 async fn sign_out_suspend_command_defers_busy_pool_teardown() {

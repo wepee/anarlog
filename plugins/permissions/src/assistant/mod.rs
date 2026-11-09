@@ -4,11 +4,6 @@ mod macos;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::open_assisted;
 
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn open_assisted(_permission: crate::Permission) -> crate::Result<bool> {
-    Ok(false)
-}
-
 /// Dismiss the assisted drag overlay, if one is showing.
 pub(crate) fn dismiss_current() {
     // The overlay is tracked in a main-thread-local, so dismissing from a

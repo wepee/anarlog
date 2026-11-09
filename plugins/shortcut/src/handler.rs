@@ -6,9 +6,6 @@ use crate::{
 #[cfg(target_os = "macos")]
 pub use self::macos::Handler;
 
-#[cfg(not(target_os = "macos"))]
-pub use self::stub::Handler;
-
 #[cfg(target_os = "macos")]
 mod macos {
     use std::{sync::Mutex, time::Duration};
@@ -86,34 +83,6 @@ mod macos {
             use_double_tap_only: options.use_double_tap_only,
             double_tap_lock_enabled: options.double_tap_lock_enabled,
             minimum_key_time: Duration::from_millis(options.minimum_key_time_ms),
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-mod stub {
-    use tauri::{AppHandle, Runtime};
-
-    use super::{Error, HotKey, Options};
-
-    pub struct Handler;
-
-    impl Handler {
-        pub fn new() -> Self {
-            Self
-        }
-
-        pub fn register<R: Runtime>(
-            &self,
-            _app: AppHandle<R>,
-            _hotkey: HotKey,
-            _options: Options,
-        ) -> Result<(), Error> {
-            Err(Error::Unsupported)
-        }
-
-        pub fn unregister(&self) -> Result<(), Error> {
-            Ok(())
         }
     }
 }

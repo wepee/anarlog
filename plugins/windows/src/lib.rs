@@ -55,29 +55,6 @@ impl SavedFrames {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-#[derive(Default)]
-pub struct PendingPositions(pub Mutex<HashMap<String, SavedFrame>>);
-
-#[cfg(not(target_os = "macos"))]
-impl PendingPositions {
-    fn insert(&self, label: String, frame: SavedFrame) {
-        self.0.lock().unwrap().insert(label, frame);
-    }
-
-    fn take_if_sized(&self, label: &str, size: tauri::LogicalSize<f64>) -> Option<SavedFrame> {
-        let mut pending = self.0.lock().unwrap();
-        let matches = pending.get(label).is_some_and(|frame| {
-            (frame.w - size.width).abs() < 1.0 && (frame.h - size.height).abs() < 1.0
-        });
-        if matches { pending.remove(label) } else { None }
-    }
-
-    fn remove(&self, label: &str) {
-        self.0.lock().unwrap().remove(label);
-    }
-}
-
 #[derive(Default)]
 pub struct WindowExpansions(pub Mutex<HashMap<String, Vec<(f64, f64, f64)>>>);
 
@@ -150,7 +127,6 @@ pub fn main_window_rebuilding() -> bool {
     MAIN_WINDOW_REBUILDING.load(Ordering::SeqCst)
 }
 
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn set_main_window_rebuilding(value: bool) {
     MAIN_WINDOW_REBUILDING.store(value, Ordering::SeqCst);
 }
@@ -165,7 +141,6 @@ fn note_main_window_show_requested() {
     }
 }
 
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn take_main_window_show_requested() -> bool {
     MAIN_WINDOW_SHOW_REQUESTED.swap(false, Ordering::SeqCst)
 }
@@ -234,7 +209,6 @@ impl WebviewHealthState {
     }
 
     // One rebuild per failure episode; a webview that reports ready resets it.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     fn begin_rebuild(&self, label: &str) -> bool {
         self.rebuilt.lock().unwrap().insert(label.to_string())
     }
@@ -290,10 +264,6 @@ pub(crate) fn clear_window_state(app: &tauri::AppHandle<tauri::Wry>, label: &str
         state.remove(label);
     }
     if let Some(state) = app.try_state::<SavedFrames>() {
-        state.remove(label);
-    }
-    #[cfg(not(target_os = "macos"))]
-    if let Some(state) = app.try_state::<PendingPositions>() {
         state.remove(label);
     }
     if let Some(state) = app.try_state::<WindowExpansions>() {
@@ -379,9 +349,6 @@ pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
                 app.manage(saved_frames);
             }
 
-            #[cfg(not(target_os = "macos"))]
-            app.manage(PendingPositions::default());
-
             {
                 let window_expansions = WindowExpansions::default();
                 app.manage(window_expansions);
@@ -409,10 +376,7 @@ pub fn extend_builder(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tau
         builder.plugin(tauri_nspanel::init())
     }
 
-    #[cfg(any(
-        not(target_os = "macos"),
-        all(target_os = "macos", not(feature = "macos-private-api"))
-    ))]
+    #[cfg(all(target_os = "macos", not(feature = "macos-private-api")))]
     {
         builder
     }

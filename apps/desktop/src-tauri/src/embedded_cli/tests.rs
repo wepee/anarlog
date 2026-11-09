@@ -1,5 +1,5 @@
 use super::*;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
 
 #[test]
@@ -9,7 +9,6 @@ fn maps_bundle_id_to_command_name() {
         command_name_from_identifier(LEGACY_STABLE_BUNDLE_ID),
         "anarlog"
     );
-    assert_eq!(command_name_from_identifier(FLATPAK_BUNDLE_ID), "anarlog");
     assert_eq!(
         command_name_from_identifier(STAGING_BUNDLE_ID),
         "anarlog-staging"
@@ -22,41 +21,7 @@ fn maps_bundle_id_to_command_name() {
     assert_eq!(command_name_from_identifier("unknown"), "anarlog");
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-#[test]
-fn resolves_linux_x64_bundled_binary() {
-    assert_eq!(
-        bundled_binary_name(),
-        Some("anarlog-cli-x86_64-unknown-linux-gnu")
-    );
-    assert_eq!(sidecar_binary_name(), "anarlog-cli");
-}
-
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-#[test]
-fn resolves_linux_arm64_bundled_binary() {
-    assert_eq!(
-        bundled_binary_name(),
-        Some("anarlog-cli-aarch64-unknown-linux-gnu")
-    );
-    assert_eq!(sidecar_binary_name(), "anarlog-cli");
-}
-
-#[test]
-fn finds_windows_path_entries_case_insensitively() {
-    let expected = Path::new(r"C:\Users\Test\AppData\Local\BlackMushi\bin");
-
-    assert!(path_list_contains(
-        r"C:\Windows;C:\USERS\TEST\APPDATA\LOCAL\BLACKMUSHI\BIN\;C:\Tools",
-        expected
-    ));
-    assert!(!path_list_contains(
-        r"C:\Windows;C:\Users\Test\AppData\Local\Other\bin",
-        expected
-    ));
-}
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
 #[test]
 fn classifies_missing_non_executable_and_stale_installs_as_missing() {
     let dir = tempfile::tempdir().unwrap();
@@ -151,7 +116,7 @@ fn installer_replaces_legacy_app_executable_symlink() {
     assert_eq!(std::fs::read_to_string(&install_path).unwrap(), "new cli");
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
 #[test]
 fn foreign_files_are_conflicts_and_are_never_replaced() {
     let dir = tempfile::tempdir().unwrap();
@@ -179,7 +144,7 @@ fn foreign_files_are_conflicts_and_are_never_replaced() {
     assert_eq!(state, EmbeddedCliState::Conflict);
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
 #[test]
 fn installed_cli_survives_bundled_resource_move() {
     let dir = tempfile::tempdir().unwrap();
@@ -208,7 +173,7 @@ fn installed_cli_survives_bundled_resource_move() {
     );
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
 #[test]
 fn app_update_requires_installing_the_new_cli_version() {
     let dir = tempfile::tempdir().unwrap();

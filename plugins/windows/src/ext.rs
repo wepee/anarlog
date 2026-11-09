@@ -321,12 +321,6 @@ impl AppWindow {
                 }
             });
         }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = app;
-            let _ = window;
-        }
     }
 
     #[cfg(target_os = "macos")]
@@ -361,27 +355,6 @@ impl AppWindow {
                 }
             })
         }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let Some(window) = self.get(app) else {
-                return Ok(None);
-            };
-            run_on_main_thread(app, move || -> tauri::Result<SavedFrame> {
-                let scale = window.scale_factor()?;
-                let position = window.outer_position()?.to_logical::<f64>(scale);
-                let size = window.inner_size()?.to_logical::<f64>(scale);
-
-                Ok(SavedFrame {
-                    x: position.x,
-                    y: position.y,
-                    w: size.width,
-                    h: size.height,
-                })
-            })?
-            .map(Some)
-            .map_err(crate::Error::from)
-        }
     }
 
     fn visible_frame(
@@ -407,30 +380,6 @@ impl AppWindow {
                 })
             })
             .map(|frame| frame.flatten())
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let Some(window) = self.get(app) else {
-                return Ok(None);
-            };
-            run_on_main_thread(app, move || -> tauri::Result<Option<SavedFrame>> {
-                let Some(monitor) = window.current_monitor()? else {
-                    return Ok(None);
-                };
-                let scale = monitor.scale_factor();
-                let work_area = monitor.work_area();
-                let position = work_area.position.to_logical::<f64>(scale);
-                let size = work_area.size.to_logical::<f64>(scale);
-
-                Ok(Some(SavedFrame {
-                    x: position.x,
-                    y: position.y,
-                    w: size.width,
-                    h: size.height,
-                }))
-            })?
-            .map_err(crate::Error::from)
         }
     }
 
@@ -461,12 +410,6 @@ impl AppWindow {
                 .and_then(|id| is_window_mostly_covered(id, i64::from(std::process::id())))
                 .unwrap_or(false))
         }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = app;
-            Ok(false)
-        }
     }
 
     fn set_frame_animated(
@@ -487,43 +430,6 @@ impl AppWindow {
             })?;
 
             Ok(())
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let Some(window) = self.get(app) else {
-                return Ok(());
-            };
-            let is_main = matches!(self, AppWindow::Main);
-            let label = self.label();
-            let app_handle = app.clone();
-            run_on_main_thread(app, move || -> tauri::Result<()> {
-                let size = tauri::LogicalSize::new(frame.w, frame.h);
-                let position = tauri::LogicalPosition::new(frame.x, frame.y);
-                let current_size = window
-                    .inner_size()?
-                    .to_logical::<f64>(window.scale_factor()?);
-
-                if is_main {
-                    let (min_w, min_h) = crate::window::MAIN_WINDOW_MIN_SIZE;
-                    window.set_min_size(Some(tauri::LogicalSize::new(
-                        min_w.min(frame.w),
-                        min_h.min(frame.h),
-                    )))?;
-                }
-
-                // Window managers clamp a move request against the window's
-                // current size, so re-apply the position once the resize lands.
-                if let Some(pending_positions) = app_handle.try_state::<crate::PendingPositions>()
-                    && (current_size.width != size.width || current_size.height != size.height)
-                {
-                    pending_positions.insert(label, frame);
-                }
-
-                window.set_size(size)?;
-                window.set_position(position)
-            })?
-            .map_err(crate::Error::from)
         }
     }
 
@@ -1079,11 +985,6 @@ impl<'a, M: tauri::Manager<tauri::Wry>> Windows<'a, tauri::Wry, M> {
             app.set_activation_policy(policy)?;
         }
 
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = app;
-        }
-
         Ok(())
     }
 
@@ -1099,12 +1000,6 @@ impl<'a, M: tauri::Manager<tauri::Wry>> Windows<'a, tauri::Wry, M> {
                     .unwrap_or(false)
             })
         }
-
-        #[cfg(not(target_os = "macos"))]
-        Ok(window
-            .get(self.manager.app_handle())
-            .and_then(|w| w.is_focused().ok())
-            .unwrap_or(false))
     }
 
     pub fn is_exists(&self, window: AppWindow) -> Result<bool, crate::Error> {

@@ -116,9 +116,5 @@ tauri-plugin-automation = { version = "0.1", optional = true }
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 tauri-plugin-local-stt = { workspace = true, features = ["metal"] }
 
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true, features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
-windows-registry = "0.5.3"
-
 [dev-dependencies]
 tempfile = { workspace = true }

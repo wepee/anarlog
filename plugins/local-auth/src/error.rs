@@ -1,7 +1,5 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("device authentication is not available")]
-    Unavailable,
     #[error(transparent)]
     Tauri(#[from] tauri::Error),
     #[error("{0}")]

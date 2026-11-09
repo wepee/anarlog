@@ -13,35 +13,12 @@ impl<'a, R: Runtime, M: tauri::Manager<R>> LocalAuth<'a, R, M> {
         {
             crate::macos::available(&self.manager.app_handle())
         }
-
-        #[cfg(target_os = "windows")]
-        {
-            crate::windows::available()
-        }
-
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            Ok(false)
-        }
     }
 
     pub fn authenticate(&self, reason: &str) -> Result<bool, Error> {
         #[cfg(target_os = "macos")]
         {
             crate::macos::authenticate(&self.manager.app_handle(), reason)
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            let _ = self.manager;
-            crate::windows::authenticate(reason)
-        }
-
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            let _ = self.manager;
-            let _ = reason;
-            Err(Error::Unavailable)
         }
     }
 }

@@ -177,9 +177,6 @@ fn restrict_permissions(path: &Path) {
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
 }
 
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) {}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -45,9 +45,7 @@ pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
 // Call from the application setup hook, after Tauri releases its plugin initialization lock.
 pub fn initialize_global_shortcuts(app: &tauri::AppHandle) {
-    if !global::uses_portal()
-        && let Err(error) = app.plugin(tauri_plugin_global_shortcut::Builder::new().build())
-    {
+    if let Err(error) = app.plugin(tauri_plugin_global_shortcut::Builder::new().build()) {
         tracing::warn!(%error, "Global shortcuts are unavailable");
     }
 }

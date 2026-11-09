@@ -51,11 +51,6 @@ async fn cloudsync_open_failure_falls_back_for_uninitialized_database() {
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64"),
 ))]
 #[tokio::test]
 async fn extension_open_without_initialized_tables_allows_plain_fallback() {
@@ -89,11 +84,6 @@ async fn extension_open_without_initialized_tables_allows_plain_fallback() {
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64"),
 ))]
 #[tokio::test]
 async fn cloudsync_open_failure_does_not_migrate_initialized_replica_plainly() {

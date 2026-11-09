@@ -4,8 +4,6 @@ use serde::{Serialize, ser::Serializer};
 pub enum Error {
     #[error("failed to start event tap: {0}")]
     TapStart(String),
-    #[error("not supported on this platform")]
-    Unsupported,
 }
 
 impl Serialize for Error {

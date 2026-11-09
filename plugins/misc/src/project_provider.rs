@@ -169,11 +169,8 @@ fn kill_group(pid: Option<u32>) {
     }
 }
 
-#[cfg(not(unix))]
-fn kill_group(_pid: Option<u32>) {}
-
 fn home_dir() -> Option<PathBuf> {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 fn expand_home(word: &str) -> String {
@@ -230,17 +227,8 @@ fn resolve_program(program: &str, search_path: &std::ffi::OsStr) -> Option<PathB
     if path.components().count() > 1 {
         return path.is_file().then(|| path.to_path_buf());
     }
-    let names: Vec<String> = if cfg!(windows) {
-        vec![
-            format!("{program}.exe"),
-            format!("{program}.cmd"),
-            program.to_string(),
-        ]
-    } else {
-        vec![program.to_string()]
-    };
     std::env::split_paths(search_path)
-        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .map(|dir| dir.join(program))
         .find(|candidate| candidate.is_file())
 }
 

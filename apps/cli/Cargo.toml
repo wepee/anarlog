@@ -29,9 +29,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-std", "macros", "rt-multi-thread"] }
 url = { workspace = true }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { workspace = true }
-
 [dev-dependencies]
 cli-docs = { path = "../../crates/cli-docs" }
 insta = { workspace = true, features = ["json"] }

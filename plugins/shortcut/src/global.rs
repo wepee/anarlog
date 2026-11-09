@@ -9,10 +9,6 @@ use tauri_specta::Event;
 
 use crate::{ShortcutEvent, ShortcutPluginExt};
 
-pub fn uses_portal() -> bool {
-    cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_some()
-}
-
 #[derive(Default)]
 pub struct GlobalState {
     registration: tokio::sync::Mutex<Registration>,
@@ -23,8 +19,6 @@ pub struct GlobalState {
 struct Registration {
     shortcut: Option<Shortcut>,
     cancel_keys: Vec<Shortcut>,
-    #[cfg(target_os = "linux")]
-    portal: Option<portal::Registration>,
 }
 
 #[tauri::command]
@@ -38,20 +32,18 @@ pub async fn configure(app: tauri::AppHandle, shortcut: Option<String>) -> Resul
     state.active.store(false, Ordering::SeqCst);
     let native_only =
         cfg!(target_os = "macos") && matches!(shortcut.as_deref(), Some("Fn" | "RightCommand"));
-    if !uses_portal() {
-        if let Some(global) =
-            app.try_state::<tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>>()
-        {
-            while let Some(key) = registration.cancel_keys.last().copied() {
-                global.unregister(key).map_err(|e| e.to_string())?;
-                registration.cancel_keys.pop();
-            }
-        } else if (!native_only && shortcut.is_some())
-            || registration.shortcut.is_some()
-            || !registration.cancel_keys.is_empty()
-        {
-            return Err("Global shortcuts are unavailable in this desktop session.".into());
+    if let Some(global) =
+        app.try_state::<tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>>()
+    {
+        while let Some(key) = registration.cancel_keys.last().copied() {
+            global.unregister(key).map_err(|e| e.to_string())?;
+            registration.cancel_keys.pop();
         }
+    } else if (!native_only && shortcut.is_some())
+        || registration.shortcut.is_some()
+        || !registration.cancel_keys.is_empty()
+    {
+        return Err("Global shortcuts are unavailable in this desktop session.".into());
     }
     app.shortcut().unregister().map_err(|e| e.to_string())?;
     if let Some(previous) = registration.shortcut {
@@ -59,10 +51,6 @@ pub async fn configure(app: tauri::AppHandle, shortcut: Option<String>) -> Resul
             .unregister(previous)
             .map_err(|e| e.to_string())?;
         registration.shortcut = None;
-    }
-    #[cfg(target_os = "linux")]
-    if let Some(portal) = registration.portal.take() {
-        portal.close().await;
     }
     let Some(shortcut) = shortcut else {
         return Ok(());
@@ -90,11 +78,6 @@ pub async fn configure(app: tauri::AppHandle, shortcut: Option<String>) -> Resul
     }
 
     let key = parse_shortcut(&shortcut)?;
-    #[cfg(target_os = "linux")]
-    if uses_portal() {
-        registration.portal = Some(portal::register(app.clone(), key).await?);
-        return Ok(());
-    }
 
     let down = Arc::new(AtomicBool::new(false));
     app.global_shortcut()
@@ -123,10 +106,6 @@ pub async fn set_active(app: tauri::AppHandle, active: bool) -> Result<(), Strin
     let state = app.state::<GlobalState>();
     let mut registration = state.registration.lock().await;
     state.active.store(active, Ordering::SeqCst);
-    #[cfg(target_os = "linux")]
-    if uses_portal() {
-        return Ok(());
-    }
     if app
         .try_state::<tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>>()
         .is_none()
@@ -163,11 +142,6 @@ pub async fn set_active(app: tauri::AppHandle, active: bool) -> Result<(), Strin
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
-mod portal;
-#[cfg(any(target_os = "linux", test))]
-mod trigger;
-
 #[tauri::command]
 #[specta::specta]
 pub fn validate(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
@@ -182,15 +156,10 @@ fn validate_shortcut(shortcut: &str, global_available: bool) -> Result<(), Strin
     if cfg!(target_os = "macos") && matches!(shortcut, "Fn" | "RightCommand") {
         return Ok(());
     }
-    let key = parse_shortcut(shortcut)?;
-    if !uses_portal() && !global_available {
+    parse_shortcut(shortcut)?;
+    if !global_available {
         return Err("Global shortcuts are unavailable in this desktop session.".into());
     }
-    #[cfg(target_os = "linux")]
-    if uses_portal() {
-        trigger::portal_trigger(key)?;
-    }
-    let _ = key;
     Ok(())
 }
 
@@ -216,9 +185,7 @@ mod validation_tests {
             assert!(validate_shortcut(shortcut, true).is_err());
         }
         assert!(validate_shortcut("Control+Alt+KeyD", true).is_ok());
-        if !uses_portal() {
-            assert!(validate_shortcut("Control+Alt+KeyD", false).is_err());
-        }
+        assert!(validate_shortcut("Control+Alt+KeyD", false).is_err());
         #[cfg(target_os = "macos")]
         assert!(validate_shortcut("Fn", false).is_ok());
     }

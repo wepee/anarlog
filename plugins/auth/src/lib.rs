@@ -4,15 +4,6 @@ mod ext;
 mod manifest;
 mod migrate;
 mod refresh;
-#[cfg(target_os = "windows")]
-mod windows;
-
-// Tauri unit tests bypass the application manifest while still importing
-// TaskDialogIndirect, so the test object must activate Common Controls v6.
-#[cfg(all(test, target_os = "windows", target_env = "msvc"))]
-#[used]
-#[unsafe(link_section = ".drectve")]
-static WINDOWS_TEST_MANIFEST_DIRECTIVES: [u8; 184] = *b" /MANIFEST:EMBED /MANIFESTDEPENDENCY:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"\0";
 
 pub use error::{Error, Result};
 pub use ext::*;
@@ -53,16 +44,6 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new(PLUGIN_NAME)
         .invoke_handler(specta_builder.invoke_handler())
         .setup(|app, _api| {
-            #[cfg(all(target_os = "linux", not(test)))]
-            let auth_store = anlg_supabase_auth::client::store::AuthStore::in_memory(
-                migrate::load_linux_auth(app)?,
-            );
-
-            #[cfg(all(target_os = "windows", not(test)))]
-            let auth_store =
-                anlg_supabase_auth::client::store::AuthStore::in_memory(windows::load_auth(app)?);
-
-            #[cfg(any(not(any(target_os = "linux", target_os = "windows")), test))]
             let auth_store = {
                 let auth_path = migrate::auth_path(app)?;
                 anlg_supabase_auth::client::store::AuthStore::load(auth_path)

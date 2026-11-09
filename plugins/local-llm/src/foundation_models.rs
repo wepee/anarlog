@@ -33,14 +33,6 @@ pub fn availability() -> Result<FoundationModelAvailability, String> {
     {
         platform::availability()
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(FoundationModelAvailability {
-            status: "unsupported".to_string(),
-            reason: Some("unsupported_os".to_string()),
-        })
-    }
 }
 
 pub async fn begin(request_id: String) -> Result<(), String> {
@@ -49,11 +41,6 @@ pub async fn begin(request_id: String) -> Result<(), String> {
         tokio::task::spawn_blocking(move || platform::begin(&request_id))
             .await
             .map_err(|error| error.to_string())??;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = request_id;
     }
 
     Ok(())
@@ -65,11 +52,6 @@ pub async fn cancel(request_id: String) -> Result<(), String> {
         tokio::task::spawn_blocking(move || platform::cancel(&request_id))
             .await
             .map_err(|error| error.to_string())??;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = request_id;
     }
 
     Ok(())
@@ -91,12 +73,6 @@ pub async fn generate(request: FoundationModelRequest) -> Result<FoundationModel
             .text
             .ok_or_else(|| "Apple Foundation Models returned no text.".to_string())?;
         Ok(FoundationModelResponse { text })
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = request;
-        Err("Apple Foundation Models is only available on macOS.".to_string())
     }
 }
 

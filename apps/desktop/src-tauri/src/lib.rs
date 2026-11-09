@@ -1,3 +1,6 @@
+#[cfg(not(target_os = "macos"))]
+compile_error!("[fork] this app only builds for macOS");
+
 mod agent_skills;
 mod agents;
 mod appearance;
@@ -108,7 +111,6 @@ fn create_audio_provider(_bundle_id: &str) -> std::sync::Arc<dyn anlg_audio_actu
 }
 
 pub fn main() {
-    startup::apply_linux_webkit_workarounds();
     // Sentry minidump reporting re-execs this binary with --crash-reporter-server.
     // That helper must reach minidump::init instead of the launch lock, or it
     // shows "BlackMushi is already starting" on every launch and never serves dumps.
@@ -371,17 +373,6 @@ pub fn main() {
                 });
             }
 
-            #[cfg(any(windows, target_os = "linux"))]
-            {
-                // https://v2.tauri.app/ko/plugin/deep-linking/#desktop-1
-                // Registration shells out to update-desktop-database/xdg-mime on Linux,
-                // which are missing on NixOS; failing setup here panics the app.
-                use tauri_plugin_deep_link::DeepLinkExt;
-                if let Err(error) = app.deep_link().register_all() {
-                    tracing::warn!(%error, "failed to register deep link handlers");
-                }
-            }
-
             {
                 use tauri_plugin_tray::TrayPluginExt;
                 use tauri_plugin_windows::WindowsPluginExt;
@@ -594,10 +585,6 @@ fn append_startup_failure_to_log(identifier: &str, message: &str) {
         };
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
         let _ = writeln!(file, "{timestamp} ERROR anarlog::startup: {message}");
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (identifier, message);
     }
 }
 
