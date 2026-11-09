@@ -264,7 +264,21 @@ jobs:
             --target "$TARGET" \
             --config ./src-tauri/tauri.conf.stable.json \
             --config ./src-tauri/tauri.conf.stable-macos.json \
-            --verbose
+            --verbose \
+            -- --timings
+
+      # Cargo's per-crate timing report: which crates dominate the build and
+      # where parallelism stalls, to know what to trim next.
+      - name: Upload the Cargo timing report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cargo-timings-${{ steps.version.outputs.version }}
+          path: |
+            target/cargo-timings/cargo-timing.html
+            apps/desktop/src-tauri/target/cargo-timings/cargo-timing.html
+          if-no-files-found: warn
+          retention-days: 30
 
       # scripts/build-macos.sh re-signs the .app after `tauri build` whenever it
       # falls back to an ad-hoc or local identity, which leaves the updater

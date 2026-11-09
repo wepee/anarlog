@@ -154,6 +154,7 @@ Dépendances de build mortes ou remplaçables :
 | `plugins/misc/build.rs` : `git rev-parse` au lieu de `vergen-gix` | 64 crates (`gix`), compilés à chaque build pour un seul SHA |
 | `sentry` retiré (voir section 2) | 12 crates |
 | `posthog-rs` retiré (voir section 2) | 1 crate |
+| `apps/desktop/src-tauri/Cargo.toml` : lib en `rlib` seule (le `staticlib` ne servait qu'au mobile) | plus d'archive statique de tout le graphe à chaque build |
 | dépendances déclarées mais jamais utilisées (`cargo shear`) | une soixantaine d'entrées, surtout des dev-dependencies |
 
 Crates orphelins supprimés : ils ne servaient qu'à `apps/api/`, `apps/stripe/`
