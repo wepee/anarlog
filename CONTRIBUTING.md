@@ -20,12 +20,6 @@ You need:
 - The [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/)
 - On Apple Silicon Macs, Xcode with its Metal Toolchain component. The Command Line Tools alone cannot compile the MLX shader library used by Soniqo local transcription. Xcode 26 and later install the component separately with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -downloadComponent MetalToolchain`; Xcode does not need to be selected with `xcode-select`.
 
-On Debian or Ubuntu, install the supported toolchains and system packages with:
-
-```bash
-bash scripts/setup-linux.sh
-```
-
 Then install the workspace:
 
 ```bash

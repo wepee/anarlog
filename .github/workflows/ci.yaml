@@ -32,8 +32,3 @@ jobs:
           scripts/verify-release-candidate.test.mjs
           scripts/security-dependencies.test.mjs
           scripts/publish-anarlog-skill.test.mjs
-          scripts/repack-linux-appimage.test.mjs
-          scripts/verify-linux-audio-qa-run.test.mjs
-          scripts/verify-linux-audio-qa-evidence.test.mjs
-          scripts/update-apt-repository.test.mjs
-          scripts/update-aur-pkgbuild.test.mjs

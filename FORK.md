@@ -178,6 +178,34 @@ il y a moins de 30 minutes n'est pas évincé. Un dossier d'archive absent
 Le lecteur d'upstream télécharge tout le fichier dès l'ouverture d'une note :
 sans le contrôle de disponibilité, chaque note ouverte rapatrierait son audio.
 
+## 4 ter. macOS uniquement
+
+L'app (desktop et CLI embarqué) ne vise plus que macOS (Apple Silicon et
+Intel). Tout ce qui ne servait qu'à Windows ou Linux est retiré :
+
+- **Code Rust** : branches `#[cfg(target_os = "windows" | "linux")]`,
+  `cfg(windows)`, `cfg(not(unix))`, `cfg(not(target_os = "macos"))` et leurs
+  dépendances `[target.…]`, dans `crates/`, `plugins/`, `apps/desktop/src-tauri`
+  et `apps/cli`. Les branches `cfg(unix)` restent (macOS en fait partie).
+  `apps/desktop/src-tauri/src/lib.rs` refuse de compiler hors macOS
+  (`compile_error!`). `enterprise/` n'est pas concerné : ses workers tournent
+  sur des serveurs Linux.
+- **Front** : branches `platform() === "windows" | "linux"`, barre de titre
+  Windows, libellés « Ctrl » / « Show in folder ».
+- **Packaging** : Flatpak, AUR, APT, AppImage, `bundle.linux` / `bundle.windows`
+  des `tauri.conf*.json`, workflow Microsoft Store.
+- **CI** : jobs `windows_ci` / `linux_ci` de `desktop_ci.yaml`, `cli-windows` ;
+  `cli-ci` tourne désormais sur un runner macOS. Les scripts `setup-linux*.sh`
+  et la QA audio Linux sont supprimés.
+
+Conséquence : le code Rust de l'app ne compile plus que sur un Mac. Un
+`cargo check` sous Linux (conteneur cloud, CI Ubuntu) n'est plus un signal
+valable ; seuls les checks JS et les crates indépendants de la plateforme
+restent vérifiables ailleurs. Les chemins supprimés sont listés dans
+`branding/removed-paths.txt` ; les suppressions *dans* des fichiers partagés
+avec upstream, elles, produiront des conflits à chaque merge qui touche ces
+lignes : les résoudre en gardant la version sans branche Windows/Linux.
+
 ## 5. Après une mise à jour upstream
 
 ```bash

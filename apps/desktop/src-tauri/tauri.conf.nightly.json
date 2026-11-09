@@ -32,11 +32,6 @@
       "dmg": {
         "background": "assets/dmg-background-staging.png"
       }
-    },
-    "windows": {
-      "webviewInstallMode": {
-        "type": "offlineInstaller"
-      }
     }
   }
 }
