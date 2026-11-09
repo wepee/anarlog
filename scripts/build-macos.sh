@@ -244,6 +244,8 @@ elif [[ "$kind" == "local" ]]; then
   # Keep APPLE_SIGNING_IDENTITY out of Tauri's environment: it would sign with
   # the hardened runtime, whose library validation a self-signed certificate
   # cannot satisfy. Sign below instead, the same way the ad-hoc path does.
+  # fork_release.yaml passes its self-signed identity through that variable.
+  unset APPLE_SIGNING_IDENTITY
   echo "Signing with: $signing_identity (local identity, set below)"
 fi
 

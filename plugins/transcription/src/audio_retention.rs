@@ -332,6 +332,16 @@ async fn load_archive_settings(pool: &SqlitePool) -> Result<Option<ArchiveSettin
     ))
 }
 
+#[derive(Default)]
+struct ArchiveTally {
+    archived: usize,
+    relocated: usize,
+    already_archived: usize,
+    busy: usize,
+    not_idle: usize,
+    failed: usize,
+}
+
 async fn archive_sweep<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     pool: &SqlitePool,
@@ -346,6 +356,7 @@ async fn archive_sweep<R: tauri::Runtime>(
     // An unplugged drive or a folder that is gone must never turn into a
     // freshly created local directory that silently keeps the audio here.
     if !settings.directory.is_dir() {
+        tracing::debug!(directory = %settings.directory.display(), "audio_archive_directory_unreachable");
         return Ok(());
     }
 
@@ -353,13 +364,14 @@ async fn archive_sweep<R: tauri::Runtime>(
     let candidates = anlg_db_app::list_session_audio_retention_candidates(pool)
         .await
         .map_err(|e| e.to_string())?;
+    let mut tally = ArchiveTally::default();
     for candidate in candidates {
         let old_enough = candidate
             .created_at_ms
             .is_some_and(|created_at| now_ms >= created_at.saturating_add(settings.after_ms));
-        if !old_enough || (settings.needs_transcript && !candidate.has_words) {
-            continue;
-        }
+        // Recordings archived under earlier settings still follow a change of
+        // folder, whatever the new delay says.
+        let may_archive = old_enough && (!settings.needs_transcript || candidate.has_words);
         let session_id = candidate.session_id;
         // Early imports used ids like "meeting-import:<hash>"; the session
         // folder only accepts UUIDs, so they never had a recording to move.
@@ -368,20 +380,51 @@ async fn archive_sweep<R: tauri::Runtime>(
         }
         let _guard = app.fs_sync().lock_session_audio(&session_id).await;
         if !session_audio_is_idle(app, &session_id).await {
+            tally.not_idle += 1;
             continue;
         }
-        match app
-            .fs_sync()
-            .archive_session_audio_locked(&session_id, &settings.directory)
-        {
-            Ok(tauri_plugin_fs_sync::audio::ArchiveOutcome::Archived(target)) => {
+        let outcome = if may_archive {
+            app.fs_sync()
+                .archive_session_audio_locked(&session_id, &settings.directory)
+        } else {
+            app.fs_sync()
+                .relocate_session_audio_locked(&session_id, &settings.directory)
+        };
+        use tauri_plugin_fs_sync::audio::ArchiveOutcome;
+        match outcome {
+            Ok(ArchiveOutcome::Archived(target)) => {
+                tally.archived += 1;
                 tracing::info!(%session_id, target = %target.display(), "session_audio_archived");
             }
-            Ok(_) => {}
+            Ok(ArchiveOutcome::Relocated(target)) => {
+                tally.relocated += 1;
+                tracing::info!(%session_id, target = %target.display(), "session_audio_relocated");
+            }
+            Ok(ArchiveOutcome::Busy) => {
+                tally.busy += 1;
+                tracing::debug!(%session_id, "session_audio_archive_busy");
+            }
+            Ok(ArchiveOutcome::AlreadyArchived) => tally.already_archived += 1,
+            Ok(ArchiveOutcome::NoAudio) => {}
             Err(error) => {
+                tally.failed += 1;
                 tracing::warn!(%session_id, %error, "session_audio_archive_failed");
             }
         }
+    }
+    // One line per pass that changed something or hit a wall, so a recording
+    // that never leaves the Mac shows why in the log.
+    if tally.archived + tally.relocated + tally.busy + tally.failed > 0 {
+        tracing::info!(
+            directory = %settings.directory.display(),
+            archived = tally.archived,
+            relocated = tally.relocated,
+            already_archived = tally.already_archived,
+            busy = tally.busy,
+            not_idle = tally.not_idle,
+            failed = tally.failed,
+            "session_audio_archive_pass"
+        );
     }
 
     if evict {

@@ -399,6 +399,7 @@ fn read_secret_blocking_for<R: tauri::Runtime>(
     });
     match migrated {
         Some(Ok(VaultRead::Migrated(secret))) => {
+            tracing::info!(scope, "secure_store_secret_migrated_from_keychain");
             forget_keychain_secret(app, scope, key);
             Ok(Some(secret))
         }
@@ -458,6 +459,11 @@ fn read_keychain_item<R: tauri::Runtime>(
                 && is_access_denied(keyring_error)
             {
                 if remember_refusal {
+                    tracing::warn!(
+                        scope,
+                        code = ?keychain_status(keyring_error),
+                        "secure_store_keychain_refused_for_session"
+                    );
                     KEYCHAIN_ACCESS_DENIED.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 return Ok(None);
@@ -659,6 +665,7 @@ fn with_vault<R: tauri::Runtime, T>(
 fn open_vault<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VaultSlot {
     let _keychain = KEYCHAIN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     if KEYCHAIN_ACCESS_DENIED.load(std::sync::atomic::Ordering::Relaxed) {
+        tracing::info!("secure_store_vault_skipped_after_refusal");
         return VaultSlot::Unavailable;
     }
     let identifier = &app.config().identifier;
@@ -668,20 +675,47 @@ fn open_vault<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VaultSlot {
     ) else {
         return VaultSlot::Unopened;
     };
-    let key = match entry.get_password() {
+    let Ok(dir) = crate::ext::resolve_store_dir(app) else {
+        return VaultSlot::Unopened;
+    };
+    let vault_path = dir.join(VAULT_FILENAME);
+
+    let mut lookup = read_master_key(&entry);
+    let sealed_on_disk = crate::vault::sealed_entries_on_disk(&vault_path);
+    if matches!(lookup, Err(keyring::Error::NoEntry)) && sealed_on_disk > 0 {
+        // A key existed: these secrets were sealed with it. Generating a new
+        // one sets them all aside, so make sure the miss was not transient.
+        tracing::warn!(
+            sealed_on_disk,
+            "secure_store_master_key_missing_while_vault_holds_secrets"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        lookup = read_master_key(&entry);
+    }
+
+    let key = match lookup {
         Ok(encoded) => match crate::vault::decode_key(&encoded) {
             Some(key) => key,
             // Never overwrite a master key we cannot read: the vault behind it
             // would become unreadable.
-            None => return VaultSlot::Unavailable,
+            None => {
+                tracing::error!("secure_store_master_key_undecodable");
+                return VaultSlot::Unavailable;
+            }
         },
         Err(keyring::Error::NoEntry) => {
             let Ok(key) = crate::vault::generate_key() else {
                 return VaultSlot::Unopened;
             };
-            if entry.set_password(&crate::vault::encode_key(&key)).is_err() {
+            if let Err(error) = entry.set_password(&crate::vault::encode_key(&key)) {
+                tracing::warn!(
+                    %error,
+                    code = ?keychain_status(&error),
+                    "secure_store_master_key_create_failed"
+                );
                 return VaultSlot::Unopened;
             }
+            tracing::info!(sealed_on_disk, "secure_store_master_key_created");
             key
         }
         Err(error) if is_access_denied(&error) => {
@@ -690,13 +724,47 @@ fn open_vault<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VaultSlot {
         }
         Err(_) => return VaultSlot::Unopened,
     };
-    let Ok(dir) = crate::ext::resolve_store_dir(app) else {
-        return VaultSlot::Unopened;
-    };
-    match crate::vault::Vault::open(dir.join(VAULT_FILENAME), &key) {
+    match crate::vault::Vault::open(vault_path, &key) {
         Ok(vault) => VaultSlot::Ready(vault),
-        Err(_) => VaultSlot::Unopened,
+        Err(error) => {
+            tracing::warn!(%error, "secure_store_vault_open_failed");
+            VaultSlot::Unopened
+        }
     }
+}
+
+/// Reads the master key and logs how it went. A read that takes seconds is a
+/// keychain prompt the user had to answer, which is what an update should no
+/// longer cause once the build is signed with a stable identity.
+fn read_master_key(entry: &keyring::Entry) -> Result<String, keyring::Error> {
+    let started = std::time::Instant::now();
+    let lookup = entry.get_password();
+    let waited_ms = started.elapsed().as_millis() as u64;
+    let likely_prompted = waited_ms >= 1_000;
+    match &lookup {
+        Ok(_) => tracing::info!(waited_ms, likely_prompted, "secure_store_master_key_read"),
+        Err(keyring::Error::NoEntry) => {
+            tracing::warn!(waited_ms, "secure_store_master_key_not_found")
+        }
+        Err(error) => tracing::warn!(
+            %error,
+            code = ?keychain_status(error),
+            denied = is_access_denied(error),
+            waited_ms,
+            "secure_store_master_key_read_failed"
+        ),
+    }
+    lookup
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_status(error: &keyring::Error) -> Option<i32> {
+    keychain_error_code(error)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_status(_error: &keyring::Error) -> Option<i32> {
+    None
 }
 
 /// Removes a secret's old keychain items once the vault holds it. Silent: an

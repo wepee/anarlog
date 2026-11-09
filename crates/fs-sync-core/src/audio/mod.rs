@@ -16,7 +16,7 @@ mod peaks;
 pub use activity::has_speech;
 pub use archive::{
     ArchiveOutcome, AudioAvailability, archive, archived_target, archives_to_offload, availability,
-    download, is_offloaded, mark_opened, opened_within,
+    download, is_offloaded, mark_opened, opened_within, relocate,
 };
 pub use peaks::{AudioPeaks, PEAKS_PER_CHANNEL, cached_peaks, compute_peaks};
 
