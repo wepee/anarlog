@@ -36,8 +36,6 @@ import { useClassicMainShortcuts } from "./useShortcuts";
 import { useShell } from "~/contexts/shell";
 import { scrollElementByWheel } from "~/shared/dom/scroll-wheel";
 import {
-  usesTitleBarSidebarActions,
-  usesWindowsStyleTitleBar,
   useWindowControlsGutter,
   WINDOW_CONTROLS_GUTTER_CLASS,
   WINDOW_CONTROLS_ROW_PADDING_TOP_CLASS,
@@ -85,7 +83,6 @@ export function ClassicMainBody() {
   const noteFilter = useSidebarNotes((state) => state.noteFilter);
   const folderFilter = useSidebarNotes((state) => state.folderFilter);
   const showWindowControlsGutter = useWindowControlsGutter();
-  const showSidebarToggleInBody = !usesWindowsStyleTitleBar();
   leftSidebarPanelConstraintsRef.current = leftSidebarPanelConstraints;
 
   const isOnboarding = currentTab?.type === "onboarding";
@@ -401,35 +398,33 @@ export function ClassicMainBody() {
     "--left-sidebar-panel-size": `${renderedLeftSidebarPanelSize}`,
     "--left-sidebar-panel-width": `${renderedLeftSidebarPanelSize}%`,
   } as LeftSidebarSizeStyle;
-  const timelineHeader =
-    showSidebarTimelineChrome && !usesTitleBarSidebarActions() ? (
-      <div
-        data-tauri-drag-region
-        data-sidebar-timeline-header
-        className={cn([
-          "flex min-h-9 shrink-0 items-start pr-1",
-          showWindowControlsGutter
-            ? [
-                WINDOW_CONTROLS_GUTTER_CLASS,
-                WINDOW_CONTROLS_ROW_PADDING_TOP_CLASS,
-              ]
-            : "pt-[9px] pl-2",
-        ])}
-        onWheelCapture={handleSidebarTimelineHeaderWheel}
-      >
-        {showSidebarTimeline ? (
-          <SidebarTimelineChromeWithUpcomingMeeting
-            currentSessionId={currentSessionId}
-            sidebarExpanded
-            showSidebarToggle={showSidebarToggleInBody}
-            showIgnoredTimelineEvents={showIgnoredTimelineEvents}
-            onNewNote={createNewNote}
-            onSearch={handleOpenNoteDialog}
-            onToggleSidebar={handleToggleLeftSidebar}
-          />
-        ) : null}
-      </div>
-    ) : null;
+  const timelineHeader = showSidebarTimelineChrome ? (
+    <div
+      data-tauri-drag-region
+      data-sidebar-timeline-header
+      className={cn([
+        "flex min-h-9 shrink-0 items-start pr-1",
+        showWindowControlsGutter
+          ? [
+              WINDOW_CONTROLS_GUTTER_CLASS,
+              WINDOW_CONTROLS_ROW_PADDING_TOP_CLASS,
+            ]
+          : "pt-[9px] pl-2",
+      ])}
+      onWheelCapture={handleSidebarTimelineHeaderWheel}
+    >
+      {showSidebarTimeline ? (
+        <SidebarTimelineChromeWithUpcomingMeeting
+          currentSessionId={currentSessionId}
+          sidebarExpanded
+          showIgnoredTimelineEvents={showIgnoredTimelineEvents}
+          onNewNote={createNewNote}
+          onSearch={handleOpenNoteDialog}
+          onToggleSidebar={handleToggleLeftSidebar}
+        />
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <div
@@ -463,7 +458,6 @@ export function ClassicMainBody() {
             <SidebarTimelineChromeWithUpcomingMeeting
               currentSessionId={currentSessionId}
               sidebarExpanded={false}
-              showSidebarToggle={showSidebarToggleInBody}
               showIgnoredTimelineEvents={showIgnoredTimelineEvents}
               onNewNote={createNewNote}
               onSearch={handleOpenNoteDialog}

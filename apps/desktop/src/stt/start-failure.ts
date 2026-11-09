@@ -1,5 +1,3 @@
-import { platform } from "@tauri-apps/plugin-os";
-
 import {
   commands as permissionsCommands,
   type PermissionStatus,
@@ -81,11 +79,6 @@ export function describeStartFailure(kind: StartFailureKind): {
 
 export async function getMicrophonePermission(): Promise<PermissionStatus | null> {
   try {
-    // Outside macOS the check only probes the default input, so a missing or
-    // busy microphone would read as a denied permission.
-    if (platform() !== "macos") {
-      return null;
-    }
     const result = await permissionsCommands.checkPermission("microphone");
     return result.status === "ok" ? result.data : null;
   } catch {

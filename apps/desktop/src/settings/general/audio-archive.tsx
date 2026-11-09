@@ -2,7 +2,6 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { homeDir } from "@tauri-apps/api/path";
 import { open as selectFolder } from "@tauri-apps/plugin-dialog";
-import { platform } from "@tauri-apps/plugin-os";
 
 import { commands as openerCommands } from "@anlg/plugin-opener2";
 import { CircleNotch, FolderSimple } from "@anlg/ui/components/icons";
@@ -46,10 +45,9 @@ export function AudioArchiveRow() {
         return;
       }
 
-      const iCloudDrive =
-        home && platform() === "macos"
-          ? `${home}/Library/Mobile Documents/com~apple~CloudDocs`
-          : undefined;
+      const iCloudDrive = home
+        ? `${home}/Library/Mobile Documents/com~apple~CloudDocs`
+        : undefined;
       const selected = await selectFolder({
         title: t`Choose where to archive recordings`,
         directory: true,

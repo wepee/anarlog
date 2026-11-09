@@ -1,5 +1,4 @@
 import { Trans } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useCallback } from "react";
 
 import { Kbd } from "@anlg/ui/components/ui/kbd";
@@ -26,7 +25,7 @@ function EmptyView() {
   const newNote = useNewNote({ behavior: "current" });
   const newNoteAndListen = useNewNoteAndListen({ behavior: "current" });
   const openCurrent = useTabs((state) => state.openCurrent);
-  const primaryModifier = platform() === "macos" ? "⌘" : "Ctrl";
+  const primaryModifier = "⌘";
 
   const openSettings = useCallback(
     () => openCurrent({ type: "settings" }),

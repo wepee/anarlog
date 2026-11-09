@@ -2,7 +2,6 @@ import { msg } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useQuery } from "@tanstack/react-query";
 import { getVersion } from "@tauri-apps/api/app";
-import { platform } from "@tauri-apps/plugin-os";
 
 import { Button } from "@anlg/ui/components/ui/button";
 
@@ -42,8 +41,6 @@ export function AppSettingsView({
     queryFn: getVersion,
     staleTime: Infinity,
   });
-  const currentPlatform = platform();
-  const isMacos = currentPlatform === "macos";
 
   return (
     <div className="flex flex-col gap-8">
@@ -87,23 +84,17 @@ export function AppSettingsView({
           >
             <Trans>Show release notes</Trans>
           </Button>
-          {isMacos && (
-            <SettingSwitchRow
-              title={<Trans>Show app in Dock</Trans>}
-              description={
-                <Trans>Show BlackMushi in the Dock and app switcher.</Trans>
-              }
-              checked={showAppInDock.value}
-              onChange={showAppInDock.onChange}
-            />
-          )}
+          <SettingSwitchRow
+            title={<Trans>Show app in Dock</Trans>}
+            description={
+              <Trans>Show BlackMushi in the Dock and app switcher.</Trans>
+            }
+            checked={showAppInDock.value}
+            onChange={showAppInDock.onChange}
+          />
           <SettingSwitchRow
             title={<Trans>Show tray icon</Trans>}
-            description={
-              isMacos ? (
-                <Trans>Open BlackMushi from the menu bar.</Trans>
-              ) : undefined
-            }
+            description={<Trans>Open BlackMushi from the menu bar.</Trans>}
             checked={showTrayIcon.value}
             onChange={showTrayIcon.onChange}
           />

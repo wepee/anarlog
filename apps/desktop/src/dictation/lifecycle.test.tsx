@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
     baseUrl: string;
   } | null,
   session: { user: { id: "user-1" } } as { user: { id: string } } | null,
-  platform: "macos",
   settings: {
     dictation_enabled: true,
     dictation_shortcut: "Control+Alt+Space",
@@ -55,7 +54,6 @@ vi.mock("~/auth", () => ({
     getSessionForRequest: mocks.getSessionForRequest,
   }),
 }));
-vi.mock("@tauri-apps/plugin-os", () => ({ platform: () => mocks.platform }));
 vi.mock("~/settings/queries", () => ({ useSettingsReady: () => true }));
 vi.mock("~/shared/config", () => ({
   useConfigValue: (key: string) => mocks.settings[key],
@@ -144,7 +142,6 @@ describe("dictation access and lifecycle", () => {
     vi.clearAllMocks();
     useDictationStatus.setState({ capturingShortcut: false });
     mocks.session = { user: { id: "user-1" } };
-    mocks.platform = "macos";
     mocks.connection = null;
     mocks.isCloudModel = false;
     mocks.getSessionForRequest.mockResolvedValue({
@@ -244,28 +241,6 @@ describe("dictation access and lifecycle", () => {
     );
   });
 
-  it.each(["windows", "linux"])(
-    "opens the selected microphone on %s without probing a potentially missing default device",
-    async (platform) => {
-      mocks.platform = platform;
-      mocks.settings.microphone_device = "USB microphone";
-      mocks.checkPermission.mockResolvedValue({ status: "ok", data: "denied" });
-      render(<DictationLifecycle />);
-      await waitFor(() =>
-        expect(useDictationStatus.getState().ready).toBe(true),
-      );
-      await act(async () => {
-        mocks.listener?.({ payload: { type: "pressed" } });
-      });
-      expect(mocks.checkPermission).not.toHaveBeenCalled();
-      expect(mocks.startSystemRecording).toHaveBeenCalledWith(
-        "USB microphone",
-        expect.stringMatching(/^system-dictation-/u),
-        null,
-        expect.anything(),
-      );
-    },
-  );
   it("reuses the finalized live transcript even when preview display is disabled", async () => {
     mocks.settings.dictation_live_preview = false;
     mocks.connection = {

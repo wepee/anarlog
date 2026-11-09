@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { platform } from "@tauri-apps/plugin-os";
 import { useShallow } from "zustand/react/shallow";
 
 import { commands as transcription } from "@anlg/plugin-transcription";
@@ -112,18 +111,10 @@ export function SettingsDictation() {
           onChange={setHandsFree}
         />
         <p className="text-muted-foreground text-xs">
-          {platform() === "linux" ? (
-            <Trans>
-              On Wayland, approve the shortcuts in your desktop's prompt. Use
-              Control + Alt + Escape to cancel. On X11, press Escape to cancel.
-              The target app must expose an editable accessibility field.
-            </Trans>
-          ) : (
-            <Trans>
-              Press Escape to cancel. Dictation stops after five minutes and
-              pauses while BlackMushi records a meeting.
-            </Trans>
-          )}
+          <Trans>
+            Press Escape to cancel. Dictation stops after five minutes and
+            pauses while BlackMushi records a meeting.
+          </Trans>
         </p>
         <div className="flex flex-wrap gap-2">
           <Button

@@ -9,7 +9,6 @@ import { forwardRef, useImperativeHandle } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  runtimePlatform: null as "windows" | "linux" | null,
   currentTab: { type: "empty" } as
     | ({ type: string } & Record<string, unknown>)
     | null,
@@ -27,16 +26,6 @@ const mocks = vi.hoisted(() => ({
     resize: vi.fn(),
   },
   tabContentRenderCount: 0,
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => {
-    if (mocks.runtimePlatform === null) {
-      throw new Error("Tauri runtime unavailable");
-    }
-
-    return mocks.runtimePlatform;
-  },
 }));
 
 vi.mock("@anlg/ui/components/ui/resizable", () => ({
@@ -126,7 +115,6 @@ import { ClassicMainBody } from "./body";
 describe("ClassicMainBody", () => {
   beforeEach(() => {
     cleanup();
-    mocks.runtimePlatform = null;
     mocks.currentTab = { type: "empty" };
     mocks.leftsidebar.expanded = true;
     mocks.leftsidebar.setExpanded.mockClear();

@@ -1,9 +1,6 @@
-import { platform } from "@tauri-apps/plugin-os";
-
 import { cn } from "@anlg/utils";
 
 import { SyncProvider } from "~/calendar/components/context";
-import { usesWindowsStyleTitleBar } from "~/shared/hooks/useWindowControlsGutter";
 
 export type MainSurfaceChrome = "default" | "top" | "top-borderless" | "left";
 
@@ -16,9 +13,6 @@ export function MainShellScaffold({
   edgeToEdge?: boolean;
   mainSurfaceChrome?: MainSurfaceChrome;
 }) {
-  const runtimePlatform = platform();
-  const isMacos = runtimePlatform === "macos";
-  const hasCustomTitleBar = usesWindowsStyleTitleBar();
   const resolvedMainSurfaceChrome =
     mainSurfaceChrome ?? (edgeToEdge ? "top" : "default");
   const hasTopMainSurfaceChrome =
@@ -32,30 +26,21 @@ export function MainShellScaffold({
           "bg-background flex h-full gap-1 overflow-hidden",
           !hasTopMainSurfaceChrome && "pl-1",
           hasTopMainSurfaceChrome && [
-            isMacos && "[&_[data-chat-floating-anchor]]:rounded-t-xl",
+            "[&_[data-chat-floating-anchor]]:rounded-t-xl",
             "[&_[data-chat-floating-anchor]]:rounded-b-none",
             "[&_[data-chat-floating-anchor]]:border-x-0",
-            resolvedMainSurfaceChrome === "top" || hasCustomTitleBar
+            resolvedMainSurfaceChrome === "top"
               ? "[&_[data-chat-floating-anchor]]:border-t"
               : "[&_[data-chat-floating-anchor]]:!border-t-0",
             "[&_[data-chat-floating-anchor]]:border-b-0",
           ],
           resolvedMainSurfaceChrome === "left" && [
-            isMacos && "[&_[data-chat-floating-anchor]]:rounded-l-xl",
-            !isMacos && "[&_[data-chat-floating-anchor]]:rounded-tl-xl",
+            "[&_[data-chat-floating-anchor]]:rounded-l-xl",
             "[&_[data-chat-floating-anchor]]:rounded-r-none",
-            hasCustomTitleBar
-              ? [
-                  "[&_[data-chat-floating-anchor]]:border-t",
-                  "[&_[data-chat-floating-anchor]]:border-b-0",
-                ]
-              : "[&_[data-chat-floating-anchor]]:border-y-0",
+            "[&_[data-chat-floating-anchor]]:border-y-0",
             "[&_[data-chat-floating-anchor]]:border-r-0",
             "[&_[data-chat-floating-anchor]]:border-l",
           ],
-          hasTopMainSurfaceChrome &&
-            !isMacos &&
-            "[&_[data-chat-floating-anchor]]:rounded-t-xl",
         ])}
         data-testid="main-app-shell"
       >

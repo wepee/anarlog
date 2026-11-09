@@ -555,10 +555,6 @@ describe("startMeetingChatCapture", () => {
       name: "missing Accessibility permission",
       warning: "macOS accessibility permission is not trusted",
     },
-    {
-      name: "a missing Linux accessibility bus",
-      warning: "AT-SPI accessibility bus is not available",
-    },
   ])("surfaces $name once", async ({ warning }) => {
     captureMeetingChatMessagesMock.mockResolvedValue({
       status: "ok",

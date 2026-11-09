@@ -3,11 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   setSearch: vi.fn(),
-  platform: vi.fn(() => "macos"),
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: hoisted.platform,
 }));
 
 vi.mock("@lingui/react/macro", () => ({
@@ -55,7 +50,6 @@ import { SearchBar } from "./bar";
 
 afterEach(() => {
   hoisted.setSearch.mockClear();
-  hoisted.platform.mockReturnValue("macos");
 });
 
 describe("SearchBar", () => {
@@ -73,21 +67,6 @@ describe("SearchBar", () => {
 
     expect(hoisted.setSearch).toHaveBeenCalledOnce();
     expect(hoisted.setSearch).toHaveBeenCalledWith("", false);
-  });
-
-  it("shows the Windows shortcut modifier", () => {
-    hoisted.platform.mockReturnValue("windows");
-    const editorRef = {
-      current: {
-        commands: {
-          setSearch: hoisted.setSearch,
-        },
-      },
-    } as any;
-
-    const { container } = render(<SearchBar editorRef={editorRef} />);
-
-    expect(container.textContent).toContain("Ctrl H");
   });
 
   it("hides replace controls for find-only surfaces", () => {

@@ -113,7 +113,6 @@ vi.mock("~/shared/hooks/useWindowControlsGutter", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("~/shared/hooks/useWindowControlsGutter")
   >()),
-  usesWindowsStyleTitleBar: () => false,
   useWindowControlsGutter: () => mocks.windowControlsGutter,
 }));
 

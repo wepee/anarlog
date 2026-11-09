@@ -1,5 +1,4 @@
 import { Channel } from "@tauri-apps/api/core";
-import { platform } from "@tauri-apps/plugin-os";
 import { useRef } from "react";
 
 import {
@@ -144,15 +143,13 @@ function ActiveDictation({
           previewUnavailable: livePreview && !conn,
           expanded: livePreview,
         });
-        if (platform() === "macos") {
-          const permission = unwrap(
-            await permissions.checkPermission("microphone"),
+        const permission = unwrap(
+          await permissions.checkPermission("microphone"),
+        );
+        if (permission !== "authorized")
+          throw new Error(
+            "Enable microphone permission in Settings > Permissions before dictating.",
           );
-          if (permission !== "authorized")
-            throw new Error(
-              "Enable microphone permission in Settings > Permissions before dictating.",
-            );
-        }
         const capture = unwrap(await transcription.getCaptureState());
         if (capture !== "inactive")
           throw new Error(

@@ -2,10 +2,8 @@ import { memo } from "react";
 
 import { ClassicMainBody } from "./body";
 import { resolveMainSurfaceChrome } from "./main-surface-chrome";
-import { WindowsTitleBar } from "./windows-title-bar";
 
 import { useShell } from "~/contexts/shell";
-import { usesWindowsStyleTitleBar } from "~/shared/hooks/useWindowControlsGutter";
 import { MainShellBodyFrame, MainShellScaffold } from "~/shared/main";
 import { ToastNotifications } from "~/sidebar/toast";
 import {
@@ -49,11 +47,6 @@ export function ClassicMainShellFrame() {
 
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      {usesWindowsStyleTitleBar() ? (
-        <WindowsTitleBar
-          showSidebarTimelineChrome={showSidebarTimelineChrome}
-        />
-      ) : null}
       <div className="min-h-0 flex-1">{shell}</div>
     </div>
   );

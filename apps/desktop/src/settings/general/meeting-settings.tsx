@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
-import { platform } from "@tauri-apps/plugin-os";
 
 import { Button } from "@anlg/ui/components/ui/button";
 import { Input } from "@anlg/ui/components/ui/input";
@@ -47,13 +46,6 @@ export function MeetingSettingsView({
   liveAssistProjectContext: SettingItem;
   captureSharedScreens: SettingItem;
 }) {
-  const currentPlatform = platform();
-  const supportsMeetingAx =
-    currentPlatform === "macos" || currentPlatform === "linux";
-  const supportsMicDetection = currentPlatform !== "windows";
-  const supportsScreenCapture =
-    currentPlatform === "macos" || currentPlatform === "windows";
-
   return (
     <div className="flex flex-col gap-4">
       <SettingSwitchRow
@@ -73,64 +65,56 @@ export function MeetingSettingsView({
         onChange={autoJoinScheduledMeetings.onChange}
         disabled={!autoStartScheduledMeetings.value}
       />
-      {supportsMicDetection && (
-        <SettingSwitchRow
-          title={<Trans>Stop when meeting ends</Trans>}
-          description={<Trans>Stop listening when your call ends.</Trans>}
-          checked={autoStopMeetings.value}
-          onChange={autoStopMeetings.onChange}
-        />
-      )}
-      {supportsMeetingAx && (
-        <>
-          <SettingSwitchRow
-            title={<Trans>Start when a meeting app is detected</Trans>}
-            description={
-              <Trans>
-                Use Accessibility to detect Zoom, Google Meet, or Teams open
-                with an active call, and start listening automatically, even
-                without a scheduled meeting.
-              </Trans>
-            }
-            checked={autoRecordDetectedMeetings.value}
-            onChange={autoRecordDetectedMeetings.onChange}
-          />
-          <SettingSwitchRow
-            title={<Trans>Post recording disclosure in meeting chat</Trans>}
-            description={
-              <Trans>
-                Tell participants when listening starts; this does not confirm
-                consent.
-              </Trans>
-            }
-            checked={meetingDisclosureAutoPost.value}
-            onChange={meetingDisclosureAutoPost.onChange}
-          />
-          <SettingSwitchRow
-            title={<Trans>Capture meeting chat in Memos</Trans>}
-            description={
-              <Trans>
-                Save visible chat from supported meetings using Accessibility.
-              </Trans>
-            }
-            checked={captureMeetingChat.value}
-            onChange={captureMeetingChat.onChange}
-          />
-        </>
-      )}
-      {supportsScreenCapture && (
-        <SettingSwitchRow
-          title={<Trans>Capture shared screens in Memos</Trans>}
-          description={
-            <Trans>
-              Save slides and screens others share in meetings. Requires Screen
-              Recording.
-            </Trans>
-          }
-          checked={captureSharedScreens.value}
-          onChange={captureSharedScreens.onChange}
-        />
-      )}
+      <SettingSwitchRow
+        title={<Trans>Stop when meeting ends</Trans>}
+        description={<Trans>Stop listening when your call ends.</Trans>}
+        checked={autoStopMeetings.value}
+        onChange={autoStopMeetings.onChange}
+      />
+      <SettingSwitchRow
+        title={<Trans>Start when a meeting app is detected</Trans>}
+        description={
+          <Trans>
+            Use Accessibility to detect Zoom, Google Meet, or Teams open with an
+            active call, and start listening automatically, even without a
+            scheduled meeting.
+          </Trans>
+        }
+        checked={autoRecordDetectedMeetings.value}
+        onChange={autoRecordDetectedMeetings.onChange}
+      />
+      <SettingSwitchRow
+        title={<Trans>Post recording disclosure in meeting chat</Trans>}
+        description={
+          <Trans>
+            Tell participants when listening starts; this does not confirm
+            consent.
+          </Trans>
+        }
+        checked={meetingDisclosureAutoPost.value}
+        onChange={meetingDisclosureAutoPost.onChange}
+      />
+      <SettingSwitchRow
+        title={<Trans>Capture meeting chat in Memos</Trans>}
+        description={
+          <Trans>
+            Save visible chat from supported meetings using Accessibility.
+          </Trans>
+        }
+        checked={captureMeetingChat.value}
+        onChange={captureMeetingChat.onChange}
+      />
+      <SettingSwitchRow
+        title={<Trans>Capture shared screens in Memos</Trans>}
+        description={
+          <Trans>
+            Save slides and screens others share in meetings. Requires Screen
+            Recording.
+          </Trans>
+        }
+        checked={captureSharedScreens.value}
+        onChange={captureSharedScreens.onChange}
+      />
       <SettingSwitchRow
         title={<Trans>Show floating bar</Trans>}
         description={

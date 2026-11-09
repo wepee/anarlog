@@ -40,7 +40,6 @@ const {
   notifyBatchCompletedMock,
   idMock,
   archMock,
-  platformMock,
 } = vi.hoisted(() => ({
   startTranscriptionMock: vi.fn(),
   stopTranscriptionMock: vi.fn(),
@@ -62,7 +61,6 @@ const {
   notifyBatchCompletedMock: vi.fn(),
   idMock: vi.fn(),
   archMock: vi.fn(),
-  platformMock: vi.fn(),
 }));
 
 vi.mock("@anlg/plugin-transcription", () => ({
@@ -74,7 +72,6 @@ vi.mock("@anlg/plugin-transcription", () => ({
 
 vi.mock("@tauri-apps/plugin-os", () => ({
   arch: archMock,
-  platform: platformMock,
 }));
 
 vi.mock("./contexts", () => ({
@@ -161,10 +158,8 @@ vi.mock("~/stt/capabilities", () => {
 
       return languages;
     },
-    isDesktopLocalSttAvailable: (
-      currentPlatform: string,
-      currentArch: string,
-    ) => currentPlatform === "macos" && currentArch === "aarch64",
+    isDesktopLocalSttAvailable: (currentArch: string) =>
+      currentArch === "aarch64",
     isLocalFileSttModel: (
       provider: string | null | undefined,
       model: string | null | undefined,
@@ -265,12 +260,7 @@ describe("isTerminalTranscriptionError", () => {
 
 describe("getBatchFallbackTarget", () => {
   test("uses local Soniqo batch transcription when it is available", () => {
-    expect(
-      getBatchFallbackTarget({
-        currentPlatform: "macos",
-        currentArch: "aarch64",
-      }),
-    ).toEqual({
+    expect(getBatchFallbackTarget({ currentArch: "aarch64" })).toEqual({
       provider: "soniqo",
       model: "soniqo-parakeet-batch",
       baseUrl: "soniqo://local",
@@ -279,21 +269,9 @@ describe("getBatchFallbackTarget", () => {
     });
   });
 
-  test.each([
-    { currentPlatform: "windows" as const, currentArch: "x86_64" as const },
-    { currentPlatform: "linux" as const, currentArch: "x86_64" as const },
-    { currentPlatform: "macos" as const, currentArch: "x86_64" as const },
-  ])(
-    "does not use local Soniqo on $currentPlatform/$currentArch",
-    ({ currentPlatform, currentArch }) => {
-      expect(
-        getBatchFallbackTarget({
-          currentPlatform,
-          currentArch,
-        }),
-      ).toBeNull();
-    },
-  );
+  test("does not use local Soniqo on Intel macOS", () => {
+    expect(getBatchFallbackTarget({ currentArch: "x86_64" })).toBeNull();
+  });
 });
 
 describe("useRunBatch", () => {
@@ -308,7 +286,6 @@ describe("useRunBatch", () => {
     }));
     stopTranscriptionMock.mockResolvedValue(undefined);
     archMock.mockReturnValue("aarch64");
-    platformMock.mockReturnValue("macos");
 
     let nextId = 0;
     idMock.mockImplementation(() => `generated-${++nextId}`);
@@ -1080,66 +1057,59 @@ describe("useRunBatch", () => {
     expect(notifyBatchCompletedMock).not.toHaveBeenCalled();
   });
 
-  test.each(["windows", "linux"] as const)(
-    "reports a language mismatch instead of a platform gap when Mistral is configured on %s",
-    async (currentPlatform) => {
-      platformMock.mockReturnValue(currentPlatform);
-      isSupportedLanguagesBatchMock.mockResolvedValue(false);
-      useSTTConnectionMock.mockReturnValue({
-        conn: {
-          provider: "mistral",
-          model: "voxtral-mini-2602",
-          baseUrl: "https://api.mistral.ai/v1",
-          apiKey: "mistral-key",
-        },
-      });
+  test("reports a language mismatch instead of a platform gap when Mistral is configured on Intel macOS", async () => {
+    archMock.mockReturnValue("x86_64");
+    isSupportedLanguagesBatchMock.mockResolvedValue(false);
+    useSTTConnectionMock.mockReturnValue({
+      conn: {
+        provider: "mistral",
+        model: "voxtral-mini-2602",
+        baseUrl: "https://api.mistral.ai/v1",
+        apiKey: "mistral-key",
+      },
+    });
 
-      const { result } = renderHook(() => useRunBatch("session-1"));
+    const { result } = renderHook(() => useRunBatch("session-1"));
 
-      await expect(
-        act(async () => {
-          await result.current("/tmp/session.wav");
-        }),
-      ).rejects.toThrow(
-        "voxtral-mini-2602 is not available for batch transcription with the selected languages",
-      );
-
-      expect(startTranscriptionMock).not.toHaveBeenCalled();
-      expect(toastWarningMock).not.toHaveBeenCalled();
-    },
-  );
-
-  test.each(["windows", "linux", "macos"] as const)(
-    "uses custom Deepgram-compatible batch endpoints on %s",
-    async (currentPlatform) => {
-      platformMock.mockReturnValue(currentPlatform);
-      useSTTConnectionMock.mockReturnValue({
-        conn: {
-          provider: "custom",
-          model: "realtime-only",
-          baseUrl: "https://custom.test",
-          apiKey: "custom-key",
-        },
-      });
-
-      const { result } = renderHook(() => useRunBatch("session-1"));
-
-      await act(async () => {
+    await expect(
+      act(async () => {
         await result.current("/tmp/session.wav");
-      });
+      }),
+    ).rejects.toThrow(
+      "voxtral-mini-2602 is not available for batch transcription with the selected languages",
+    );
 
-      expect(startTranscriptionMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: "deepgram",
-          model: "realtime-only",
-          base_url: "https://custom.test",
-          api_key: "custom-key",
-        }),
-        expect.any(Object),
-      );
-      expect(toastWarningMock).not.toHaveBeenCalled();
-    },
-  );
+    expect(startTranscriptionMock).not.toHaveBeenCalled();
+    expect(toastWarningMock).not.toHaveBeenCalled();
+  });
+
+  test("uses custom Deepgram-compatible batch endpoints", async () => {
+    useSTTConnectionMock.mockReturnValue({
+      conn: {
+        provider: "custom",
+        model: "realtime-only",
+        baseUrl: "https://custom.test",
+        apiKey: "custom-key",
+      },
+    });
+
+    const { result } = renderHook(() => useRunBatch("session-1"));
+
+    await act(async () => {
+      await result.current("/tmp/session.wav");
+    });
+
+    expect(startTranscriptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "deepgram",
+        model: "realtime-only",
+        base_url: "https://custom.test",
+        api_key: "custom-key",
+      }),
+      expect.any(Object),
+    );
+    expect(toastWarningMock).not.toHaveBeenCalled();
+  });
 
   test.each([
     { isPaid: false, name: "rejects Soniqo when no fallback is available" },

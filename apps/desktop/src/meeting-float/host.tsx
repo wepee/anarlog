@@ -33,7 +33,6 @@ import {
   createFloatingSpeakerLabeler,
   type FloatingSpeakerLabels,
 } from "./speaker-labels";
-import { isFloatingBarSupported } from "./support";
 import {
   createFloatingMeetingWindowSynchronizer,
   hideFloatingMeetingPanel,
@@ -66,26 +65,17 @@ export function FloatingMeetingWindowHost() {
   const floatingBarEnabled = useConfigValue("floating_bar_enabled");
   const storedSettings = useConfigValues(FLOATING_OVERLAY_SETTING_KEYS);
   const overlaySettings = getFloatingOverlaySettings(storedSettings);
-  const floatingOverlaySupported = isFloatingBarSupported();
   const sttProvider = useStoredSettingValue("current_stt_provider").value;
 
   return (
     <>
-      {floatingOverlaySupported && (
-        <>
-          <FloatingOverlaySettingsEventSync />
-          <LiveCaptionDefaultVisibilitySync />
-        </>
-      )}
-      {floatingOverlaySupported ? (
-        <FloatingMeetingWindowSync
-          settings={overlaySettings}
-          enabled={floatingBarEnabled}
-          sttProvider={sttProvider ?? null}
-        />
-      ) : (
-        <FloatingMeetingWindowDisabled />
-      )}
+      <FloatingOverlaySettingsEventSync />
+      <LiveCaptionDefaultVisibilitySync />
+      <FloatingMeetingWindowSync
+        settings={overlaySettings}
+        enabled={floatingBarEnabled}
+        sttProvider={sttProvider ?? null}
+      />
       <LiveCaptionWindowDisabled />
     </>
   );
@@ -160,14 +150,6 @@ function LiveCaptionDefaultVisibilitySync() {
 
   return null;
 }
-function FloatingMeetingWindowDisabled() {
-  useMountEffect(() => {
-    void hideFloatingMeetingPanel();
-  });
-
-  return null;
-}
-
 function LiveCaptionWindowDisabled() {
   useMountEffect(() => {
     void hideLiveCaptionPanel();

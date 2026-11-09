@@ -1,5 +1,5 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { platform } from "@tauri-apps/plugin-os";
 import { useState } from "react";
 
 import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
@@ -21,85 +21,11 @@ export const WINDOW_CONTROLS_SIDEBAR_MIN_WIDTH =
 export const WINDOW_CONTROLS_ROW_PADDING_TOP_CLASS =
   "pt-[max(0px,calc(23px_/_var(--anlg-zoom,1)_-_14px))]";
 
-export function usesWindowsStyleTitleBar() {
-  const runtimePlatform = getRuntimePlatform();
-
-  return runtimePlatform === "windows" || runtimePlatform === "linux";
-}
-
-export function usesTitleBarSidebarActions() {
-  return usesWindowsStyleTitleBar();
-}
-
-function usesRoundedWindowFrame() {
-  return getRuntimePlatform() === "linux";
-}
-
-export function useRoundedWindowFrame() {
-  useMountEffect(() => {
-    if (!usesRoundedWindowFrame()) {
-      return;
-    }
-
-    const appWindow = getCurrentWindow();
-    if (appWindow.label !== "main") {
-      return;
-    }
-
-    let cancelled = false;
-    let syncVersion = 0;
-    let unlistenResize: (() => void) | undefined;
-    document.documentElement.dataset.roundedWindowOwner = "app";
-    const sync = async () => {
-      const version = ++syncVersion;
-      const [isMaximized, isFullscreen] = await Promise.all([
-        appWindow.isMaximized().catch(() => false),
-        appWindow.isFullscreen().catch(() => false),
-      ]);
-
-      if (cancelled || version !== syncVersion) {
-        return;
-      }
-
-      if (isMaximized || isFullscreen) {
-        delete document.documentElement.dataset.roundedWindow;
-      } else {
-        document.documentElement.dataset.roundedWindow = "";
-      }
-    };
-
-    void sync();
-    void appWindow
-      .onResized(() => {
-        void sync();
-      })
-      .then((unlisten) => {
-        if (cancelled) {
-          unlisten();
-          return;
-        }
-
-        unlistenResize = unlisten;
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      unlistenResize?.();
-      delete document.documentElement.dataset.roundedWindowOwner;
-    };
-  });
-}
-
 export function useWindowControlsGutter() {
-  const [visible, setVisible] = useState(() => {
-    const runtimePlatform = getRuntimePlatform();
-
-    return runtimePlatform === null || runtimePlatform === "macos";
-  });
+  const [visible, setVisible] = useState(true);
 
   useMountEffect(() => {
-    if (getRuntimePlatform() !== "macos") {
+    if (!isTauri()) {
       return;
     }
 
@@ -136,12 +62,4 @@ export function useWindowControlsGutter() {
   });
 
   return visible;
-}
-
-function getRuntimePlatform() {
-  try {
-    return platform();
-  } catch {
-    return null;
-  }
 }

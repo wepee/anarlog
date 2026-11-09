@@ -1,5 +1,4 @@
 import { Trans } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useState } from "react";
 
 import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
@@ -95,7 +94,6 @@ function AppleCalendarProvider({
 }
 
 function CalendarSectionContent({ onContinue }: { onContinue: () => void }) {
-  const isMacos = platform() === "macos";
   const calendar = usePermission("calendar");
   const isAuthorized = calendar.status === "authorized";
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
@@ -105,15 +103,13 @@ function CalendarSectionContent({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-stretch gap-3">
-        {isMacos && (
-          <AppleCalendarProvider
-            isAuthorized={isAuthorized}
-            isPending={calendar.isPending}
-            onRequest={calendar.request}
-            onTroubleshoot={() => setShowTroubleshooting(true)}
-            onOpen={calendar.open}
-          />
-        )}
+        <AppleCalendarProvider
+          isAuthorized={isAuthorized}
+          isPending={calendar.isPending}
+          onRequest={calendar.request}
+          onTroubleshoot={() => setShowTroubleshooting(true)}
+          onOpen={calendar.open}
+        />
       </div>
 
       {hasConnectedCalendar && (

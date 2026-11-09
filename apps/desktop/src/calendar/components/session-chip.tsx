@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { format } from "date-fns";
 import { useCallback, useMemo } from "react";
 
@@ -61,7 +60,7 @@ export function SessionChip({
     () => [
       {
         id: "show",
-        text: platform() === "macos" ? t`Show in Finder` : t`Show in folder`,
+        text: t`Show in Finder`,
         action: handleShowInFolder,
       },
       { separator: true },

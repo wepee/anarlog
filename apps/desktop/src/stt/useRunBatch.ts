@@ -1,4 +1,4 @@
-import { arch, platform } from "@tauri-apps/plugin-os";
+import { arch } from "@tauri-apps/plugin-os";
 import { useCallback } from "react";
 
 import {
@@ -215,13 +215,11 @@ export function canRunBatchTranscription(
 }
 
 export function getBatchFallbackTarget({
-  currentPlatform = platform(),
   currentArch = arch(),
 }: {
-  currentPlatform?: ReturnType<typeof platform>;
   currentArch?: ReturnType<typeof arch>;
 } = {}): BatchTarget | null {
-  return isDesktopLocalSttAvailable(currentPlatform, currentArch)
+  return isDesktopLocalSttAvailable(currentArch)
     ? LOCAL_SONIQO_BATCH_TARGET
     : null;
 }
@@ -325,7 +323,6 @@ export const useRunBatch = (sessionId: string) => {
           await readSessionTranscriptLanguage(sessionId),
           getTranscriptionLanguages(aiLanguage, spokenLanguages),
         );
-      const currentPlatform = platform();
       const currentArch = arch();
       const selectedProviderId = options?.provider ?? conn?.provider;
       const selectedModel = options?.model ?? conn?.model;
@@ -347,7 +344,7 @@ export const useRunBatch = (sessionId: string) => {
         selectedTarget &&
         (isOnDeviceSttModel(selectedProviderId, selectedModel) ||
           isLocalFileSttModel(selectedProviderId, selectedModel)) &&
-        !isDesktopLocalSttAvailable(currentPlatform, currentArch)
+        !isDesktopLocalSttAvailable(currentArch)
       );
       const selectedTargetSupported =
         selectedTarget && !selectedOnDeviceUnsupported
@@ -358,10 +355,7 @@ export const useRunBatch = (sessionId: string) => {
             )
           : false;
       options?.signal?.throwIfAborted();
-      const fallbackTarget = getBatchFallbackTarget({
-        currentPlatform,
-        currentArch,
-      });
+      const fallbackTarget = getBatchFallbackTarget({ currentArch });
       const shouldUseSelectedTarget =
         selectedTargetSupported ||
         (fallbackTarget && sameBatchTarget(selectedTarget, fallbackTarget));

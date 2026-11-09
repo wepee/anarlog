@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useRef } from "react";
 
 import { type PermissionStatus } from "@anlg/plugin-permissions";
@@ -34,7 +33,6 @@ function PermissionBlock({
   status,
   isPending,
   onAction,
-  actionLabel,
   assisted = false,
   opensSettingsWhenDenied = true,
 }: {
@@ -47,7 +45,6 @@ function PermissionBlock({
   status: PermissionStatus | undefined;
   isPending: boolean;
   onAction: () => void;
-  actionLabel?: string;
   assisted?: boolean;
   opensSettingsWhenDenied?: boolean;
 }) {
@@ -77,7 +74,7 @@ function PermissionBlock({
       aria-label={
         opensSettings
           ? t`Open ${permissionName.toLowerCase()} settings`
-          : (actionLabel ?? t`Enable ${permissionName.toLowerCase()}`)
+          : t`Enable ${permissionName.toLowerCase()}`
       }
     >
       <div
@@ -132,12 +129,10 @@ function PermissionsSectionContent({
   onContinue,
   accessibility,
   accessibilityGuidance,
-  runtimeCapabilities = false,
 }: {
   onContinue?: () => void;
   accessibility?: ReturnType<typeof usePermission>;
   accessibilityGuidance?: ReturnType<typeof usePermissionGuidance>;
-  runtimeCapabilities?: boolean;
 }) {
   const { t } = useLingui();
   const mic = usePermission("microphone");
@@ -206,13 +201,7 @@ function PermissionsSectionContent({
           permissionName={t`Microphone`}
           status={mic.status}
           isPending={mic.isPending}
-          onAction={() => handleAction("microphone", mic, !runtimeCapabilities)}
-          actionLabel={
-            runtimeCapabilities && mic.status === "denied"
-              ? `${t`Try again`}: ${t`Microphone`}`
-              : undefined
-          }
-          opensSettingsWhenDenied={!runtimeCapabilities}
+          onAction={() => handleAction("microphone", mic, true)}
         />
 
         <PermissionBlock
@@ -226,15 +215,7 @@ function PermissionsSectionContent({
           permissionName={t`System audio`}
           status={systemAudio.status}
           isPending={systemAudio.isPending}
-          onAction={() =>
-            handleAction("system_audio", systemAudio, !runtimeCapabilities)
-          }
-          actionLabel={
-            runtimeCapabilities && systemAudio.status === "denied"
-              ? `${t`Try again`}: ${t`System audio`}`
-              : undefined
-          }
-          opensSettingsWhenDenied={!runtimeCapabilities}
+          onAction={() => handleAction("system_audio", systemAudio, true)}
         />
 
         {accessibility && (
@@ -290,11 +271,5 @@ export function PermissionsSection({
 }: {
   onContinue?: () => void;
 }) {
-  if (platform() === "macos") {
-    return <MacOSPermissionsSection onContinue={onContinue} />;
-  }
-
-  return (
-    <PermissionsSectionContent onContinue={onContinue} runtimeCapabilities />
-  );
+  return <MacOSPermissionsSection onContinue={onContinue} />;
 }

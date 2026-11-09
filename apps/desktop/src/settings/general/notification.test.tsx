@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   clearNotifications: vi.fn(),
-  currentPlatform: "macos",
   previewCompletionSound: vi.fn(),
   setSettingValues: vi.fn(),
   useConfigValues: vi.fn(),
@@ -27,10 +26,6 @@ vi.mock("@lingui/react/macro", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: mocks.useQuery,
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => mocks.currentPlatform,
 }));
 
 vi.mock("@anlg/plugin-detect", () => ({
@@ -81,7 +76,6 @@ const baseConfig = {
 describe("NotificationSettingsView", () => {
   beforeEach(() => {
     mocks.clearNotifications.mockReset();
-    mocks.currentPlatform = "macos";
     mocks.setSettingValues.mockReset();
     mocks.previewCompletionSound.mockReset();
     mocks.useConfigValues.mockReset();

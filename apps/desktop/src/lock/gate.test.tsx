@@ -22,10 +22,6 @@ vi.mock("@lingui/react/macro", () => ({
   }),
 }));
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => "macos",
-}));
-
 vi.mock("@anlg/plugin-windows", () => ({
   events: {
     visibilityEvent: {

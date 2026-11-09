@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useEffect, useRef } from "react";
 
 import type { NoteEditorRef } from "@anlg/editor/note";
@@ -103,7 +102,7 @@ export function SearchBar({
 }) {
   const { t } = useLingui();
   const search = useSearch();
-  const primaryModifier = platform() === "macos" ? "⌘" : "Ctrl";
+  const primaryModifier = "⌘";
   const searchInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 

@@ -19,9 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@anlg/ui/components/ui/dropdown-menu";
 import { useSquircleRef } from "@anlg/ui/hooks/use-squircle";
-import { cn } from "@anlg/utils";
 
-import { usesWindowsStyleTitleBar } from "~/shared/hooks/useWindowControlsGutter";
 import { CustomSidebarHeader } from "~/sidebar/custom-sidebar-header";
 
 export function ContactFacehash({
@@ -127,11 +125,7 @@ export function ColumnHeader({
       <CustomSidebarHeader>
         <div className="flex shrink-0 items-center">
           {sortOption && setSortOption && (
-            <div
-              className={cn([
-                usesWindowsStyleTitleBar() ? "block" : "hidden @[220px]:block",
-              ])}
-            >
+            <div className="hidden @[220px]:block">
               <SortDropdown
                 sortOption={sortOption}
                 setSortOption={setSortOption}

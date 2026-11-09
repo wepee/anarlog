@@ -42,10 +42,6 @@ const mocks = vi.hoisted(() => ({
   contextMenus: [] as ContextMenuItem[][],
 }));
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => "macos",
-}));
-
 vi.mock("~/auth", () => ({
   useAuth: () => ({ session: {} }),
 }));

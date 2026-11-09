@@ -259,14 +259,11 @@ function showCaptureWarning(warnings: string[], previousWarning: string) {
     console.warn("[listener] meeting chat capture warning", warning);
   }
   if (
-    (warning.includes("accessibility permission") ||
-      warning.includes("accessibility bus")) &&
+    warning.includes("accessibility permission") &&
     warning !== previousWarning
   ) {
     toast.warning(
-      warning.includes("accessibility bus")
-        ? "Meeting chat capture needs the desktop accessibility bus"
-        : "Meeting chat capture needs Accessibility permission in Settings",
+      "Meeting chat capture needs Accessibility permission in Settings",
       {
         id: "meeting-chat-capture-warning",
         duration: Infinity,

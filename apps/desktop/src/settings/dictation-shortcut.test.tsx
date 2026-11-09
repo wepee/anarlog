@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@anlg/plugin-shortcut", () => ({
   commands: { validate: mocks.validate },
 }));
-vi.mock("@tauri-apps/plugin-os", () => ({ platform: () => "macos" }));
 vi.mock("~/settings/queries", () => ({ setSettingValue: mocks.save }));
 vi.mock("~/dictation/lifecycle", () => ({
   waitForDictationCleanup: mocks.cleanup,

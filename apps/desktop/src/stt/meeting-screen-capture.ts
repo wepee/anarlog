@@ -1,5 +1,3 @@
-import { platform } from "@tauri-apps/plugin-os";
-
 import { commands as detectCommands } from "@anlg/plugin-detect";
 import { commands as permissionsCommands } from "@anlg/plugin-permissions";
 import { toast } from "@anlg/ui/components/ui/toast";
@@ -39,9 +37,7 @@ export function startMeetingScreenCapture({
       }
 
       const permission =
-        platform() === "macos"
-          ? await permissionsCommands.checkPermission("screenRecording")
-          : null;
+        await permissionsCommands.checkPermission("screenRecording");
       if (permission?.status === "ok" && permission.data === "denied") {
         if (!permissionWarned) {
           permissionWarned = true;
