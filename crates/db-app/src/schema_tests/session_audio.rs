@@ -74,21 +74,6 @@ async fn session_audio_retention_skips_sessions_still_owned_by_capture_or_transc
 }
 
 #[tokio::test]
-async fn archiving_ignores_a_stale_processing_status_but_not_a_live_capture() {
-    let db = test_db().await;
-    insert_sessions(&db).await;
-
-    let archivable: Vec<_> = list_session_audio_archive_candidates(db.pool())
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|candidate| candidate.session_id)
-        .collect();
-
-    assert_eq!(archivable, ["idle", "processing", "no-words"]);
-}
-
-#[tokio::test]
 async fn logically_deleted_session_audio_is_listed_until_marked_absent() {
     let db = test_db().await;
     let pool = db.pool();

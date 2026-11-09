@@ -70,7 +70,7 @@ pub fn archive(
     if is_symlink {
         return relocate(session_dir, archive_dir, session_id);
     }
-    if recovery_in_progress(&session_dir.join("audio-recovery"))
+    if session_dir.join("audio-recovery").exists()
         || IN_PROGRESS_ARTIFACTS
             .iter()
             .any(|artifact| session_dir.join(artifact).exists())
@@ -108,17 +108,6 @@ pub fn archive(
 
     point_link_at(&source, &target)?;
     Ok(ArchiveOutcome::Archived(target))
-}
-
-/// A recovery folder only matters while it holds something: a finished
-/// recovery can leave it behind empty, and it would hold the recording back
-/// for good. Anything unreadable counts as in progress.
-#[cfg(unix)]
-fn recovery_in_progress(recovery_dir: &Path) -> bool {
-    match std::fs::read_dir(recovery_dir) {
-        Ok(mut entries) => entries.next().is_some(),
-        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
-    }
 }
 
 // A file played this recently may still be open in the player through its
@@ -553,26 +542,6 @@ mod tests {
                 .file_type()
                 .is_symlink()
         );
-    }
-
-    #[test]
-    fn an_empty_recovery_folder_does_not_hold_the_recording_back() {
-        let temp = tempfile::tempdir().unwrap();
-        let session_dir = session_with_audio(temp.path(), b"meeting audio");
-        let archive_dir = temp.path().join("archive");
-        std::fs::create_dir(session_dir.join("audio-recovery")).unwrap();
-        std::fs::write(session_dir.join("audio-recovery").join("chunk"), b"pcm").unwrap();
-        assert_eq!(
-            archive(&session_dir, &archive_dir, "session-1").unwrap(),
-            ArchiveOutcome::Busy
-        );
-
-        std::fs::remove_file(session_dir.join("audio-recovery").join("chunk")).unwrap();
-
-        assert!(matches!(
-            archive(&session_dir, &archive_dir, "session-1").unwrap(),
-            ArchiveOutcome::Archived(_)
-        ));
     }
 
     #[test]

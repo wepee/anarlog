@@ -361,7 +361,7 @@ async fn archive_sweep<R: tauri::Runtime>(
     }
 
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let candidates = anlg_db_app::list_session_audio_archive_candidates(pool)
+    let candidates = anlg_db_app::list_session_audio_retention_candidates(pool)
         .await
         .map_err(|e| e.to_string())?;
     let mut tally = ArchiveTally::default();
