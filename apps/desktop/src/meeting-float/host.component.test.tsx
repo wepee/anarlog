@@ -50,10 +50,6 @@ const mocks = vi.hoisted(() => ({
   subscribeListener: vi.fn(() => vi.fn()),
 }));
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => "macos",
-}));
-
 vi.mock("@anlg/plugin-windows", () => ({
   commands: {
     floatingBarShow: mocks.floatingBarShow,

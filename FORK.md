@@ -33,6 +33,9 @@ Aucune donnée d'usage ni rapport de crash ne quitte la machine.
 | `plugins/analytics/src/ext.rs` | `APP_VERSION` devient optionnel (repli sur la version du package) |
 | `apps/desktop/src-tauri/src/lib.rs` | Sentry retiré (plus de client, plus de plugin) |
 | `apps/desktop/src/settings/privacy/index.tsx` | interrupteurs PostHog et rapports d'erreur retirés (ils ne pilotaient plus rien) |
+| `crates/analytics/src/lib.rs` | puits PostHog supprimé (`posthog-rs` retiré) : chaque appel journalise `analytics_backend_unavailable` et s'arrête là |
+| `plugins/tracing`, `crates/listener-core`, `crates/user-error` | couche `sentry` du tracing, contexte de session Sentry et nettoyage des événements Sentry retirés : sans client, ils ne faisaient rien |
+| `apps/cli/src/main.rs` | rapports d'erreur Sentry du CLI retirés (`error_reporting.rs` supprimé) |
 
 Note : Sentry était déjà inactif sans `SENTRY_DSN` au build (`option_env!`).
 Le retrait explicite sert surtout à supprimer la dépendance du build.
@@ -135,6 +138,38 @@ termine alors avant d'ouvrir sa fenêtre.
 La barre de devtools est également retirée (`apps/desktop/src/main/shell-frame.tsx`),
 elle était activée en dur par le mode debug.
 
+Seconde passe : plugins montés mais jamais appelés (aucun import côté front,
+aucune commande `plugin:<nom>|…`, aucun crate Rust qui en dépend), retirés de la
+même façon et supprimés du dépôt :
+
+| Plugin | Gain | Ce qu'il faisait |
+|---|---|---|
+| `js` | 13 crates (`rquickjs`, moteur QuickJS en C) | commande `eval`, jamais appelée |
+| `overlay`, `audio-priority`, `path2`, `messenger`, `mcp` | 1 à 2 crates chacun | commandes jamais appelées ; `mcp` n'exportait que des types, `messenger` qu'un `ping` |
+
+Dépendances de build mortes ou remplaçables :
+
+| Changement | Gain |
+|---|---|
+| `plugins/misc/build.rs` : `git rev-parse` au lieu de `vergen-gix` | 64 crates (`gix`), compilés à chaque build pour un seul SHA |
+| `sentry` retiré (voir section 2) | 12 crates |
+| `posthog-rs` retiré (voir section 2) | 1 crate |
+| dépendances déclarées mais jamais utilisées (`cargo shear`) | une soixantaine d'entrées, surtout des dev-dependencies |
+
+Crates orphelins supprimés : ils ne servaient qu'à `apps/api/`, `apps/stripe/`
+et `apps/mobile/`, déjà retirés, mais restaient membres du workspace
+(`crates/*`), donc compilés par `cargo test --workspace`, clippy et
+rust-analyzer : tous les `crates/api-*`, `llm-proxy`, `transcribe-proxy`,
+`nango`, `loops`, `supabase-storage`, `slack-web`, `linear`, `exa`, `jina`,
+`google-mail`, `pyannote-cloud`, `mcp`, `attachment-sync-core`, `s3`,
+`mobile-bridge`, `uniffi-bindgen` (et `packages/mobile-bridge-rn`), plus les
+plugins `bedrock` et `attachment-sync`. Ils emportaient notamment `async-stripe`,
+`aws-sdk-*` et `uniffi`. Tous sont listés dans `branding/removed-paths.txt` pour
+que `scripts/merge-upstream.sh` réapplique la suppression.
+
+Restent volontairement : `chrome-native-host` (sidecar livré avec l'app) et
+les grosses dépendances qui servent : export (`typst`), recherche (`tantivy`), calendrier, `api-client`.
+
 ## 4 bis. Archivage des enregistrements
 
 Upstream ne laisse plus choisir où vivent les enregistrements (fastrepl/anarlog#7723) : tout
@@ -165,6 +200,49 @@ il y a moins de 30 minutes n'est pas évincé. Un dossier d'archive absent
 
 Le lecteur d'upstream télécharge tout le fichier dès l'ouverture d'une note :
 sans le contrôle de disponibilité, chaque note ouverte rapatrierait son audio.
+
+## 4 ter. macOS uniquement
+
+L'app (desktop et CLI embarqué) ne vise plus que macOS (Apple Silicon et
+Intel). Tout ce qui ne servait qu'à Windows ou Linux est retiré :
+
+- **Code Rust** : branches `#[cfg(target_os = "windows" | "linux")]`,
+  `cfg(windows)`, `cfg(not(unix))`, `cfg(not(target_os = "macos"))` et leurs
+  dépendances `[target.…]`, dans `crates/`, `plugins/`, `apps/desktop/src-tauri`
+  et `apps/cli`. Les branches `cfg(unix)` restent (macOS en fait partie).
+  `apps/desktop/src-tauri/src/lib.rs` refuse de compiler hors macOS
+  (`compile_error!`).
+- **`enterprise/`** : capture de réunions côté serveur (robots Meet/Zoom,
+  control-plane), sous licence commerciale Fastrepl et inutilisée par le fork.
+  Supprimée avec `crates/meeting-capture`, les binaires Linux de `cloudsync`,
+  `LICENSE.enterprise`, `LICENSING.md`, le check de frontière de licence et
+  `enterprise_ci.yaml`. Plus aucun crate ne garde de branche Linux.
+- **Front** : branches `platform() === "windows" | "linux"`, barre de titre
+  Windows, libellés « Ctrl » / « Show in folder ». La barre flottante et le
+  sous-titrage en webview (`meeting-float/overlay/`, routes `/app/floating-bar`
+  et `/app/live-caption`, événements `*OverlayState` / `*OverlayAmplitude`)
+  sont retirés : macOS les dessine nativement en Swift.
+- **Site web** : après `apps/web/`, ses restes `packages/pricing` et
+  `packages/supabase` (facturation, parrainage) sont supprimés.
+- **Packaging** : Flatpak, AUR, APT, AppImage, `bundle.linux` / `bundle.windows`
+  des `tauri.conf*.json`, workflow Microsoft Store.
+- **CI** : jobs `windows_ci` / `linux_ci` de `desktop_ci.yaml`, `cli-windows` ;
+  `cli-ci` tourne désormais sur un runner macOS. Les scripts `setup-linux*.sh`
+  et la QA audio Linux sont supprimés.
+
+Conséquence : le code Rust de l'app ne compile plus que sur un Mac. Un
+`cargo check` sous Linux (conteneur cloud, CI Ubuntu) n'est plus un signal
+valable ; seuls les checks JS et les crates indépendants de la plateforme
+restent vérifiables ailleurs. Les chemins supprimés sont listés dans
+`branding/removed-paths.txt` ; les suppressions *dans* des fichiers partagés
+avec upstream, elles, produiront des conflits à chaque merge qui touche ces
+lignes : les résoudre en gardant la version sans branche Windows/Linux.
+
+`scripts/check-macos-only.mjs` le vérifie : il échoue si un chemin de
+`removed-paths.txt` réapparaît, ou si une branche Windows/Linux revient dans le
+Rust (`crates/`, `plugins/`, `apps/`) ou le front (`platform() === "windows"`).
+`scripts/merge-upstream.sh` le lance avant de committer le merge, et `ci.yaml`
+à chaque PR.
 
 ## 5. Après une mise à jour upstream
 

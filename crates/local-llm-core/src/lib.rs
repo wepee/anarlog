@@ -79,9 +79,4 @@ pub fn list_custom_models() -> Result<Vec<CustomModelInfo>, Error> {
         }
         Ok(custom_models)
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(Vec::new())
-    }
 }

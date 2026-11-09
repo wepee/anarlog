@@ -22,7 +22,6 @@ vi.mock("./body", async () => {
   return { ClassicMainBody: ClassicMainSidebar };
 });
 
-vi.mock("./windows-title-bar", () => ({ WindowsTitleBar: () => null }));
 vi.mock("~/devtools-bar", () => ({ DevtoolsStatusBar: () => null }));
 vi.mock("~/sidebar/toast", () => ({ ToastNotifications: () => null }));
 

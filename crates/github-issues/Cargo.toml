@@ -17,6 +17,3 @@ specta = { workspace = true, optional = true }
 thiserror = { workspace = true }
 urlencoding = { workspace = true }
 utoipa = { workspace = true, optional = true }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

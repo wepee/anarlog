@@ -464,14 +464,6 @@ fn evict_uploaded_archives(directory: &std::path::Path) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn evict_uploaded_archives(directory: &std::path::Path) {
-    // Only iCloud needs an explicit eviction; keep the selection compiled
-    // and exercised on every platform.
-    let _ =
-        tauri_plugin_fs_sync::audio::archives_to_offload(directory, UPLOAD_GRACE, RECENTLY_PLAYED);
-}
-
 pub(crate) fn spawn<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(SWEEP_INTERVAL);

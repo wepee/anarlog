@@ -150,10 +150,7 @@ pub fn show(app: &AppHandle<tauri::Wry>) -> Result<WebviewWindow, Error> {
         })?;
     }
 
-    #[cfg(any(
-        not(target_os = "macos"),
-        all(target_os = "macos", not(feature = "macos-private-api"))
-    ))]
+    #[cfg(all(target_os = "macos", not(feature = "macos-private-api")))]
     {
         let app = app.clone();
         let handle = app.clone();
@@ -183,10 +180,7 @@ pub fn hide(app: &AppHandle<tauri::Wry>) -> Result<(), Error> {
         })?;
     }
 
-    #[cfg(any(
-        not(target_os = "macos"),
-        all(target_os = "macos", not(feature = "macos-private-api"))
-    ))]
+    #[cfg(all(target_os = "macos", not(feature = "macos-private-api")))]
     {
         if let Some(window) = app.get_webview_window(&AppWindow::Composer.label()) {
             window.hide()?;

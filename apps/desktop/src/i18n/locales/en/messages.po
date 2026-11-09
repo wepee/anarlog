@@ -442,10 +442,6 @@ msgstr "Append an update to Notion"
 msgid "Apple Calendar access is off"
 msgstr "Apple Calendar access is off"
 
-#: src/main/windows-title-bar.tsx
-msgid "Application menu"
-msgstr "Application menu"
-
 #: src/session/components/note-input/transcript/renderer/speaker-assign.tsx
 msgid "Apply to all"
 msgstr "Apply to all"
@@ -511,10 +507,6 @@ msgstr "Audio available"
 #: src/settings/general/audio-settings.tsx
 msgid "Audio file retention"
 msgstr "Audio file retention"
-
-#: src/lock/screen.tsx
-msgid "Authenticate to continue."
-msgstr "Authenticate to continue."
 
 #: src/lock/screen.tsx
 msgid "Authenticating…"
@@ -650,10 +642,6 @@ msgstr "BlackMushi could not generate this summary because you were not signed i
 #: src/lock/gate.tsx
 msgid "BlackMushi is Locked"
 msgstr "BlackMushi is Locked"
-
-#: src/onboarding/index.tsx
-msgid "BlackMushi needs access to your microphone and system audio to record and transcribe your meetings"
-msgstr "BlackMushi needs access to your microphone and system audio to record and transcribe your meetings"
 
 #: src/onboarding/index.tsx
 msgid "BlackMushi needs microphone and system audio to transcribe your meetings, plus Accessibility to read meeting controls, visible chat."
@@ -990,8 +978,6 @@ msgid "Clone"
 msgstr "Clone"
 
 #: src/changelog/index.tsx
-#: src/main/windows-title-bar.tsx
-#: src/main/windows-window-controls.tsx
 #: src/session/components/note-input/search/bar.tsx
 #: src/shared/open-note-dialog.tsx
 msgid "Close"
@@ -1169,7 +1155,6 @@ msgstr "Conversations: {total}"
 msgid "Copied"
 msgstr "Copied"
 
-#: src/main/windows-title-bar.tsx
 #: src/session/components/note-input/transcript/renderer/selection-menu.tsx
 #: src/settings/ai/llm/subscriptions/connect.tsx
 #: src/settings/developers/live-assist-log.tsx
@@ -1362,10 +1347,6 @@ msgstr "Current default"
 msgid "Customized"
 msgstr "Customized"
 
-#: src/main/windows-title-bar.tsx
-msgid "Cut"
-msgstr "Cut"
-
 #: src/settings/stats/index.tsx
 msgid "Daily conversations"
 msgstr "Daily conversations"
@@ -1521,7 +1502,6 @@ msgstr "Disconnect"
 msgid "Dismiss"
 msgstr "Dismiss"
 
-#: src/main/windows-title-bar.tsx
 #: src/settings/imports/index.tsx
 msgid "Documentation"
 msgstr "Documentation"
@@ -1604,7 +1584,6 @@ msgstr "Each example must be 12,000 characters or fewer."
 msgid "Earlier versions of this note, newest first."
 msgstr "Earlier versions of this note, newest first."
 
-#: src/main/windows-title-bar.tsx
 #: src/session/components/note-input/transcript/renderer/selection-menu.tsx
 #: src/settings/dictionary/index.tsx
 #: src/sidebar/automations.tsx
@@ -1769,10 +1748,6 @@ msgstr "Favorite template"
 msgid "Field Journal"
 msgstr "Field Journal"
 
-#: src/main/windows-title-bar.tsx
-msgid "File"
-msgstr "File"
-
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "File format"
 msgstr "File format"
@@ -1851,10 +1826,6 @@ msgstr "Forever"
 msgid "Frequently used"
 msgstr "Frequently used"
 
-#: src/main/windows-title-bar.tsx
-msgid "Full Screen"
-msgstr "Full Screen"
-
 #: src/calendar/components/event-chip.tsx
 msgid "Future meetings"
 msgstr "Future meetings"
@@ -1893,7 +1864,6 @@ msgstr "Get your attention when a summary is ready in the background."
 msgid "Go back to now"
 msgstr "Go back to now"
 
-#: src/main/windows-title-bar.tsx
 #: src/sidebar/custom-sidebar-header.tsx
 msgid "Go home"
 msgstr "Go home"
@@ -1958,10 +1928,6 @@ msgstr "Having trouble? Paste the redirect URL"
 msgid "Hello, BlackMushi"
 msgstr "Hello, BlackMushi"
 
-#: src/main/windows-title-bar.tsx
-msgid "Help"
-msgstr "Help"
-
 #: src/onboarding/permissions.tsx
 msgid "Help BlackMushi listen to others"
 msgstr "Help BlackMushi listen to others"
@@ -1993,14 +1959,6 @@ msgstr "Hide Deleted Events"
 #: src/settings/automations/index.tsx
 msgid "Hide preview"
 msgstr "Hide preview"
-
-#: src/main/windows-title-bar.tsx
-msgid "Hide sidebar"
-msgstr "Hide sidebar"
-
-#: src/main/windows-title-bar.tsx
-msgid "Hide Sidebar"
-msgstr "Hide Sidebar"
 
 #: src/settings/ai/llm/select.tsx
 msgid "High"
@@ -2395,10 +2353,6 @@ msgstr "Match your device"
 msgid "Materials"
 msgstr "Materials"
 
-#: src/main/windows-window-controls.tsx
-msgid "Maximize"
-msgstr "Maximize"
-
 #: src/settings/developers/cli.tsx
 msgid "MCP configuration copied"
 msgstr "MCP configuration copied"
@@ -2517,10 +2471,6 @@ msgstr "Migration needs attention"
 msgid "Migration status unavailable"
 msgstr "Migration status unavailable"
 
-#: src/main/windows-window-controls.tsx
-msgid "Minimize"
-msgstr "Minimize"
-
 #: src/settings/ai/llm/select.tsx
 #: src/settings/ai/stt/select.tsx
 msgid "Model being used"
@@ -2596,7 +2546,6 @@ msgid "New folder"
 msgstr "New folder"
 
 #: src/main/empty.tsx
-#: src/main/windows-title-bar.tsx
 msgid "New Note"
 msgstr "New Note"
 
@@ -2879,10 +2828,6 @@ msgstr "Older files that differ from your current data were kept as recovery cop
 msgid "Oldest"
 msgstr "Oldest"
 
-#: src/settings/dictation.tsx
-msgid "On Wayland, approve the shortcuts in your desktop's prompt. Use Control + Alt + Escape to cancel. On X11, press Escape to cancel. The target app must expose an editable accessibility field."
-msgstr "On Wayland, approve the shortcuts in your desktop's prompt. Use Control + Alt + Escape to cancel. On X11, press Escape to cancel. The target app must expose an editable accessibility field."
-
 #: src/session/components/note-input/enhanced/streaming.tsx
 msgid "On-device models can take a few minutes to warm up before text appears."
 msgstr "On-device models can take a few minutes to warm up before text appears."
@@ -3011,10 +2956,6 @@ msgstr "Page not found"
 #: src/session/components/outer-header/overflow/export-modal.tsx
 msgid "Participants"
 msgstr "Participants"
-
-#: src/main/windows-title-bar.tsx
-msgid "Paste"
-msgstr "Paste"
 
 #: src/templates/auto-format-examples-dialog.tsx
 msgid "Paste a past summary you like..."
@@ -3245,10 +3186,6 @@ msgstr "Recording not found. It may have been deleted."
 msgid "Recording status prompts"
 msgstr "Recording status prompts"
 
-#: src/main/windows-title-bar.tsx
-msgid "Redo"
-msgstr "Redo"
-
 #: src/calendar/components/calendar-selection.tsx
 msgid "Refresh calendars"
 msgstr "Refresh calendars"
@@ -3336,10 +3273,6 @@ msgstr "Replace all"
 msgid "Replace with..."
 msgstr "Replace with..."
 
-#: src/main/windows-title-bar.tsx
-msgid "Report a Bug"
-msgstr "Report a Bug"
-
 #: src/calendar/components/apple/permission.tsx
 msgid "Request"
 msgstr "Request"
@@ -3357,10 +3290,6 @@ msgstr "Request {0} permission"
 #: src/settings/privacy/index.tsx
 msgid "Require Touch ID or your password when opening BlackMushi."
 msgstr "Require Touch ID or your password when opening BlackMushi."
-
-#: src/settings/privacy/index.tsx
-msgid "Require Windows Hello face, PIN, or password when opening BlackMushi."
-msgstr "Require Windows Hello face, PIN, or password when opening BlackMushi."
 
 #: src/shared/open-note-dialog.tsx
 msgid "Requires BlackMushi Pro"
@@ -3392,7 +3321,6 @@ msgstr "Restart"
 msgid "Restart App"
 msgstr "Restart App"
 
-#: src/main/windows-window-controls.tsx
 #: src/session/components/version-history-dialog.tsx
 msgid "Restore"
 msgstr "Restore"
@@ -3584,10 +3512,6 @@ msgstr "Select a person to view details"
 msgid "Select a provider"
 msgstr "Select a provider"
 
-#: src/main/windows-title-bar.tsx
-msgid "Select All"
-msgstr "Select All"
-
 #: src/contacts/organization-details.tsx
 msgid "Select an organization to view details"
 msgstr "Select an organization to view details"
@@ -3658,7 +3582,6 @@ msgid "Setting up dictation…"
 msgstr "Setting up dictation…"
 
 #: src/main/empty.tsx
-#: src/main/windows-title-bar.tsx
 #: src/shared/open-note-dialog.tsx
 #: src/sidebar/toast/registry.tsx
 msgid "Settings"
@@ -3693,16 +3616,8 @@ msgid "Show Apple Calendar events in BlackMushi."
 msgstr "Show Apple Calendar events in BlackMushi."
 
 #: src/session/components/outer-header/overflow/index.tsx
-msgid "Show Audio in Explorer"
-msgstr "Show Audio in Explorer"
-
-#: src/session/components/outer-header/overflow/index.tsx
 msgid "Show Audio in Finder"
 msgstr "Show Audio in Finder"
-
-#: src/session/components/outer-header/overflow/index.tsx
-msgid "Show Audio in Folder"
-msgstr "Show Audio in Folder"
 
 #: src/settings/general/app-settings.tsx
 msgid "Show BlackMushi in the Dock and app switcher."
@@ -3726,11 +3641,6 @@ msgstr "Show floating bar"
 msgid "Show in Finder"
 msgstr "Show in Finder"
 
-#: src/calendar/components/session-chip.tsx
-#: src/sidebar/timeline/item.tsx
-msgid "Show in folder"
-msgstr "Show in folder"
-
 #: src/settings/appearance/time-format.tsx
 msgid "Show meeting times as 14:00 instead of 2:00 PM."
 msgstr "Show meeting times as 14:00 instead of 2:00 PM."
@@ -3738,14 +3648,6 @@ msgstr "Show meeting times as 14:00 instead of 2:00 PM."
 #: src/settings/general/app-settings.tsx
 msgid "Show release notes"
 msgstr "Show release notes"
-
-#: src/main/windows-title-bar.tsx
-msgid "Show sidebar"
-msgstr "Show sidebar"
-
-#: src/main/windows-title-bar.tsx
-msgid "Show Sidebar"
-msgstr "Show Sidebar"
 
 #: src/settings/appearance/sidebar-item-fields.tsx
 msgid "Show tags under the date and time."
@@ -4032,10 +3934,6 @@ msgstr "Story Collector"
 msgid "Success"
 msgstr "Success"
 
-#: src/main/windows-title-bar.tsx
-msgid "Suggest a Feature"
-msgstr "Suggest a Feature"
-
 #: src/chat/components/body/empty.tsx
 msgid "Suggest what to ask next."
 msgstr "Suggest what to ask next."
@@ -4298,8 +4196,6 @@ msgid "Trigger"
 msgstr "Trigger"
 
 #: src/contacts/details.tsx
-#: src/onboarding/permissions.tsx
-#: src/settings/general/permissions.tsx
 #: src/settings/stats/badge-collection.tsx
 msgid "Try again"
 msgstr "Try again"
@@ -4332,7 +4228,6 @@ msgstr "Typical conversation length"
 msgid "Unavailable"
 msgstr "Unavailable"
 
-#: src/main/windows-title-bar.tsx
 #: src/sidebar/toast/undo-delete-toast.tsx
 msgid "Undo"
 msgstr "Undo"
@@ -4463,10 +4358,6 @@ msgstr "Use the other version"
 msgid "Use Touch ID or enter your password to view."
 msgstr "Use Touch ID or enter your password to view."
 
-#: src/lock/screen.tsx
-msgid "Use Windows Hello face, PIN, or password to view."
-msgstr "Use Windows Hello face, PIN, or password to view."
-
 #: src/onboarding/permissions.tsx
 msgid "Use your microphone to capture your voice"
 msgstr "Use your microphone to capture your voice"
@@ -4487,10 +4378,6 @@ msgstr "Verifying the SQLite migration status"
 #: src/session/components/version-history-dialog.tsx
 msgid "Version history"
 msgstr "Version history"
-
-#: src/main/windows-title-bar.tsx
-msgid "View"
-msgstr "View"
 
 #: src/lock/gate.tsx
 msgid "View BlackMushi"

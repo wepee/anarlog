@@ -7,12 +7,6 @@ const SECURE_STORE_SUFFIX: &str = "secure-store";
 const NATIVE_SECRET_ACCOUNT_PREFIXES: &[&str] = &["e2ee:"];
 #[cfg(target_os = "macos")]
 const MACOS_KEYCHAIN_ACCESS_ERROR_PREFIX: &str = "macOS couldn't access your login Keychain.";
-#[cfg(target_os = "linux")]
-const LINUX_SECRET_SERVICE_ACCESS_ERROR: &str =
-    "Linux couldn't access Secret Service. Unlock your login keyring, then try again.";
-#[cfg(target_os = "linux")]
-const LINUX_SECRET_SERVICE_UNAVAILABLE_ERROR: &str =
-    "Linux Secret Service is unavailable. Start your desktop keyring service, then try again.";
 
 #[cfg(target_os = "macos")]
 const ERR_SEC_AUTH_FAILED: i32 = -25293;
@@ -74,17 +68,6 @@ fn secure_store_error(error: keyring::Error) -> String {
         return format!(
             "{MACOS_KEYCHAIN_ACCESS_ERROR_PREFIX} Use “Repair Keychain Access” below, then try again."
         );
-    }
-
-    #[cfg(target_os = "linux")]
-    match error {
-        keyring::Error::NoStorageAccess(_) => {
-            return LINUX_SECRET_SERVICE_ACCESS_ERROR.to_string();
-        }
-        keyring::Error::PlatformFailure(_) => {
-            return LINUX_SECRET_SERVICE_UNAVAILABLE_ERROR.to_string();
-        }
-        _ => {}
     }
 
     error.to_string()
@@ -228,9 +211,6 @@ pub(crate) async fn repair_keychain_access() -> Result<(), String> {
             .await
             .map_err(|error| error.to_string())?;
     }
-
-    #[cfg(not(target_os = "macos"))]
-    Err("Keychain repair is only available on macOS.".to_string())
 }
 
 #[tauri::command]
@@ -377,11 +357,6 @@ static KEYCHAIN_ACCESS_DENIED: std::sync::atomic::AtomicBool =
 fn is_access_denied(error: &keyring::Error) -> bool {
     // errSecAuthFailed, errSecUserCanceled, errSecInteractionNotAllowed.
     matches!(keychain_error_code(error), Some(-25293 | -128 | -25308))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn is_access_denied(_error: &keyring::Error) -> bool {
-    false
 }
 
 fn read_secret_blocking_for<R: tauri::Runtime>(
@@ -762,11 +737,6 @@ fn keychain_status(error: &keyring::Error) -> Option<i32> {
     keychain_error_code(error)
 }
 
-#[cfg(not(target_os = "macos"))]
-fn keychain_status(_error: &keyring::Error) -> Option<i32> {
-    None
-}
-
 /// Removes a secret's old keychain items once the vault holds it. Silent: an
 /// item this build may not touch without asking simply stays behind, unread.
 fn forget_keychain_secret<R: tauri::Runtime>(app: &tauri::AppHandle<R>, scope: &str, key: &str) {
@@ -796,11 +766,6 @@ fn without_keychain_prompts<T>(operation: impl FnOnce() -> T) -> T {
     #[allow(deprecated)]
     let _ = unsafe { objc2_security::SecKeychain::set_user_interaction_allowed(false) };
     let _restore = RestorePrompts;
-    operation()
-}
-
-#[cfg(not(target_os = "macos"))]
-fn without_keychain_prompts<T>(operation: impl FnOnce() -> T) -> T {
     operation()
 }
 

@@ -13,15 +13,7 @@ use crate::AsyncSource;
 use crate::async_ring::RingbufAsyncReader;
 
 fn is_tap_device(name: &str) -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        name.contains(crate::TAP_DEVICE_NAME)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = name;
-        false
-    }
+    name.contains(crate::TAP_DEVICE_NAME)
 }
 
 pub(crate) fn is_unusable_input_device(name: &str) -> bool {
@@ -108,38 +100,7 @@ fn resolve_ranked_candidate(
 }
 
 fn with_cpal_host_lock<T>(f: impl FnOnce() -> T) -> T {
-    #[cfg(target_os = "linux")]
-    {
-        use std::cell::Cell;
-
-        thread_local! {
-            static LOCK_HELD: Cell<bool> = const { Cell::new(false) };
-        }
-
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-        LOCK_HELD.with(|held| {
-            if held.get() {
-                return f();
-            }
-
-            let _guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            struct Reset<'a>(&'a Cell<bool>);
-            impl Drop for Reset<'_> {
-                fn drop(&mut self) {
-                    self.0.set(false);
-                }
-            }
-
-            held.set(true);
-            let _reset = Reset(held);
-            f()
-        })
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        f()
-    }
+    f()
 }
 
 fn drop_quietly<T>(value: T) {

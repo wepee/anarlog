@@ -1,5 +1,4 @@
 import { t } from "@lingui/core/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
@@ -190,7 +189,7 @@ function ComposerInput({
     onSendMessage,
   });
   const mentionConfig = useMentionConfig();
-  const primaryModifier = platform() === "macos" ? "⌘" : "Ctrl";
+  const primaryModifier = "⌘";
 
   useAutoFocusEditor({
     editorRef,

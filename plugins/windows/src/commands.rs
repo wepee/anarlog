@@ -186,38 +186,6 @@ pub async fn window_save_frame(
         let maximized = handle.is_maximized().map_err(|e| e.to_string())?;
         if maximized {
             handle.unmaximize().map_err(|e| e.to_string())?;
-            #[cfg(target_os = "linux")]
-            let restored = tokio::time::timeout(std::time::Duration::from_secs(2), async {
-                let mut previous_bounds = None;
-                let mut stable_since = std::time::Instant::now();
-                loop {
-                    if !handle.is_maximized().map_err(|e| e.to_string())? {
-                        let frame = app
-                            .windows()
-                            .frame(window.clone())
-                            .map_err(|e| e.to_string())?
-                            .ok_or("restored window frame is unavailable")?;
-                        let bounds = (frame.x, frame.y, frame.w, frame.h);
-                        if previous_bounds != Some(bounds) {
-                            previous_bounds = Some(bounds);
-                            stable_since = std::time::Instant::now();
-                        } else if stable_since.elapsed() >= std::time::Duration::from_millis(120) {
-                            return Ok::<(), String>(());
-                        }
-                    } else {
-                        previous_bounds = None;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(16)).await;
-                }
-            })
-            .await
-            .map_err(|e| e.to_string())
-            .and_then(|result| result);
-            #[cfg(target_os = "linux")]
-            if let Err(error) = restored {
-                let _ = handle.maximize();
-                return Err(error);
-            }
         }
         maximized
     } else {
@@ -250,56 +218,6 @@ pub async fn window_restore_frame_animated(
     restore_saved_frame(&app, window, saved).await
 }
 
-#[cfg(target_os = "linux")]
-async fn wait_for_maximized(
-    handle: &tauri::WebviewWindow<tauri::Wry>,
-    maximized: bool,
-) -> Result<(), String> {
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
-        loop {
-            if handle.is_maximized().map_err(|e| e.to_string())? == maximized {
-                return Ok::<(), String>(());
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(16)).await;
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[cfg(target_os = "linux")]
-async fn wait_for_restored_frame(
-    app: &tauri::AppHandle<tauri::Wry>,
-    window: &AppWindow,
-    frame: crate::SavedFrame,
-) -> Result<(), String> {
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
-        let mut stable_since = None;
-        loop {
-            let current = app
-                .windows()
-                .frame(window.clone())
-                .map_err(|e| e.to_string())?
-                .ok_or("restored window frame is unavailable")?;
-            if (current.x - frame.x).abs() < 1.0
-                && (current.y - frame.y).abs() < 1.0
-                && (current.w - frame.w).abs() < 1.0
-                && (current.h - frame.h).abs() < 1.0
-            {
-                let since = stable_since.get_or_insert_with(std::time::Instant::now);
-                if since.elapsed() >= std::time::Duration::from_millis(120) {
-                    return Ok::<(), String>(());
-                }
-            } else {
-                stable_since = None;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(16)).await;
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
 pub(crate) async fn restore_saved_frame(
     app: &tauri::AppHandle<tauri::Wry>,
     window: AppWindow,
@@ -311,22 +229,14 @@ pub(crate) async fn restore_saved_frame(
                 && handle.is_maximized().map_err(|e| e.to_string())?
             {
                 handle.unmaximize().map_err(|e| e.to_string())?;
-                #[cfg(target_os = "linux")]
-                wait_for_maximized(&handle, false).await?;
             }
             app.windows()
                 .set_frame_animated(window.clone(), saved.frame)
                 .map_err(|e| e.to_string())?;
-            #[cfg(target_os = "linux")]
-            if window.get(app).is_some() {
-                wait_for_restored_frame(app, &window, saved.frame).await?;
-            }
             if saved.maximized
                 && let Some(handle) = window.get(app)
             {
                 handle.maximize().map_err(|e| e.to_string())?;
-                #[cfg(target_os = "linux")]
-                wait_for_maximized(&handle, true).await?;
             }
         }
         Ok::<(), String>(())
@@ -467,34 +377,6 @@ pub async fn window_expand_width(
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        let outer_size = window.outer_size().map_err(|e| e.to_string())?;
-
-        if max_current_width.is_some_and(|max| outer_size.width >= max) {
-            return Ok(());
-        }
-
-        let _ = expand_left;
-        let new_width = outer_size.width + expansion_physical;
-        window
-            .set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                width: new_width,
-                height: outer_size.height,
-            }))
-            .map_err(|e| e.to_string())?;
-
-        if restore_on_close {
-            app.state::<crate::WindowExpansions>()
-                .0
-                .lock()
-                .unwrap()
-                .entry(window.label().to_string())
-                .or_default()
-                .push((f64::from(outer_size.width), f64::from(new_width), 0.0));
-        }
-    }
-
     Ok(())
 }
 
@@ -513,20 +395,6 @@ pub async fn window_restore_width(
     #[cfg(target_os = "macos")]
     restore_expanded_width(&app, window.label(), (previous_w, expanded_w, origin_shift))
         .map_err(|e| e.to_string())?;
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = origin_shift;
-        let outer_size = window.outer_size().map_err(|e| e.to_string())?;
-        if (f64::from(outer_size.width) - expanded_w).abs() < 1.0 {
-            window
-                .set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                    width: previous_w as u32,
-                    height: outer_size.height,
-                }))
-                .map_err(|e| e.to_string())?;
-        }
-    }
 
     Ok(())
 }

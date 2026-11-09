@@ -103,12 +103,6 @@ pub(crate) async fn get_installed_application_icons<R: tauri::Runtime>(
 
         receiver.recv().map_err(|error| error.to_string())
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, app_ids);
-        Ok(Vec::new())
-    }
 }
 
 #[tauri::command]

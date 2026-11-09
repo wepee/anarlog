@@ -42,21 +42,8 @@ objc2 = { workspace = true }
 objc2-core-foundation = { workspace = true }
 objc2-application-services = { workspace = true }
 macos-accessibility-client = { workspace = true }
+xcap = { workspace = true, optional = true }
 
 [[example]]
 name = "detector"
 required-features = ["mic", "list", "zoom", "sleep", "app", "language"]
-
-# xcap's Linux backend links libgbm/EGL/PipeWire; Linux capture is not supported yet.
-[target."cfg(any(target_os = \"macos\", target_os = \"windows\"))".dependencies]
-xcap = { workspace = true, optional = true }
-
-[target."cfg(target_os = \"linux\")".dependencies]
-libpulse-binding = "2.30"
-atspi = { version = "0.25", default-features = false, features = ["tokio"] }
-zbus = { version = "5", default-features = false, features = ["tokio"] }
-
-[target."cfg(target_os = \"windows\")".dependencies]
-winreg = "0.55"
-wasapi = { workspace = true }
-windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Accessibility", "Win32_UI_WindowsAndMessaging"] }

@@ -4,8 +4,6 @@ use anlg_calendar_interface::CalendarProviderType;
 pub enum Error {
     #[error("not authenticated")]
     NotAuthenticated,
-    #[error("provider {provider:?} is not available on this platform")]
-    ProviderUnavailable { provider: CalendarProviderType },
     #[error("operation '{operation}' is not supported for provider {provider:?}")]
     UnsupportedOperation {
         operation: &'static str,

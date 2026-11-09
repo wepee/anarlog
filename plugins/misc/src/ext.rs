@@ -20,7 +20,7 @@ pub struct Misc<'a, R: tauri::Runtime, M: tauri::Manager<R>> {
 
 impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Misc<'a, R, M> {
     pub fn get_git_hash(&self) -> String {
-        env!("VERGEN_GIT_SHA").to_string()
+        env!("GIT_SHA").to_string()
     }
 
     pub fn get_fingerprint(&self) -> String {

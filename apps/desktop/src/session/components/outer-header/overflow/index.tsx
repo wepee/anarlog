@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useState } from "react";
 
 import { commands as fsSyncCommands } from "@anlg/plugin-fs-sync";
@@ -46,7 +45,6 @@ import { DEVICE_AUTH_REASON } from "~/lock/auth";
 import { isLockedFlag } from "~/lock/flag";
 import { useAppLock } from "~/lock/store";
 import { openFloatingMeetingPanel } from "~/meeting-float/host";
-import { isFloatingBarSupported } from "~/meeting-float/support";
 import { useRegenerateTranscript } from "~/session/components/note-input/transcript/actions";
 import {
   useCurrentNoteHasContent,
@@ -98,7 +96,6 @@ export function OverflowButton({
   const activeLanguage = sessionLanguage || transcriptionLanguages[0] || "";
   const sessionMode = useListener((state) => state.getSessionMode(sessionId));
   const floatingBarEnabled = useConfigValue("floating_bar_enabled");
-  const floatingBarSupported = isFloatingBarSupported();
   const isMeetingInProgress =
     sessionMode === "active" || sessionMode === "finalizing";
   const showListeningAction = allowListening;
@@ -111,17 +108,9 @@ export function OverflowButton({
     !currentNoteHasContent &&
     !isMeetingInProgress;
   const showAudioInFolder = audioExistsResolved && audioExists;
-  const showAudioLabel =
-    platform() === "macos"
-      ? t`Show Audio in Finder`
-      : platform() === "windows"
-        ? t`Show Audio in Explorer`
-        : t`Show Audio in Folder`;
+  const showAudioLabel = t`Show Audio in Finder`;
   const canOpenFloatingPanel =
-    floatingBarSupported &&
-    allowListening &&
-    floatingBarEnabled &&
-    sessionMode === "active";
+    allowListening && floatingBarEnabled && sessionMode === "active";
   const hasRecordingActions =
     showListeningAction ||
     showRetranscribeAction ||

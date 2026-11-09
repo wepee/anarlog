@@ -27,5 +27,4 @@ tracing-subscriber = { workspace = true, optional = true, features = ["env-filte
 
 [dev-dependencies]
 anlg-data = { workspace = true }
-approx = { workspace = true }
 serde_json = { workspace = true }

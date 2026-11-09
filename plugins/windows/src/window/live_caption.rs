@@ -24,8 +24,6 @@ pub struct LiveCaptionState {
     pub minimized: bool,
 }
 
-pub const WINDOW_LABEL: &str = "live-caption";
-
 #[cfg(target_os = "macos")]
 mod platform {
     use swift_rs::{Bool, swift};
@@ -48,53 +46,6 @@ mod platform {
     pub fn hide() -> Result<(), Error> {
         unsafe {
             _live_caption_hide();
-        }
-        Ok(())
-    }
-
-    pub fn update(_state: LiveCaptionState) -> Result<(), Error> {
-        hide()
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-mod platform {
-    use std::sync::{Mutex, OnceLock};
-
-    use tauri::Manager;
-
-    use super::{LiveCaptionState, WINDOW_LABEL};
-    use crate::Error;
-
-    static APP_HANDLE: OnceLock<tauri::AppHandle<tauri::Wry>> = OnceLock::new();
-    static LAST_STATE: Mutex<Option<LiveCaptionState>> = Mutex::new(None);
-
-    pub fn set_app_handle(app: tauri::AppHandle<tauri::Wry>) {
-        let _ = APP_HANDLE.set(app);
-    }
-
-    pub fn current_state() -> Option<LiveCaptionState> {
-        LAST_STATE.lock().ok().and_then(|guard| guard.clone())
-    }
-
-    fn app() -> Result<&'static tauri::AppHandle<tauri::Wry>, Error> {
-        APP_HANDLE
-            .get()
-            .ok_or_else(|| Error::PanelError("live caption app handle is not ready".to_string()))
-    }
-
-    pub fn show() -> Result<(), Error> {
-        hide()
-    }
-
-    pub fn hide() -> Result<(), Error> {
-        if let Ok(app) = app()
-            && let Some(window) = app.get_webview_window(WINDOW_LABEL)
-        {
-            window.hide()?;
-        }
-        if let Ok(mut state) = LAST_STATE.lock() {
-            *state = None;
         }
         Ok(())
     }

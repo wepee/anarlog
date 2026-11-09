@@ -2,8 +2,6 @@
 pub enum Error {
     #[error(transparent)]
     AppleTodo(#[from] anlg_apple_todo::Error),
-    #[error("unsupported platform")]
-    UnsupportedPlatform,
     #[error("invalid read path: {0}")]
     InvalidReadPath(String),
     #[error("auth error: {0}")]

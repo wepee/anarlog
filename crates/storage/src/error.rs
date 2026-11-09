@@ -12,6 +12,4 @@ pub enum Error {
     PathNotValidUtf8,
     #[error("path exists but is not a directory")]
     PathIsNotDirectory,
-    #[error("{0}")]
-    SecureStorage(String),
 }

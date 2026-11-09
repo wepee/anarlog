@@ -17,11 +17,6 @@ pub fn authorization_status() -> Result<String, Error> {
         let status = anlg_apple_todo::Handle::authorization_status();
         Ok(format!("{:?}", status))
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err(Error::UnsupportedPlatform)
-    }
 }
 
 #[tauri::command]
@@ -30,11 +25,6 @@ pub fn request_full_access() -> Result<bool, Error> {
     #[cfg(target_os = "macos")]
     {
         Ok(anlg_apple_todo::Handle::request_full_access())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err(Error::UnsupportedPlatform)
     }
 }
 
@@ -46,11 +36,6 @@ pub fn list_todo_lists() -> Result<Vec<ReminderList>, Error> {
         let handle = anlg_apple_todo::Handle;
         handle.list_reminder_lists().map_err(Into::into)
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err(Error::UnsupportedPlatform)
-    }
 }
 
 #[tauri::command]
@@ -60,12 +45,6 @@ pub fn fetch_todos(filter: ReminderFilter) -> Result<Vec<Reminder>, Error> {
     {
         let handle = anlg_apple_todo::Handle;
         handle.fetch_reminders(filter).map_err(Into::into)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = filter;
-        Err(Error::UnsupportedPlatform)
     }
 }
 
@@ -90,11 +69,6 @@ pub async fn read_path<R: tauri::Runtime>(
                         Ok(ReadPathResult::Reminders(items))
                     }
                 }
-            }
-
-            #[cfg(not(target_os = "macos"))]
-            {
-                Err(Error::UnsupportedPlatform)
             }
         }
         ReadPath::LinearTeams { connection_id } => {
@@ -171,12 +145,6 @@ pub fn create_todo(input: CreateReminderInput) -> Result<String, Error> {
         let handle = anlg_apple_todo::Handle;
         handle.create_reminder_identifier(input).map_err(Into::into)
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = input;
-        Err(Error::UnsupportedPlatform)
-    }
 }
 
 #[tauri::command]
@@ -187,12 +155,6 @@ pub fn complete_todo(target: ReminderIdentifierInput) -> Result<(), Error> {
         let handle = anlg_apple_todo::Handle;
         handle.complete_reminder(&target).map_err(Into::into)
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = target;
-        Err(Error::UnsupportedPlatform)
-    }
 }
 
 #[tauri::command]
@@ -202,12 +164,6 @@ pub fn delete_todo(target: ReminderIdentifierInput) -> Result<(), Error> {
     {
         let handle = anlg_apple_todo::Handle;
         handle.delete_reminder(&target).map_err(Into::into)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = target;
-        Err(Error::UnsupportedPlatform)
     }
 }
 

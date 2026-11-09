@@ -204,10 +204,6 @@ vi.mock("./contexts", () => ({
   useListener: useListenerMock,
 }));
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => "macos",
-}));
-
 vi.mock("@anlg/plugin-permissions", () => ({
   commands: {
     checkPermission: vi.fn(async () => ({ status: "ok", data: "authorized" })),

@@ -228,45 +228,13 @@ describe("isConfiguredSttModel", () => {
 
 describe("getUnsupportedDesktopLocalSttRepair", () => {
   test("reports local STT only on Apple Silicon", () => {
-    expect(isDesktopLocalSttAvailable("macos", "aarch64")).toBe(true);
-    expect(isDesktopLocalSttAvailable("macos", "x86_64")).toBe(false);
-    expect(isDesktopLocalSttAvailable("windows", "aarch64")).toBe(false);
+    expect(isDesktopLocalSttAvailable("aarch64")).toBe(true);
+    expect(isDesktopLocalSttAvailable("x86_64")).toBe(false);
   });
-
-  test.each(["windows", "linux"])(
-    "uses hosted transcription for entitled users on %s",
-    (currentPlatform) => {
-      expect(
-        getUnsupportedDesktopLocalSttRepair(
-          currentPlatform,
-          "x86_64",
-          "anarlog",
-          "soniqo-parakeet-streaming",
-          true,
-        ),
-      ).toEqual({ provider: "anarlog", model: "cloud" });
-    },
-  );
-
-  test.each(["windows", "linux"])(
-    "requires a new provider selection for free users on %s",
-    (currentPlatform) => {
-      expect(
-        getUnsupportedDesktopLocalSttRepair(
-          currentPlatform,
-          "x86_64",
-          "anarlog",
-          "am-parakeet-v3",
-          false,
-        ),
-      ).toEqual({ provider: "", model: "" });
-    },
-  );
 
   test("keeps supported Apple-local selections on Apple Silicon", () => {
     expect(
       getUnsupportedDesktopLocalSttRepair(
-        "macos",
         "aarch64",
         "anarlog",
         "soniqo-parakeet-streaming",
@@ -275,10 +243,9 @@ describe("getUnsupportedDesktopLocalSttRepair", () => {
     ).toBeNull();
   });
 
-  test("repairs local model files on unsupported platforms", () => {
+  test("repairs local model files on Intel Macs", () => {
     expect(
       getUnsupportedDesktopLocalSttRepair(
-        "linux",
         "x86_64",
         "local_file",
         "local-file",
@@ -295,7 +262,6 @@ describe("getUnsupportedDesktopLocalSttRepair", () => {
     (canUseCloud, expected) => {
       expect(
         getUnsupportedDesktopLocalSttRepair(
-          "macos",
           "x86_64",
           "anarlog",
           "soniqo-parakeet-streaming",
@@ -307,17 +273,10 @@ describe("getUnsupportedDesktopLocalSttRepair", () => {
 
   test("does not rewrite cloud or BYOK selections", () => {
     expect(
-      getUnsupportedDesktopLocalSttRepair(
-        "windows",
-        "x86_64",
-        "anarlog",
-        "cloud",
-        true,
-      ),
+      getUnsupportedDesktopLocalSttRepair("x86_64", "anarlog", "cloud", true),
     ).toBeNull();
     expect(
       getUnsupportedDesktopLocalSttRepair(
-        "linux",
         "x86_64",
         "deepgram",
         "nova-3-general",

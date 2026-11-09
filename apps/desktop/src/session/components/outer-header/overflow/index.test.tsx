@@ -27,7 +27,6 @@ const {
   useConfigValueMock,
   sessionLanguage,
   transcriptionLanguages,
-  platformMock,
   windowShowMock,
   audioExistMock,
   sessionDirMock,
@@ -51,7 +50,6 @@ const {
   useConfigValueMock: vi.fn(),
   sessionLanguage: { value: "" },
   transcriptionLanguages: { value: ["fr", "en"] as string[] },
-  platformMock: vi.fn(() => "macos"),
   windowShowMock: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
   audioExistMock: vi.fn(),
   sessionDirMock: vi.fn(),
@@ -59,10 +57,6 @@ const {
   toastErrorMock: vi.fn(),
   sessionRecord: { value: null as { locked?: boolean } | null },
   authenticateMock: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: platformMock,
 }));
 
 vi.mock("@anlg/ui/components/ui/button", () => ({
@@ -241,7 +235,6 @@ type Scenario = {
   audioResolved?: boolean;
   mode?: string;
   floatingPanel?: boolean;
-  platform?: string;
 };
 
 const ACTIONS = [
@@ -251,8 +244,6 @@ const ACTIONS = [
   "Resume listening",
   "Re-transcribe",
   "Show Audio in Finder",
-  "Show Audio in Explorer",
-  "Show Audio in Folder",
   "Open floating panel",
   "Open in New Window",
   "Delete recording",
@@ -266,14 +257,12 @@ function arrange({
   audioResolved = true,
   mode = "inactive",
   floatingPanel = false,
-  platform = "macos",
 }: Scenario) {
   useHasTranscriptMock.mockReturnValue(transcript);
   currentNoteContent.value = content;
   audioExists.value = audio;
   audioExistsResolved.value = audioResolved;
   useConfigValueMock.mockReturnValue(floatingPanel);
-  platformMock.mockReturnValue(platform);
   useListenerMock.mockImplementation((selector) =>
     selector({ getSessionMode: () => mode, stop: vi.fn() }),
   );
@@ -575,21 +564,18 @@ describe("OverflowButton", () => {
     expect(regenerateTranscriptMock).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["macos", "linux"])(
-    "opens the floating panel while actively listening on %s",
-    (platform) => {
-      arrange({ mode: "active", floatingPanel: true, platform });
-      renderOverflow();
+  it("opens the floating panel while actively listening", () => {
+    arrange({ mode: "active", floatingPanel: true });
+    renderOverflow();
 
-      fireEvent.click(
-        screen.getByRole("button", { name: "Open floating panel" }),
-      );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open floating panel" }),
+    );
 
-      expect(openFloatingMeetingPanel).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionId: "session-1", enabled: true }),
-      );
-    },
-  );
+    expect(openFloatingMeetingPanel).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "session-1", enabled: true }),
+    );
+  });
 
   it("opens the current note in a standalone window", () => {
     renderOverflow();

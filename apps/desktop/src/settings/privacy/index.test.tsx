@@ -14,14 +14,9 @@ const mocks = vi.hoisted(() => ({
   lockApp: vi.fn(),
   available: true as boolean | null,
   authenticating: false,
-  platform: "macos" as string,
   values: {
     lock_app: false,
   },
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => mocks.platform,
 }));
 
 vi.mock("~/settings/queries", () => ({
@@ -55,7 +50,6 @@ describe("SettingsPrivacy", () => {
     mocks.values.lock_app = false;
     mocks.available = true;
     mocks.authenticating = false;
-    mocks.platform = "macos";
     mocks.authenticate.mockResolvedValue(true);
     mocks.refreshAvailability.mockResolvedValue(true);
   });

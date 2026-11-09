@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => {
   };
 
   return {
-    currentPlatform: "macos",
     permissions,
     guidance: null as { assisted: boolean; paneTitle: string | null } | null,
     usePermission: vi.fn((type: keyof typeof permissions) => permissions[type]),
@@ -39,10 +38,6 @@ vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({ t: lingui.t }),
 }));
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => mocks.currentPlatform,
-}));
-
 vi.mock("~/shared/hooks/usePermissions", () => ({
   usePermission: mocks.usePermission,
   usePermissionGuidance: () => mocks.guidance,
@@ -55,7 +50,6 @@ afterEach(cleanup);
 
 describe("PermissionsSection", () => {
   beforeEach(() => {
-    mocks.currentPlatform = "macos";
     mocks.guidance = null;
     vi.clearAllMocks();
 
@@ -83,41 +77,6 @@ describe("PermissionsSection", () => {
     view.rerender(<PermissionsSection onContinue={onContinue} />);
 
     expect(onContinue).toHaveBeenCalledTimes(1);
-  });
-
-  it("preserves the audio-only flow outside macOS", () => {
-    const onContinue = vi.fn();
-    mocks.currentPlatform = "windows";
-    mocks.permissions.microphone.status = "authorized";
-    mocks.permissions.systemAudio.status = "authorized";
-
-    render(<PermissionsSection onContinue={onContinue} />);
-
-    expect(
-      screen.queryByText("Help BlackMushi read meeting activity"),
-    ).toBeNull();
-    expect(mocks.usePermission).not.toHaveBeenCalledWith("accessibility");
-    expect(onContinue).toHaveBeenCalledTimes(1);
-  });
-
-  it("retries denied runtime audio probes outside macOS", () => {
-    mocks.currentPlatform = "linux";
-    mocks.permissions.microphone.error = "microphone device unavailable";
-    mocks.permissions.systemAudio.error = "PipeWire source unavailable";
-
-    render(<PermissionsSection />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Try again: Microphone" }),
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Try again: System audio" }),
-    );
-
-    expect(mocks.permissions.microphone.request).toHaveBeenCalledOnce();
-    expect(mocks.permissions.systemAudio.request).toHaveBeenCalledOnce();
-    expect(mocks.permissions.microphone.open).not.toHaveBeenCalled();
-    expect(mocks.permissions.systemAudio.open).not.toHaveBeenCalled();
   });
 
   it("requests denied Accessibility permission instead of opening Settings", () => {

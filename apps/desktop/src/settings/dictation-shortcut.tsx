@@ -1,6 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useMutation } from "@tanstack/react-query";
-import { platform } from "@tauri-apps/plugin-os";
 import { useRef, useState } from "react";
 
 import { commands as shortcuts } from "@anlg/plugin-shortcut";
@@ -13,7 +12,6 @@ import { setSettingValue } from "~/settings/queries";
 
 export function DictationShortcut({ shortcut }: { shortcut: string }) {
   const { t } = useLingui();
-  const mac = platform() === "macos";
   const [recording, setRecording] = useState(false);
   const attempt = useRef(0);
   const persisting = useRef(false);
@@ -56,11 +54,11 @@ export function DictationShortcut({ shortcut }: { shortcut: string }) {
   });
 
   const labels: Record<string, string> = {
-    Control: mac ? "⌃" : "Ctrl",
-    Alt: mac ? "⌥" : "Alt",
-    Shift: mac ? "⇧" : "Shift",
-    Super: mac ? "⌘" : "Super",
-    Meta: mac ? "⌘" : "Super",
+    Control: "⌃",
+    Alt: "⌥",
+    Shift: "⇧",
+    Super: "⌘",
+    Meta: "⌘",
     Fn: t`Fn / Globe`,
     RightCommand: t`Right Command`,
     ArrowLeft: "←",
@@ -146,25 +144,23 @@ export function DictationShortcut({ shortcut }: { shortcut: string }) {
           {save.error.message}
         </p>
       )}
-      {mac && (
-        <div className="flex gap-2">
-          {[
-            ["Fn", t`Fn / Globe`],
-            ["RightCommand", t`Right Command`],
-          ].map(([value, label]) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={save.isPending}
-              onClick={() => save.mutate({ value, token: attempt.current })}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      )}
+      <div className="flex gap-2">
+        {[
+          ["Fn", t`Fn / Globe`],
+          ["RightCommand", t`Right Command`],
+        ].map(([value, label]) => (
+          <Button
+            key={value}
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={save.isPending}
+            onClick={() => save.mutate({ value, token: attempt.current })}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

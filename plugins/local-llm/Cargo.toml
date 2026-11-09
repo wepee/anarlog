@@ -15,9 +15,7 @@ swift-rs = { workspace = true, features = ["build"] }
 
 [dev-dependencies]
 dirs = { workspace = true }
-reqwest = { workspace = true, features = ["json", "stream"] }
 specta-typescript = { workspace = true }
-tauri-plugin-store = { workspace = true }
 
 [dependencies]
 anlg-local-llm-core = { workspace = true, features = ["specta"] }

@@ -11,21 +11,9 @@
       "icons/stable/icon.icns",
       "icons/stable/icon.ico"
     ],
-    "linux": {
-      "deb": {
-        "provides": ["char"],
-        "conflicts": ["char"],
-        "replaces": ["char"]
-      }
-    },
     "macOS": {
       "files": {
         "Resources/AppIcon.icns": "resources/stable-dark/AppIcon.icns"
-      }
-    },
-    "windows": {
-      "webviewInstallMode": {
-        "type": "offlineInstaller"
       }
     }
   },

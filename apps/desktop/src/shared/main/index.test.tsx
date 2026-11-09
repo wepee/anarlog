@@ -2,10 +2,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => "macos",
-}));
-
 vi.mock("@anlg/ui/components/ui/resizable", () => {
   return {
     ResizablePanelGroup: ({ children }: { children: ReactNode }) => (

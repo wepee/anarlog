@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 
 import type { PermissionStatus } from "@anlg/plugin-permissions";
 import { ArrowRight, Check, WarningCircle } from "@anlg/ui/components/icons";
@@ -27,7 +26,6 @@ function PermissionRow({
   onRequest,
   onOpen,
   assisted = false,
-  runtimeCapability = false,
 }: {
   title: string;
   description: string;
@@ -38,21 +36,12 @@ function PermissionRow({
   onRequest: () => void;
   onOpen: () => void;
   assisted?: boolean;
-  runtimeCapability?: boolean;
 }) {
   const { t } = useLingui();
   const isAuthorized = status === "authorized";
   const isDenied = status === "denied";
 
   const handleButtonClick = () => {
-    if (runtimeCapability) {
-      if (!isAuthorized) {
-        trackPermissionRequested(permission, status, "settings", "request");
-        onRequest();
-      }
-      return;
-    }
-
     if (assisted || isAuthorized || isDenied) {
       trackPermissionRequested(permission, status, "settings", "open_settings");
       onOpen();
@@ -85,20 +74,16 @@ function PermissionRow({
         variant={isAuthorized ? "ghost" : "default"}
         size="icon"
         onClick={handleButtonClick}
-        disabled={isPending || (runtimeCapability && isAuthorized)}
+        disabled={isPending}
         className={cn([
           "size-8",
           isAuthorized &&
             "text-green-600 hover:bg-transparent hover:text-green-600",
         ])}
         aria-label={
-          runtimeCapability
-            ? isDenied
-              ? `${t`Try again`}: ${title}`
-              : title
-            : assisted || isAuthorized || isDenied
-              ? t`Open ${title.toLowerCase()} settings`
-              : t`Request ${title.toLowerCase()} permission`
+          assisted || isAuthorized || isDenied
+            ? t`Open ${title.toLowerCase()} settings`
+            : t`Request ${title.toLowerCase()} permission`
         }
       >
         {isAuthorized ? (
@@ -129,22 +114,10 @@ function PermissionGroup({
 }
 
 export function Permissions() {
-  if (platform() === "macos") {
-    return <MacOSPermissions />;
-  }
-
-  return (
-    <div className="flex flex-col gap-8">
-      <AudioPermissions runtimeCapabilities />
-    </div>
-  );
+  return <MacOSPermissions />;
 }
 
-function AudioPermissions({
-  runtimeCapabilities = false,
-}: {
-  runtimeCapabilities?: boolean;
-}) {
+function AudioPermissions() {
   const { t } = useLingui();
   const mic = usePermission("microphone");
   const systemAudio = usePermission("systemAudio");
@@ -166,7 +139,6 @@ function AudioPermissions({
         error={mic.error}
         onRequest={mic.request}
         onOpen={mic.open}
-        runtimeCapability={runtimeCapabilities}
       />
       <PermissionRow
         permission="system_audio"
@@ -177,7 +149,6 @@ function AudioPermissions({
         error={systemAudio.error}
         onRequest={systemAudio.request}
         onOpen={systemAudio.open}
-        runtimeCapability={runtimeCapabilities}
       />
     </PermissionGroup>
   );

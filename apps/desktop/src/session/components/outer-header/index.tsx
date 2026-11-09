@@ -34,7 +34,6 @@ import {
 } from "~/session/hooks/useRemoteMeeting";
 import { useSessionEvent } from "~/session/hooks/useSessionEvent";
 import {
-  usesWindowsStyleTitleBar,
   useWindowControlsGutter,
   WINDOW_CONTROLS_GUTTER_CLASS,
   WINDOW_CONTROLS_GUTTER_PLUS_32_CLASS,
@@ -69,7 +68,7 @@ export function OuterHeader({
   const now = useNow();
   const showWindowControlsGutter = useWindowControlsGutter();
   const showSidebarTimelineHeaderGutter =
-    !standaloneWindow && !leftsidebar.expanded && !usesWindowsStyleTitleBar();
+    !standaloneWindow && !leftsidebar.expanded;
   const endedAt = sessionEvent?.ended_at
     ? safeParseDate(sessionEvent.ended_at)
     : null;

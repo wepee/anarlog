@@ -17,8 +17,5 @@ tokio-util = "0.7"
 tracing = { workspace = true }
 
 [dev-dependencies]
-anlg-s3 = { workspace = true }
-dirs = { workspace = true }
 tempfile = { workspace = true }
-testcontainers-modules = { workspace = true, features = ["minio"] }
 wiremock = { workspace = true }

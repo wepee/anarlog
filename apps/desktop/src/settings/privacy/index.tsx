@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 
 import { useMountEffect } from "@anlg/ui/hooks/use-mount-effect";
 
@@ -39,9 +38,7 @@ export function SettingsPrivacy() {
   const authAvailable = available === true;
   const lockAppDescription = !authAvailable
     ? t`Device authentication is not available on this computer.`
-    : platform() === "windows"
-      ? t`Require Windows Hello face, PIN, or password when opening BlackMushi.`
-      : t`Require Touch ID or your password when opening BlackMushi.`;
+    : t`Require Touch ID or your password when opening BlackMushi.`;
 
   return (
     <div className="flex flex-col gap-8">

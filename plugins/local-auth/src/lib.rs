@@ -4,8 +4,6 @@ mod ext;
 
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(target_os = "windows")]
-mod windows;
 
 pub use error::{Error, Result};
 pub use ext::*;

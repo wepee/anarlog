@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import {
   memo,
   type DragEvent,
@@ -754,7 +753,7 @@ const SessionItem = memo(
         },
         {
           id: "show",
-          text: platform() === "macos" ? t`Show in Finder` : t`Show in folder`,
+          text: t`Show in Finder`,
           action: handleShowInFolder,
         },
       ];

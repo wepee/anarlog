@@ -767,7 +767,6 @@ export function useConfiguredMapping(): {
 
       if (provider.id === "local_file") {
         const available = isDesktopLocalSttAvailable(
-          deviceInfo.data?.platform ?? "",
           deviceInfo.data?.arch ?? "",
         );
         return [

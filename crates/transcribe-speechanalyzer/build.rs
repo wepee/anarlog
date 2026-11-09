@@ -68,9 +68,4 @@ fn main() {
         println!("cargo:rerun-if-changed=swift-lib/src");
         println!("cargo:rerun-if-changed=swift-lib/Package.swift");
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        println!("cargo:warning=Apple Speech linking is only available on macOS");
-    }
 }

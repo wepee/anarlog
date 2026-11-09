@@ -43,7 +43,7 @@ pub struct MeetingApp {
     pub name: String,
 }
 
-#[cfg(any(test, target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(test, target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub(super) struct MeetingChatTarget {
     pub(super) kind: String,
@@ -106,7 +106,7 @@ pub struct MeetingChatCaptureResult {
     pub warnings: Vec<String>,
 }
 
-#[cfg(any(test, target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(test, target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub(super) struct AxNode {
     pub(super) index: usize,
@@ -134,8 +134,7 @@ pub(super) struct AxChatElement {
     pub(super) element: arc::R<ax::UiElement>,
 }
 
-#[cfg(any(test, target_os = "macos", target_os = "linux", target_os = "windows"))]
-#[cfg_attr(target_os = "windows", allow(dead_code))]
+#[cfg(any(test, target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub(super) struct AxAncestor {
     pub(super) path: Vec<usize>,
@@ -150,25 +149,22 @@ pub(super) struct SlackHuddleRoot {
     pub(super) element: arc::R<ax::UiElement>,
 }
 
-#[cfg(any(test, target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(test, target_os = "macos"))]
 #[derive(Debug)]
 pub(super) struct BrowserMeetingRoot {
     pub(super) platform: MeetingPlatform,
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(super) window_title: Option<String>,
     pub(super) web_area_url: Option<String>,
     pub(super) nodes: Vec<AxNode>,
 }
 
-#[cfg(any(test, target_os = "macos", target_os = "linux", target_os = "windows"))]
-#[cfg_attr(target_os = "windows", allow(dead_code))]
+#[cfg(any(test, target_os = "macos"))]
 pub(super) struct NativeMeetingRoot {
     pub(super) window_title: Option<String>,
     pub(super) nodes: Vec<AxNode>,
 }
 
-#[cfg(any(test, target_os = "macos", target_os = "linux", target_os = "windows"))]
-#[cfg_attr(target_os = "windows", allow(dead_code))]
+#[cfg(any(test, target_os = "macos"))]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum UniqueMatch {
     Missing,

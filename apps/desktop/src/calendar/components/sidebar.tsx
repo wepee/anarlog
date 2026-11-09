@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 import { useCallback, useMemo, useState, type MouseEvent } from "react";
 
 import {
@@ -71,12 +70,8 @@ function ProviderIcon({ provider }: { provider: CalendarProvider }) {
 }
 
 export function CalendarSidebarContent() {
-  const isMacos = platform() === "macos";
   const calendar = usePermission("calendar");
-  const visibleProviders = useMemo(
-    () => PROVIDERS.filter((p) => p.platform !== "macos" || isMacos),
-    [isMacos],
-  );
+  const visibleProviders = PROVIDERS;
   const defaultOpenProviders = useMemo(
     () => getDefaultOpenProviderIds(visibleProviders),
     [visibleProviders],

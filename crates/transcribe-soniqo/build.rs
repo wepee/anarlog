@@ -615,11 +615,4 @@ fn main() {
         println!("cargo:rerun-if-changed=swift-lib/Package.swift");
         println!("cargo:rerun-if-changed=swift-lib/Package.resolved");
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        println!(
-            "cargo:warning=Soniqo speech-swift linking is only available on macOS Apple Silicon"
-        );
-    }
 }

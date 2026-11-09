@@ -10,15 +10,6 @@ pub(crate) struct PollNextSample {
     pub(crate) did_pop_chunk: bool,
 }
 
-#[cfg_attr(
-    not(any(target_os = "linux", target_os = "windows", test)),
-    allow(dead_code)
-)]
-pub(crate) struct PollNextChunk {
-    pub(crate) poll: Poll<Option<Vec<f32>>>,
-    pub(crate) did_pop_chunk: bool,
-}
-
 pub(crate) struct RingbufAsyncReader<C> {
     consumer: C,
     waker: Arc<AtomicWaker>,
@@ -77,15 +68,6 @@ where
 
     pub(crate) fn has_buffered_samples(&self) -> bool {
         self.read_idx < self.read_len
-    }
-
-    #[cfg_attr(
-        not(any(target_os = "linux", target_os = "windows", test)),
-        allow(dead_code)
-    )]
-    fn clear_buffered(&mut self) {
-        self.read_len = 0;
-        self.read_idx = 0;
     }
 
     fn maybe_log_dropped(&mut self) {
@@ -188,40 +170,6 @@ where
             },
         }
     }
-
-    #[cfg_attr(
-        not(any(target_os = "linux", target_os = "windows", test)),
-        allow(dead_code)
-    )]
-    pub(crate) fn poll_next_chunk(&mut self, cx: &mut Context<'_>) -> PollNextChunk {
-        if self.read_idx < self.read_len {
-            let chunk = self.read_buffer[self.read_idx..self.read_len].to_vec();
-            self.clear_buffered();
-            return PollNextChunk {
-                poll: Poll::Ready(Some(chunk)),
-                did_pop_chunk: false,
-            };
-        }
-
-        match self.poll_ready_chunk(cx) {
-            Some(true) => {
-                let chunk = self.read_buffer[..self.read_len].to_vec();
-                self.clear_buffered();
-                PollNextChunk {
-                    poll: Poll::Ready(Some(chunk)),
-                    did_pop_chunk: true,
-                }
-            }
-            Some(false) => PollNextChunk {
-                poll: Poll::Ready(None),
-                did_pop_chunk: false,
-            },
-            None => PollNextChunk {
-                poll: Poll::Pending,
-                did_pop_chunk: false,
-            },
-        }
-    }
 }
 
 #[cfg(test)]
@@ -233,7 +181,7 @@ mod tests {
     };
 
     #[test]
-    fn poll_next_chunk_rechecks_after_register() {
+    fn poll_next_sample_rechecks_after_register() {
         let rb = HeapRb::<f32>::new(8);
         let (mut producer, consumer) = rb.split();
         let waker = Arc::new(AtomicWaker::new());
@@ -246,13 +194,13 @@ mod tests {
         reader.wake_pending.store(true, Ordering::Release);
         producer.push_slice(&[1.0, 2.0, 3.0]);
 
-        let res = reader.poll_next_chunk(&mut cx);
+        let res = reader.poll_next_sample(&mut cx);
         assert!(res.did_pop_chunk);
-        assert_eq!(res.poll, Poll::Ready(Some(vec![1.0, 2.0, 3.0])));
+        assert_eq!(res.poll, Poll::Ready(Some(1.0)));
     }
 
     #[test]
-    fn poll_next_chunk_returns_none_when_source_dies() {
+    fn poll_next_sample_returns_none_when_source_dies() {
         let rb = HeapRb::<f32>::new(8);
         let (_producer, consumer) = rb.split();
         let waker = Arc::new(AtomicWaker::new());
@@ -264,7 +212,7 @@ mod tests {
         let waker = futures_util::task::noop_waker();
         let mut cx = Context::from_waker(&waker);
 
-        let res = reader.poll_next_chunk(&mut cx);
+        let res = reader.poll_next_sample(&mut cx);
         assert!(!res.did_pop_chunk);
         assert_eq!(res.poll, Poll::Ready(None));
     }

@@ -587,9 +587,4 @@ PY
             .map(|status| status.success())
             .unwrap_or(false)
     }
-
-    #[cfg(not(unix))]
-    fn write_fake_codex_script(_temp_dir: &TempDir, _body: &str) -> PathBuf {
-        panic!("fake codex script tests are only supported on unix")
-    }
 }

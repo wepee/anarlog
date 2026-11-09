@@ -7,11 +7,8 @@ import {
 } from "./start-failure";
 
 const mocks = vi.hoisted(() => ({
-  platform: vi.fn(() => "macos"),
   checkPermission: vi.fn(),
 }));
-
-vi.mock("@tauri-apps/plugin-os", () => ({ platform: mocks.platform }));
 
 vi.mock("@anlg/plugin-permissions", () => ({
   commands: { checkPermission: mocks.checkPermission },
@@ -24,14 +21,7 @@ describe("getMicrophonePermission", () => {
   });
 
   test("reports the macOS permission status", async () => {
-    mocks.platform.mockReturnValue("macos");
     await expect(getMicrophonePermission()).resolves.toBe("denied");
-  });
-
-  test("ignores the input probe outside macOS", async () => {
-    mocks.platform.mockReturnValue("linux");
-    await expect(getMicrophonePermission()).resolves.toBeNull();
-    expect(mocks.checkPermission).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,4 @@
-> **Note:** The team is now building **[char](https://char.com)**. The **anarlog** community application remains open-source, MIT-licensed, and maintained as the local-first meeting notetaker in this repo. Source-visible enterprise components are commercially licensed.
+> **Note:** The team is now building **[char](https://char.com)**. The **anarlog** community application remains open-source, MIT-licensed, and maintained as the local-first meeting notetaker in this repo.
 
 <div align="center">
 
@@ -53,7 +53,6 @@ It is built for people who want AI meeting notes without handing their conversat
 - **Bring your own AI.** Use a supported hosted provider, your own API key, or an OpenAI-compatible local server such as Ollama, LM Studio, or Unsloth.
 - **Readable source, MIT.** The community application is MIT-licensed. Fork it, audit it, sell it, or build it yourself.
 - **Cloud is opt-in, not required.** Hosted AI, encrypted CloudSync, and sharing exist when you want them. Nothing depends on them.
-- **A front door for your org.** Source-visible enterprise components and commercial deployment options give security and IT teams a real path to yes.
 
 ## What runs where
 
@@ -78,7 +77,7 @@ The active provider and model are always visible under **Settings → Transcript
 
 ## Get started
 
-1. [Download BlackMushi](https://anarlog.so/download) for macOS, Windows, or Linux.
+1. [Download BlackMushi](https://anarlog.so/download) for macOS.
 2. Open it and join a meeting. anarlog records on your device and transcribes with the model you selected.
 3. Generate a note, edit it like a document, and export Markdown when you need it.
 4. Optional: connect an LLM provider or a local model in settings for summaries and chat.
@@ -101,17 +100,12 @@ Product docs live at [docs.anarlog.so](https://docs.anarlog.so). To build the de
 | `packages/*`       | Shared TypeScript packages for the editor, database, UI, and plugin SDK                    |
 | `supabase/`        | Hosted authentication, sharing, sync, billing, and Cloud API data                          |
 | `skills/anarlog`   | Published agent skill for the CLI and MCP server                                           |
-| `enterprise/`      | Source-visible enterprise components, commercially licensed                                |
 
 ## Local development
 
 The local-first desktop app and website start without secrets. Hosted AI, CloudSync, authentication, billing, and connected integrations need their optional local services and configuration.
 
-You need Node.js 22 or later, pnpm 11.1.1, Rust 1.94.0, [process-compose](https://f1bonacc1.github.io/process-compose/installation/) 1.122.0 or later (`brew install process-compose` on macOS), and the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/). Apple Silicon Macs also need Xcode with its Metal Toolchain component to compile the MLX shader library (Xcode 26 and later: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -downloadComponent MetalToolchain`); the Command Line Tools alone are not enough. On Debian or Ubuntu, the repository can install the required toolchains and system packages:
-
-```bash
-bash scripts/setup-linux.sh
-```
+You need Node.js 22 or later, pnpm 11.1.1, Rust 1.94.0, [process-compose](https://f1bonacc1.github.io/process-compose/installation/) 1.122.0 or later (`brew install process-compose` on macOS), and the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/). Apple Silicon Macs also need Xcode with its Metal Toolchain component to compile the MLX shader library (Xcode 26 and later: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -downloadComponent MetalToolchain`); the Command Line Tools alone are not enough.
 
 Install the workspace and start the app you want to work on:
 
@@ -145,13 +139,11 @@ Issues, pull requests, bug reports, and docs fixes are all welcome.
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 - Join the community on [Discord](https://anarlog.so/discord) or [r/anarlog](https://www.reddit.com/r/anarlog/).
 
-Contributions outside `enterprise/` are distributed under the MIT license.
+Contributions are distributed under the MIT license.
 
 ## License
 
 - Community application: [MIT](LICENSE)
-- Enterprise components: [commercial](LICENSE.enterprise)
-- Full boundary: [LICENSING.md](LICENSING.md)
 
 Maintained by [fastrepl](https://github.com/fastrepl).
 

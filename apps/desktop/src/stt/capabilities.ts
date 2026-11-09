@@ -125,22 +125,18 @@ export function isLocalFileSttModel(
   return provider === "local_file" && model === "local-file";
 }
 
-export function isDesktopLocalSttAvailable(
-  currentPlatform: string,
-  currentArch: string,
-) {
-  return currentPlatform === "macos" && currentArch === "aarch64";
+export function isDesktopLocalSttAvailable(currentArch: string) {
+  return currentArch === "aarch64";
 }
 
 export function getUnsupportedDesktopLocalSttRepair(
-  currentPlatform: string,
   currentArch: string,
   provider: string | undefined,
   model: string | undefined,
   canUseCloud: boolean,
 ) {
   if (
-    isDesktopLocalSttAvailable(currentPlatform, currentArch) ||
+    isDesktopLocalSttAvailable(currentArch) ||
     (!isOnDeviceSttModel(provider, model) &&
       !isLocalFileSttModel(provider, model))
   ) {

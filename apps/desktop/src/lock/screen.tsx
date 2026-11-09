@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { platform } from "@tauri-apps/plugin-os";
 
 import { Lock } from "@anlg/ui/components/icons";
 import { Button } from "@anlg/ui/components/ui/button";
@@ -58,14 +57,7 @@ export function LockScreen({
 
 export function useDeviceAuthHint() {
   const { t } = useLingui();
-  switch (platform()) {
-    case "macos":
-      return t`Use Touch ID or enter your password to view.`;
-    case "windows":
-      return t`Use Windows Hello face, PIN, or password to view.`;
-    default:
-      return t`Authenticate to continue.`;
-  }
+  return t`Use Touch ID or enter your password to view.`;
 }
 
 export function NoteLockScreen({

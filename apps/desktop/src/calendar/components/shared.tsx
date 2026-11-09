@@ -6,7 +6,6 @@ export type CalendarProvider = {
   displayName: string;
   icon: ReactNode;
   badge?: string | null;
-  platform?: "macos" | "all";
   docsPath: string;
 };
 
@@ -23,7 +22,6 @@ const _PROVIDERS = [
         className="size-5 rounded-[4px] object-cover"
       />
     ),
-    platform: "macos",
     docsPath: "https://docs.anarlog.so/calendar#apple-calendar",
   },
 ] as const satisfies readonly CalendarProvider[];

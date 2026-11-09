@@ -24,8 +24,6 @@ anlg-user-error = { workspace = true }
 tauri = { workspace = true }
 tauri-specta = { workspace = true, features = ["derive", "typescript"] }
 
-sentry = { workspace = true, features = ["tracing"] }
-
 dirs = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

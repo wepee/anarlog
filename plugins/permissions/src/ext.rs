@@ -347,11 +347,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
         return check!("calendar", unsafe {
             EKEventStore::authorizationStatusForEntityType(EKEntityType::Event)
         });
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(PermissionStatus::Denied)
-        }
     }
 
     async fn check_reminders(&self) -> Result<PermissionStatus, crate::Error> {
@@ -359,11 +354,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
         return check!("reminders", unsafe {
             EKEventStore::authorizationStatusForEntityType(EKEntityType::Reminder)
         });
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(PermissionStatus::Denied)
-        }
     }
 
     async fn check_contacts(&self) -> Result<PermissionStatus, crate::Error> {
@@ -371,11 +361,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
         return check!("contacts", unsafe {
             CNContactStore::authorizationStatusForEntityType(CNEntityType::Contacts)
         });
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(PermissionStatus::Denied)
-        }
     }
 
     async fn check_microphone(&self) -> Result<PermissionStatus, crate::Error> {
@@ -384,15 +369,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
             let media_type = AVMediaTypeAudio.unwrap();
             AVCaptureDevice::authorizationStatusForMediaType(media_type)
         });
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let audio = self.require_audio()?;
-            match audio.probe_mic(None) {
-                Ok(()) => Ok(PermissionStatus::Authorized),
-                Err(_) => Ok(PermissionStatus::Denied),
-            }
-        }
     }
 
     async fn check_system_audio(&self) -> Result<PermissionStatus, crate::Error> {
@@ -406,15 +382,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
                 Ok(()) => Ok(PermissionStatus::Authorized),
                 Err(_) => Ok(PermissionStatus::Denied),
             };
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let audio = self.require_audio()?;
-            match audio.probe_speaker() {
-                Ok(()) => Ok(PermissionStatus::Authorized),
-                Err(_) => Ok(PermissionStatus::Denied),
-            }
         }
     }
 
@@ -430,11 +397,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
             "screen_recording",
             objc2_core_graphics::CGPreflightScreenCaptureAccess()
         );
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(PermissionStatus::Denied)
-        }
     }
 
     async fn check_accessibility(&self) -> Result<PermissionStatus, crate::Error> {
@@ -443,11 +405,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
             "accessibility",
             macos_accessibility_client::accessibility::application_is_trusted()
         );
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(PermissionStatus::Denied)
-        }
     }
 
     async fn request_calendar(&self) -> Result<(), crate::Error> {
@@ -538,12 +495,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
             }
 
             let _ = rx.recv_timeout(std::time::Duration::from_secs(60));
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let audio = self.require_audio()?;
-            audio.probe_mic(None)?;
         }
 
         Ok(())
@@ -643,11 +594,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
         return check!("input_monitoring", unsafe {
             IOHIDCheckAccess(K_IOHID_REQUEST_TYPE_LISTEN_EVENT) as isize
         });
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(PermissionStatus::Denied)
-        }
     }
 
     async fn request_input_monitoring(&self) -> Result<(), crate::Error> {

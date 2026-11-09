@@ -4,16 +4,4 @@ pub enum Error {
     AudioProcessQuery(String),
     #[error("failed to inspect audio process state: {0}")]
     AudioProcessState(String),
-    #[cfg(target_os = "linux")]
-    #[error("failed to create pulseaudio mainloop")]
-    PulseMainloop,
-    #[cfg(target_os = "linux")]
-    #[error("failed to create pulseaudio context")]
-    PulseContext,
-    #[cfg(target_os = "linux")]
-    #[error("failed to connect to pulseaudio")]
-    PulseConnect,
-    #[cfg(target_os = "linux")]
-    #[error("pulseaudio operation failed: {0}")]
-    PulseOperation(String),
 }

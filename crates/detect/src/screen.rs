@@ -136,7 +136,7 @@ impl ScreenShareSampler {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 pub fn capture_meeting_window(pid: i32, window_title: Option<&str>) -> Result<RgbaImage, String> {
     let pid = u32::try_from(pid).map_err(|_| "invalid meeting process id".to_string())?;
     let windows = xcap::Window::all().map_err(|error| error.to_string())?;
@@ -158,11 +158,6 @@ pub fn capture_meeting_window(pid: i32, window_title: Option<&str>) -> Result<Rg
         .ok_or_else(|| "meeting window not found".to_string())?;
 
     window.capture_image().map_err(|error| error.to_string())
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub fn capture_meeting_window(_pid: i32, _window_title: Option<&str>) -> Result<RgbaImage, String> {
-    Err("screen share capture is not supported on this platform".to_string())
 }
 
 pub fn encode_capture_jpeg(image: &RgbaImage) -> Result<(Vec<u8>, u32, u32), String> {

@@ -139,12 +139,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Icon<'a, R, M> {
             rx.recv()
                 .map_err(|e| crate::Error::Custom(format!("Failed to receive icon result: {e}")))?
         }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = name;
-            Ok(())
-        }
     }
 
     pub fn reset_dock_icon(&self) -> Result<(), crate::Error> {
@@ -183,11 +177,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Icon<'a, R, M> {
 
             rx.recv()
                 .map_err(|e| crate::Error::Custom(format!("Failed to receive icon result: {e}")))?
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(())
         }
     }
 
@@ -253,12 +242,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Icon<'a, R, M> {
 
             Ok(())
         }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = show;
-            Ok(())
-        }
     }
 
     pub fn set_notification_badge(&self, count: Option<u8>) -> Result<(), crate::Error> {
@@ -317,12 +300,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Icon<'a, R, M> {
                 })
                 .map_err(crate::Error::Tauri)?;
 
-            Ok(())
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = count;
             Ok(())
         }
     }
@@ -387,11 +364,6 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Icon<'a, R, M> {
 
             rx.recv()
                 .map_err(|e| crate::Error::Custom(format!("Failed to receive icon data: {}", e)))
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            Ok(None)
         }
     }
 }

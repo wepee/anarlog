@@ -8,14 +8,6 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  platform: vi.fn(() => "macos"),
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: mocks.platform,
-}));
-
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn().mockResolvedValue("1.4.31"),
 }));
@@ -55,7 +47,6 @@ describe("AppSettingsView", () => {
   afterEach(() => {
     cleanup();
     useTabs.setState({ tabs: [], currentTab: null });
-    mocks.platform.mockReturnValue("macos");
   });
 
   it("reopens the installed version's release notes after closing them", async () => {

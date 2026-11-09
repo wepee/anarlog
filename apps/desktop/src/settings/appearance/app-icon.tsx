@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useQuery } from "@tanstack/react-query";
 import { getIdentifier } from "@tauri-apps/api/app";
-import { platform } from "@tauri-apps/plugin-os";
 
 import { cn } from "@anlg/utils";
 
@@ -57,10 +56,6 @@ export function AppIconSelector() {
   const options = APP_ICON_OPTIONS.filter(
     (option) => option === "default" || option !== defaultIconName,
   );
-
-  if (platform() !== "macos") {
-    return null;
-  }
 
   return (
     <section className="flex flex-col gap-4">

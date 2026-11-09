@@ -42,9 +42,7 @@ private enum FloatingAssistPeriod: Hashable {
   case all
 }
 
-// The Live Assist content of the expanded floating bar on macOS. The webview
-// overlay draws the same panel for Windows and Linux in
-// apps/desktop/src/meeting-float/overlay/assist-panel.tsx.
+// The Live Assist content of the expanded floating bar on macOS.
 struct FloatingAssistPanelView<Live: View>: View {
   let assist: FloatingAssistPayload
   let primary: Color

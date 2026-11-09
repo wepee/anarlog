@@ -3,16 +3,6 @@ mod macos;
 #[cfg(target_os = "macos")]
 type PlatformDetector = macos::Detector;
 
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-type PlatformDetector = windows::Detector;
-
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
-type PlatformDetector = linux::Detector;
-
 #[derive(Default)]
 pub struct AppDetector {
     inner: PlatformDetector,

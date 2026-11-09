@@ -9,9 +9,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - run: |
-          python3 .github/scripts/test_check_license_boundary.py
-          python3 .github/scripts/check_license_boundary.py
+      - run: node scripts/check-macos-only.mjs
       - run: node scripts/sync-desktop-changelogs.mjs --check
       - run: node scripts/release-version.mjs --check
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -32,8 +30,3 @@ jobs:
           scripts/verify-release-candidate.test.mjs
           scripts/security-dependencies.test.mjs
           scripts/publish-anarlog-skill.test.mjs
-          scripts/repack-linux-appimage.test.mjs
-          scripts/verify-linux-audio-qa-run.test.mjs
-          scripts/verify-linux-audio-qa-evidence.test.mjs
-          scripts/update-apt-repository.test.mjs
-          scripts/update-aur-pkgbuild.test.mjs

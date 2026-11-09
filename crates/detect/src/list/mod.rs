@@ -4,23 +4,6 @@ mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::*;
 
-#[cfg(target_os = "linux")]
-mod linux;
-
-#[cfg(target_os = "linux")]
-pub use linux::*;
-
-#[cfg(target_os = "windows")]
-mod windows;
-
-#[cfg(target_os = "windows")]
-pub use windows::*;
-
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-pub fn list_installed_apps() -> Vec<InstalledApp> {
-    Vec::new()
-}
-
 const SELF_BUNDLE_IDS: &[&str] = &[
     "com.blackmushi.dev",
     "com.blackmushi.stable",
@@ -72,25 +55,7 @@ fn is_self_app(app: &InstalledApp) -> bool {
 }
 
 pub fn list_mic_using_apps() -> Result<Vec<InstalledApp>, crate::Error> {
-    let apps = {
-        #[cfg(target_os = "macos")]
-        {
-            macos::list_mic_using_apps()?
-        }
-        #[cfg(target_os = "linux")]
-        {
-            linux::list_mic_using_apps()?
-        }
-        #[cfg(target_os = "windows")]
-        {
-            windows::list_mic_using_apps()?
-        }
-
-        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-        {
-            Vec::<InstalledApp>::new()
-        }
-    };
+    let apps = macos::list_mic_using_apps()?;
 
     Ok(apps.into_iter().filter(|app| !is_self_app(app)).collect())
 }

@@ -2,14 +2,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  platform: vi.fn(() => "macos"),
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: mocks.platform,
-}));
-
 vi.mock("~/shared/main", () => ({
   StandardContentWrapper: ({
     children,
@@ -51,7 +43,6 @@ import { TabContentEmpty } from "./empty";
 describe("TabContentEmpty", () => {
   afterEach(() => {
     cleanup();
-    mocks.platform.mockReturnValue("macos");
   });
 
   it("shows the home actions and global chat FAB", () => {

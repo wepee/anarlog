@@ -6,12 +6,10 @@ const {
   captureMeetingScreenShareMock,
   checkPermissionMock,
   persistMeetingScreenCaptureMock,
-  platformMock,
 } = vi.hoisted(() => ({
   captureMeetingScreenShareMock: vi.fn(),
   checkPermissionMock: vi.fn(),
   persistMeetingScreenCaptureMock: vi.fn(),
-  platformMock: vi.fn(),
 }));
 
 vi.mock("@anlg/plugin-detect", () => ({
@@ -21,8 +19,6 @@ vi.mock("@anlg/plugin-detect", () => ({
 vi.mock("@anlg/plugin-permissions", () => ({
   commands: { checkPermission: checkPermissionMock },
 }));
-
-vi.mock("@tauri-apps/plugin-os", () => ({ platform: platformMock }));
 
 vi.mock("~/stt/meeting-screen-records", () => ({
   persistMeetingScreenCapture: persistMeetingScreenCaptureMock,
@@ -53,7 +49,6 @@ describe("startMeetingScreenCapture", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    platformMock.mockReturnValue("macos");
     checkPermissionMock.mockResolvedValue({ status: "ok", data: "authorized" });
     persistMeetingScreenCaptureMock.mockResolvedValue(undefined);
   });
@@ -93,24 +88,6 @@ describe("startMeetingScreenCapture", () => {
     await stop();
 
     expect(captureMeetingScreenShareMock).not.toHaveBeenCalled();
-  });
-
-  test("captures on Windows, where there is no Screen Recording permission", async () => {
-    platformMock.mockReturnValue("windows");
-    checkPermissionMock.mockResolvedValue({ status: "ok", data: "denied" });
-    captureMeetingScreenShareMock.mockResolvedValue({
-      status: "ok",
-      data: frame,
-    });
-
-    const stop = startMeetingScreenCapture({
-      sessionId: "session-1",
-      isEnabled: () => true,
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    await stop();
-
-    expect(persistMeetingScreenCaptureMock).toHaveBeenCalledTimes(1);
   });
 
   test("stops without waiting for a slow accessibility walk and drops its frame", async () => {

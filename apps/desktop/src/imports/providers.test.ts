@@ -29,20 +29,6 @@ describe("meeting import providers", () => {
     ]);
   });
 
-  it("detects Plaud and Pocket desktop apps from Windows display names", () => {
-    const providers = detectMeetingImportProviders([
-      { id: "windows:hklm:Plaud Desktop", name: "Plaud Desktop" },
-      { id: "windows:hkcu:Pocket", name: "Pocket Desktop" },
-    ]);
-
-    expect(providers.map((provider) => provider.id)).toEqual([
-      "fireflies",
-      "plaud",
-      "pocket",
-      "google-meet",
-    ]);
-  });
-
   it("does not treat Pocket Casts as Pocket", () => {
     expect(
       detectMeetingImportProviders([

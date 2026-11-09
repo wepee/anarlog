@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   } | null,
   goBack: vi.fn(),
   openCurrent: vi.fn(),
-  platform: null as string | null,
   select: vi.fn(),
   sendEvent: vi.fn(),
   tabs: [] as {
@@ -21,15 +20,6 @@ const mocks = vi.hoisted(() => ({
     slotId?: string;
     type: string;
   }[],
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => {
-    if (mocks.platform === null) {
-      throw new Error("not in tauri");
-    }
-    return mocks.platform;
-  },
 }));
 
 vi.mock("~/contexts/shell", () => ({
@@ -61,10 +51,7 @@ vi.mock("~/store/zustand/tabs", () => {
   };
 });
 
-import {
-  CustomSidebarHeader,
-  TITLE_BAR_SIDEBAR_ACTIONS_SLOT_ID,
-} from "./custom-sidebar-header";
+import { CustomSidebarHeader } from "./custom-sidebar-header";
 
 describe("CustomSidebarHeader", () => {
   afterEach(() => {
@@ -77,7 +64,6 @@ describe("CustomSidebarHeader", () => {
     mocks.currentTab = { type: "settings" };
     mocks.goBack.mockClear();
     mocks.openCurrent.mockClear();
-    mocks.platform = null;
     mocks.select.mockClear();
     mocks.sendEvent.mockClear();
     mocks.tabs = [];
@@ -145,27 +131,5 @@ describe("CustomSidebarHeader", () => {
 
     expect(mocks.openCurrent).toHaveBeenCalledWith({ type: "empty" });
     expect(mocks.sendEvent).not.toHaveBeenCalled();
-  });
-
-  it("portals header actions next to the title bar back button on windows", () => {
-    mocks.platform = "windows";
-    const slot = document.createElement("div");
-    slot.id = TITLE_BAR_SIDEBAR_ACTIONS_SLOT_ID;
-    document.body.appendChild(slot);
-
-    try {
-      const { container } = render(
-        <CustomSidebarHeader>
-          <button type="button">New folder</button>
-        </CustomSidebarHeader>,
-      );
-
-      expect(container.innerHTML).toBe("");
-      expect(
-        slot.contains(screen.getByRole("button", { name: "New folder" })),
-      ).toBe(true);
-    } finally {
-      slot.remove();
-    }
   });
 });

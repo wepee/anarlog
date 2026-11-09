@@ -8,7 +8,6 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  platform: vi.fn(() => "macos"),
   setAppIcon: vi.fn(),
   applyAppIconPreference: vi.fn(),
   appIcon: "default",
@@ -28,10 +27,6 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("@tauri-apps/api/app", () => ({
   getIdentifier: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: mocks.platform,
 }));
 
 vi.mock("~/settings/queries", () => ({
@@ -57,7 +52,6 @@ describe("AppIconSelector", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-    mocks.platform.mockReturnValue("macos");
     mocks.appIcon = "default";
     mocks.theme = "system";
     mocks.appIdentifier = "com.hyprnote.stable";
@@ -170,13 +164,5 @@ describe("AppIconSelector", () => {
         .getAttribute("aria-checked"),
     ).toBe("true");
     expect(screen.queryByRole("radio", { name: "Production" })).toBeNull();
-  });
-
-  it("is hidden on platforms that cannot change the running app icon", () => {
-    mocks.platform.mockReturnValue("windows");
-
-    render(<AppIconSelector />);
-
-    expect(screen.queryByText("App icon")).toBeNull();
   });
 });

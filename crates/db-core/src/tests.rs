@@ -589,12 +589,7 @@ async fn local_cloudsync_requires_wal() {
 
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "aarch64"),
-    all(target_os = "linux", target_env = "musl", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "x86_64")
 ))]
 #[tokio::test]
 async fn cloudsync_initialized_table_requires_extension_for_writes() {

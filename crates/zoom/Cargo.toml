@@ -11,6 +11,3 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 urlencoding = { workspace = true }
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

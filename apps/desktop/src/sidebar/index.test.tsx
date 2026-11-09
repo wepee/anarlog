@@ -3,11 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   currentTab: { type: "empty" } as { type: string } | null,
-  platform: "macos",
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => mocks.platform,
 }));
 
 vi.mock("~/store/zustand/tabs", () => ({
@@ -61,7 +56,6 @@ import { LeftSidebar } from "./index";
 describe("LeftSidebar", () => {
   beforeEach(() => {
     mocks.currentTab = { type: "empty" };
-    mocks.platform = "macos";
   });
 
   afterEach(() => {

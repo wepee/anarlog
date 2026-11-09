@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   toggleLeftSidebar: vi.fn(),
   isTauri: vi.fn(() => true),
   isFullscreen: vi.fn().mockResolvedValue(false),
-  platform: "macos" as "linux" | "macos" | "windows",
   startDragging: vi.fn().mockResolvedValue(undefined),
   toggleMaximize: vi.fn().mockResolvedValue(undefined),
   upcomingMeetingStatus: null as null | {
@@ -47,10 +46,6 @@ vi.mock("@tauri-apps/api/window", () => ({
     startDragging: mocks.startDragging,
     toggleMaximize: mocks.toggleMaximize,
   }),
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => mocks.platform,
 }));
 
 vi.mock("~/main/useShortcuts", () => ({
@@ -131,7 +126,6 @@ describe("ClassicMainBody", () => {
     mocks.isTauri.mockReturnValue(true);
     mocks.isFullscreen.mockReset();
     mocks.isFullscreen.mockResolvedValue(false);
-    mocks.platform = "macos";
     mocks.startDragging.mockClear();
     mocks.toggleMaximize.mockClear();
     mocks.upcomingMeetingStatus = null;

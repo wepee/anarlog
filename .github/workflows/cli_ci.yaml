@@ -82,20 +82,19 @@ concurrency:
 
 jobs:
   cli-ci:
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           submodules: recursive
           fetch-depth: 0
-      - run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell 2> /dev/null || true
-          df -h /
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.23.4"
       - uses: ./.github/actions/rust_install
+        with:
+          platform: macos
       - run: |
           cargo test --locked -p agent-access
           cargo test --locked -p anarlog-cli
@@ -148,11 +147,6 @@ jobs:
           fi
           grep -q '"code": "operation_failed"' <<<"$auth_error"
           ! grep -q 'cli-auth-secret-sentinel' <<<"$auth_error"
-          headless_auth_root="$RUNNER_TEMP/anarlog-auth-headless"
-          headless_logout="$(env -u DBUS_SESSION_BUS_ADDRESS XDG_DATA_HOME="$headless_auth_root" target/release/anarlog --json auth logout)"
-          grep -q '"command": "auth.logout"' <<<"$headless_logout"
-          headless_fallback="$headless_auth_root/com.hyprnote.stable/auth.cli.json"
-          test ! -e "$headless_fallback"
       - run: |
           test -s skills/anarlog/SKILL.md
           test "$(sed -n '1p' skills/anarlog/SKILL.md)" = "---"
@@ -174,54 +168,3 @@ jobs:
         env:
           PUPPETEER_SKIP_DOWNLOAD: "true"
 
-  cli-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-          fetch-depth: 0
-      - uses: ./.github/actions/rust_install
-        with:
-          platform: windows
-      - run: cargo test --locked -p anarlog-cli
-      - run: |
-          cargo clippy --locked \
-            -p anarlog-cli \
-            --all-targets \
-            --no-deps \
-            -- \
-            -D warnings
-        shell: bash
-      - run: cargo build --locked --release -p anarlog-cli
-      - run: |
-          target/release/anarlog.exe --help
-          target/release/anarlog.exe --version
-          target/release/anarlog.exe auth --help
-          target/release/anarlog.exe meetings --help
-          target/release/anarlog.exe mcp --help
-          if doctor_output="$(target/release/anarlog.exe --json --db-path "$RUNNER_TEMP/missing.db" doctor)"; then
-            echo "doctor unexpectedly reported a missing database as ready"
-            exit 1
-          fi
-          grep -q '"ready": false' <<<"$doctor_output"
-          if invalid_output="$(target/release/anarlog.exe --json meetings list --limit 0 2>&1)"; then
-            echo "invalid arguments unexpectedly succeeded"
-            exit 1
-          fi
-          grep -q '"code": "invalid_arguments"' <<<"$invalid_output"
-          auth_path="$RUNNER_TEMP/anarlog-auth-smoke.json"
-          auth_status="$(ANARLOG_AUTH_PATH="$auth_path" target/release/anarlog.exe --json auth status)"
-          grep -q '"command": "auth.status"' <<<"$auth_status"
-          grep -q '"signed_in": false' <<<"$auth_status"
-          auth_logout="$(ANARLOG_AUTH_PATH="$auth_path" target/release/anarlog.exe --json auth logout)"
-          grep -q '"command": "auth.logout"' <<<"$auth_logout"
-          grep -q '"signed_in": false' <<<"$auth_logout"
-          if auth_error="$(printf '%s\n' 'anarlog://auth/callback?access_token=cli-auth-secret-sentinel' | ANARLOG_AUTH_PATH="$auth_path" target/release/anarlog.exe --json auth login 2>&1)"; then
-            echo "incomplete auth callback unexpectedly succeeded"
-            exit 1
-          fi
-          grep -q '"code": "operation_failed"' <<<"$auth_error"
-          ! grep -q 'cli-auth-secret-sentinel' <<<"$auth_error"
-        shell: bash

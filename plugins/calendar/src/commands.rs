@@ -210,12 +210,6 @@ async fn is_apple_authorized<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Re
             tauri_plugin_permissions::PermissionStatus::Authorized
         ))
     }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = app;
-        Ok(false)
-    }
 }
 
 #[tauri::command]

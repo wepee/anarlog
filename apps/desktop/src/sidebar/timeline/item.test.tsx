@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   isIgnored: vi.fn(() => false),
   openCurrent: vi.fn(),
   openNew: vi.fn(),
-  platform: "macos",
   preloadSession: vi.fn(() => Promise.resolve(null)),
   sessionMode: "inactive",
   isEnhancing: false,
@@ -42,10 +41,6 @@ const mocks = vi.hoisted(() => ({
   windowShow: vi.fn(() => Promise.resolve({ status: "ok", data: null })),
   authAvailable: false as boolean | null,
   revealedNoteIds: {} as Record<string, true>,
-}));
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  platform: () => mocks.platform,
 }));
 
 vi.mock("@anlg/plugin-fs-sync", () => ({
@@ -209,7 +204,6 @@ describe("TimelineItemComponent", () => {
     mocks.stop.mockClear();
     mocks.openCurrent.mockClear();
     mocks.openNew.mockClear();
-    mocks.platform = "macos";
     mocks.preloadSession.mockReset();
     mocks.preloadSession.mockResolvedValue(null);
     mocks.authAvailable = false;
@@ -589,39 +583,6 @@ describe("TimelineItemComponent", () => {
       text: "Delete Event",
     });
   });
-
-  it.each(["windows", "linux"])(
-    "uses platform-neutral folder copy on %s",
-    (currentPlatform) => {
-      mocks.platform = currentPlatform;
-
-      render(
-        <TimelineItemComponent
-          item={{
-            type: "session",
-            id: "session-note",
-            data: {
-              title: "Window Note",
-              created_at: "2024-01-15T10:30:00.000Z",
-            },
-          }}
-          precision="time"
-          selected={false}
-          timezone="UTC"
-          multiSelected={false}
-          flatItemKeys={["session-session-note"]}
-        />,
-      );
-
-      const menu = mocks.nativeContextMenus.find((items) =>
-        items.some((item) => item.id === "show"),
-      );
-
-      expect(menu?.find((item) => item.id === "show")?.text).toBe(
-        "Show in folder",
-      );
-    },
-  );
 
   it("renders finalizing session spinner at the end of the row", () => {
     mocks.sessionMode = "finalizing";

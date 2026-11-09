@@ -1,5 +1,3 @@
-#![cfg_attr(target_os = "windows", allow(dead_code))]
-
 use std::collections::HashSet;
 
 #[cfg(target_os = "macos")]
@@ -195,78 +193,6 @@ pub(super) fn running_apps_for_bundle(bundle_id: &str) -> Vec<(MeetingApp, i32)>
 }
 
 #[cfg(target_os = "macos")]
-pub(super) fn running_meeting_apps() -> Vec<(MeetingApp, i32)> {
-    let mut seen = HashSet::new();
-
-    MEETING_APP_BUNDLES
-        .iter()
-        .flat_map(|bundle| running_apps_for_bundle(bundle.id))
-        .filter(|(_, pid)| seen.insert(*pid))
-        .collect()
-}
-
-#[cfg(not(target_os = "macos"))]
-fn process_matches_meeting_family(process: &sysinfo::Process, family: &str) -> bool {
-    let process_name = process.name().to_string_lossy();
-    let exe_name = process
-        .exe()
-        .and_then(|path| path.file_name())
-        .map(|name| name.to_string_lossy())
-        .unwrap_or_default();
-    let command = process
-        .cmd()
-        .first()
-        .map(|part| part.to_string_lossy())
-        .unwrap_or_default();
-
-    [process_name.as_ref(), exe_name.as_ref(), command.as_ref()]
-        .into_iter()
-        .any(|candidate| meeting_app_family(candidate) == Some(family))
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn running_apps_for_bundle(bundle_id: &str) -> Vec<(MeetingApp, i32)> {
-    let Some(family) = meeting_app_family(bundle_id) else {
-        return Vec::new();
-    };
-
-    let mut system = sysinfo::System::new();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-
-    let mut seen = HashSet::new();
-    system
-        .processes()
-        .iter()
-        .filter_map(|(pid, process)| {
-            if process.thread_kind().is_some()
-                || process.status() == sysinfo::ProcessStatus::Zombie
-                || !process_matches_meeting_family(process, family)
-                || process
-                    .parent()
-                    .and_then(|parent| system.process(parent))
-                    .is_some_and(|parent| process_matches_meeting_family(parent, family))
-            {
-                return None;
-            }
-            let process_name = process.name().to_string_lossy().into_owned();
-
-            let pid = i32::try_from(pid.as_u32()).ok()?;
-            if !seen.insert(pid) {
-                return None;
-            }
-
-            Some((
-                MeetingApp {
-                    id: bundle_id.to_string(),
-                    name: process_name,
-                },
-                pid,
-            ))
-        })
-        .collect()
-}
-
-#[cfg(not(target_os = "macos"))]
 pub(super) fn running_meeting_apps() -> Vec<(MeetingApp, i32)> {
     let mut seen = HashSet::new();
 

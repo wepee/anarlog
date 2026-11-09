@@ -340,11 +340,8 @@ export const events = __makeEvents__<{
   floatingBarAssistAction: FloatingBarAssistAction;
   floatingBarDictationAction: FloatingBarDictationAction;
   floatingBarOpenMain: FloatingBarOpenMain;
-  floatingBarOverlayAmplitude: FloatingBarOverlayAmplitude;
-  floatingBarOverlayState: FloatingBarOverlayState;
   floatingBarSettingsChange: FloatingBarSettingsChange;
   floatingBarStop: FloatingBarStop;
-  liveCaptionOverlayState: LiveCaptionOverlayState;
   navigate: Navigate;
   openTab: OpenTab;
   visibilityEvent: VisibilityEvent;
@@ -354,11 +351,8 @@ export const events = __makeEvents__<{
   floatingBarAssistAction: "plugin:windows:floating-bar-assist-action",
   floatingBarDictationAction: "plugin:windows:floating-bar-dictation-action",
   floatingBarOpenMain: "plugin:windows:floating-bar-open-main",
-  floatingBarOverlayAmplitude: "plugin:windows:floating-bar-overlay-amplitude",
-  floatingBarOverlayState: "plugin:windows:floating-bar-overlay-state",
   floatingBarSettingsChange: "plugin:windows:floating-bar-settings-change",
   floatingBarStop: "plugin:windows:floating-bar-stop",
-  liveCaptionOverlayState: "plugin:windows:live-caption-overlay-state",
   navigate: "plugin:windows:navigate",
   openTab: "plugin:windows:open-tab",
   visibilityEvent: "plugin:windows:visibility-event",
@@ -423,12 +417,10 @@ export type FloatingBarDictationAction = {
   action: DictationPanelAction;
 };
 export type FloatingBarOpenMain = Record<string, never>;
-export type FloatingBarOverlayAmplitude = { amplitude: number };
 export type FloatingBarOverlayLayout = {
   controlsCenterX: number;
   expandsUpward: boolean;
 };
-export type FloatingBarOverlayState = { state: FloatingBarState };
 export type FloatingBarSettingsChange = {
   floatingBarOpacity: number | null;
   liveCaptionOpacity: number | null;
@@ -490,7 +482,6 @@ export type JsonValue =
   | string
   | JsonValue[]
   | Partial<{ [key in string]: JsonValue }>;
-export type LiveCaptionOverlayState = { state: LiveCaptionState };
 export type LiveCaptionPosition =
   | "topCenter"
   | "topLeft"

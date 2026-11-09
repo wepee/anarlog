@@ -1,13 +1,3 @@
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "windows")]
-mod windows;
-
-#[cfg(target_os = "linux")]
-pub use linux::{capture, insert};
-#[cfg(target_os = "windows")]
-pub use windows::{capture, insert};
-
 #[cfg(target_os = "macos")]
 pub async fn capture() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(anlg_dictation_ui_macos::capture_target)

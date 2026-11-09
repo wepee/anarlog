@@ -216,18 +216,11 @@ function OnboardingScreenContent({
             title={<Trans>Start with permissions</Trans>}
             completedTitle={<Trans>Permissions granted</Trans>}
             description={
-              currentPlatform === "macos" ? (
-                <Trans>
-                  BlackMushi needs microphone and system audio to transcribe
-                  your meetings, plus Accessibility to read meeting controls,
-                  visible chat.
-                </Trans>
-              ) : (
-                <Trans>
-                  BlackMushi needs access to your microphone and system audio to
-                  record and transcribe your meetings
-                </Trans>
-              )
+              <Trans>
+                BlackMushi needs microphone and system audio to transcribe your
+                meetings, plus Accessibility to read meeting controls, visible
+                chat.
+              </Trans>
             }
             status={getStepStatus("permissions", currentStep)}
             skippable={false}

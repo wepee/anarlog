@@ -232,31 +232,31 @@ fn full_resync_schedule_tracks_generation_until_cancelled() {
     assert_eq!(schedule.last_error("generation-1"), None);
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn witness_repair_refresh_is_reused_until_activity_invalidates_it() {
     run_witness_repair(WitnessRepairScenario::Refresh).await;
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn witness_repair_encrypts_local_edits_that_defer_remote_changes() {
     run_witness_repair(WitnessRepairScenario::LocalEdit).await;
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn witness_repair_waits_for_missing_transcript_chunks() {
     run_witness_repair(WitnessRepairScenario::IncompleteTranscript).await;
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn witness_repair_resumes_after_confirming_a_large_pending_version() {
     run_witness_repair(WitnessRepairScenario::LargePendingVersion).await;
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 #[derive(Clone, Copy)]
 enum WitnessRepairScenario {
     Refresh,
@@ -265,7 +265,7 @@ enum WitnessRepairScenario {
     LargePendingVersion,
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 async fn run_witness_repair(scenario: WitnessRepairScenario) {
     use std::io::{Read, Write};
 

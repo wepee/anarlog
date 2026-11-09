@@ -57,6 +57,3 @@ fn main() {
         "native Quit must hide the main window while the event loop remains running"
     );
 }
-
-#[cfg(not(target_os = "macos"))]
-fn main() {}

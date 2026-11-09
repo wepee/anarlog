@@ -1,3 +1,6 @@
+#[cfg(not(target_os = "macos"))]
+compile_error!("[fork] this app only builds for macOS");
+
 mod agent_skills;
 mod agents;
 mod appearance;
@@ -109,7 +112,6 @@ fn create_audio_provider(_bundle_id: &str) -> std::sync::Arc<dyn anlg_audio_actu
 }
 
 pub fn main() {
-    startup::apply_linux_webkit_workarounds();
     // Sentry minidump reporting re-execs this binary with --crash-reporter-server.
     // That helper must reach minidump::init instead of the launch lock, or it
     // shows "BlackMushi is already starting" on every launch and never serves dumps.
@@ -273,13 +275,10 @@ pub fn main() {
         .plugin(tauri_plugin_fs_sync::init())
         .plugin(tauri_plugin_fs2::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_path2::init())
         .plugin(tauri_plugin_export::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_local_api::init())
         .plugin(tauri_plugin_local_auth::init())
-        .plugin(tauri_plugin_mcp::init())
-        .plugin(tauri_plugin_messenger::init())
         .plugin(tauri_plugin_misc::init())
         .plugin(tauri_plugin_template::init())
         .plugin(tauri_plugin_session::init())
@@ -288,7 +287,6 @@ pub fn main() {
         .plugin(tauri_plugin_dock::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_notify::init())
-        .plugin(tauri_plugin_overlay::init())
         .plugin(tauri_plugin_clipboard_manager::init());
 
     builder = builder
@@ -298,7 +296,6 @@ pub fn main() {
         .plugin(tauri_plugin_shortcut::init())
         .plugin(tauri_plugin_dictation::init())
         .plugin(tauri_plugin_windows::init())
-        .plugin(tauri_plugin_js::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(tauri_plugin_windows::persisted_window_state_flags())
@@ -307,7 +304,6 @@ pub fn main() {
         )
         .plugin(tauri_plugin_transcription::init())
         .plugin(tauri_plugin_tantivy::init())
-        .plugin(tauri_plugin_audio_priority::init())
         .plugin(tauri_plugin_local_llm::init())
         .plugin(tauri_plugin_local_stt::init(
             tauri_plugin_local_stt::InitOptions {
@@ -377,17 +373,6 @@ pub fn main() {
                         }
                     });
                 });
-            }
-
-            #[cfg(any(windows, target_os = "linux"))]
-            {
-                // https://v2.tauri.app/ko/plugin/deep-linking/#desktop-1
-                // Registration shells out to update-desktop-database/xdg-mime on Linux,
-                // which are missing on NixOS; failing setup here panics the app.
-                use tauri_plugin_deep_link::DeepLinkExt;
-                if let Err(error) = app.deep_link().register_all() {
-                    tracing::warn!(%error, "failed to register deep link handlers");
-                }
             }
 
             {
@@ -602,10 +587,6 @@ fn append_startup_failure_to_log(identifier: &str, message: &str) {
         };
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ");
         let _ = writeln!(file, "{timestamp} ERROR anarlog::startup: {message}");
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (identifier, message);
     }
 }
 

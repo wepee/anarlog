@@ -68,6 +68,13 @@ if [ -n "$REMAINING" ]; then
   exit 1
 fi
 
+echo "==> checking macOS-only invariants"
+if ! node scripts/check-macos-only.mjs; then
+  echo
+  echo "upstream brought back Windows/Linux code; fix it, then: git add <files> && git commit"
+  exit 1
+fi
+
 if [ "$MERGE_CLEAN" = 0 ]; then
   echo "==> all conflicts were mechanical; committing the merge"
   git commit --no-edit
