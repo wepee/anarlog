@@ -139,6 +139,7 @@ pics d'onde et la retranscription suivent ce lien sans le savoir.
 |---|---|
 | `crates/fs-sync-core/src/audio/archive.rs` | copie vérifiée (date de modification conservée pour le cache des pics), remplacement atomique par un lien ; disponibilité (`SF_DATALESS`), téléchargement à la demande, sélection des fichiers à libérer |
 | `crates/fs-sync-core/src/audio/mod.rs` | supprimer un audio archivé supprime aussi le fichier archivé |
+| `crates/fs-sync-core/src/audio/archive.rs` (`relocate`) | changer de dossier d'archive y déplace les audios déjà archivés et refait leurs liens (simple renommage sur un même volume, copie vérifiée sinon) ; un ancien dossier inaccessible est retenté plus tard |
 | `plugins/fs-sync/src/{ext,commands}.rs` | `archive_session_audio_locked` ; commandes `audio_availability` et `audio_download` ; `audio_path` renvoie le chemin résolu |
 | `plugins/transcription/src/audio_retention.rs` | passe d'archivage toutes les 2 min, puis éviction iCloud (`brctl evict`) |
 | `apps/desktop/src/audio-player/{provider,timeline}.tsx` | un audio retiré du Mac n'est pas chargé à l'ouverture de la note : « In iCloud », puis téléchargement au clic sur lecture |

@@ -357,9 +357,9 @@ async fn archive_sweep<R: tauri::Runtime>(
         let old_enough = candidate
             .created_at_ms
             .is_some_and(|created_at| now_ms >= created_at.saturating_add(settings.after_ms));
-        if !old_enough || (settings.needs_transcript && !candidate.has_words) {
-            continue;
-        }
+        // Recordings archived under earlier settings still follow a change of
+        // folder, whatever the new delay says.
+        let may_archive = old_enough && (!settings.needs_transcript || candidate.has_words);
         let session_id = candidate.session_id;
         // Early imports used ids like "meeting-import:<hash>"; the session
         // folder only accepts UUIDs, so they never had a recording to move.
@@ -370,12 +370,19 @@ async fn archive_sweep<R: tauri::Runtime>(
         if !session_audio_is_idle(app, &session_id).await {
             continue;
         }
-        match app
-            .fs_sync()
-            .archive_session_audio_locked(&session_id, &settings.directory)
-        {
+        let outcome = if may_archive {
+            app.fs_sync()
+                .archive_session_audio_locked(&session_id, &settings.directory)
+        } else {
+            app.fs_sync()
+                .relocate_session_audio_locked(&session_id, &settings.directory)
+        };
+        match outcome {
             Ok(tauri_plugin_fs_sync::audio::ArchiveOutcome::Archived(target)) => {
                 tracing::info!(%session_id, target = %target.display(), "session_audio_archived");
+            }
+            Ok(tauri_plugin_fs_sync::audio::ArchiveOutcome::Relocated(target)) => {
+                tracing::info!(%session_id, target = %target.display(), "session_audio_relocated");
             }
             Ok(_) => {}
             Err(error) => {
