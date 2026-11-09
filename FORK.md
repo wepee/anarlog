@@ -193,7 +193,12 @@ Intel). Tout ce qui ne servait qu'à Windows ou Linux est retiré :
   `db-core`, `db-app`, `db-migrate`, `agent-access`…) gardent leurs branches
   Linux ; seuls Windows et le mobile y sont retirés.
 - **Front** : branches `platform() === "windows" | "linux"`, barre de titre
-  Windows, libellés « Ctrl » / « Show in folder ».
+  Windows, libellés « Ctrl » / « Show in folder ». La barre flottante et le
+  sous-titrage en webview (`meeting-float/overlay/`, routes `/app/floating-bar`
+  et `/app/live-caption`, événements `*OverlayState` / `*OverlayAmplitude`)
+  sont retirés : macOS les dessine nativement en Swift.
+- **Site web** : après `apps/web/`, ses restes `packages/pricing` et
+  `packages/supabase` (facturation, parrainage) sont supprimés.
 - **Packaging** : Flatpak, AUR, APT, AppImage, `bundle.linux` / `bundle.windows`
   des `tauri.conf*.json`, workflow Microsoft Store.
 - **CI** : jobs `windows_ci` / `linux_ci` de `desktop_ci.yaml`, `cli-windows` ;

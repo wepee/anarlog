@@ -82,8 +82,6 @@ pub struct FloatingBarState {
     pub assist_json: Option<String>,
 }
 
-pub const WINDOW_LABEL: &str = "floating-bar";
-
 #[cfg(test)]
 pub(crate) mod layout {
     use super::FloatingBarState;

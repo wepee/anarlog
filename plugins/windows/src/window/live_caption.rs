@@ -24,8 +24,6 @@ pub struct LiveCaptionState {
     pub minimized: bool,
 }
 
-pub const WINDOW_LABEL: &str = "live-caption";
-
 #[cfg(target_os = "macos")]
 mod platform {
     use swift_rs::{Bool, swift};

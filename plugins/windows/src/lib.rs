@@ -284,9 +284,6 @@ fn make_specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             events::FloatingBarDictationAction,
             events::FloatingBarAssistAction,
             events::FloatingBarOpenMain,
-            events::FloatingBarOverlayState,
-            events::FloatingBarOverlayAmplitude,
-            events::LiveCaptionOverlayState,
             events::FloatingBarSettingsChange,
         ])
         .commands(tauri_specta::collect_commands![

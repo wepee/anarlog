@@ -136,3 +136,13 @@ plugins/dictation/src/insertion/windows.rs
 plugins/local-auth/src/windows.rs
 plugins/shortcut/src/global/portal.rs
 plugins/shortcut/src/global/trigger.rs
+
+# macOS draws the floating bar and live caption natively; the webview
+# overlay only served Windows/Linux. Pricing and web-only Supabase helpers
+# were left behind by apps/web/.
+apps/desktop/src/meeting-float/overlay/
+apps/desktop/src/routes/app/floating-bar.tsx
+apps/desktop/src/routes/app/live-caption.tsx
+apps/desktop/src/settings/general/tier-actions.test.ts
+packages/pricing/
+packages/supabase/
