@@ -94,6 +94,11 @@ refusée. `scripts/build-macos.sh` retire `APPLE_SIGNING_IDENTITY` de
 l'environnement de Tauri pour une identité locale, sinon Tauri signerait avec le
 hardened runtime, incompatible avec un certificat auto-signé.
 
+Le build vide les attributs étendus du bundle avant de le signer
+(`xattr -cr`), l'archive de mise à jour est créée sans eux (`tar --no-xattrs`),
+et la signature est vérifiée en mode strict : un `com.apple.FinderInfo` sur le
+bundle fait échouer `codesign --verify --strict`, le contrôle de Gatekeeper.
+
 Diagnostic : au lancement, `apps/desktop/src-tauri/src/launch_diagnostics.rs`
 journalise la signature vue par `codesign` (ad-hoc ou certificat, TeamIdentifier,
 cdhash, exigence désignée) et l'état Accessibilité / micro / écran. Chaque

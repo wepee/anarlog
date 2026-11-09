@@ -21,6 +21,7 @@ export function startMeetingScreenCapture({
   let pendingPersistence: Promise<void> | null = null;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let permissionWarned = false;
+  let permissionRequested = false;
   const captureIsEnabled =
     isEnabled ??
     (async () =>
@@ -38,6 +39,17 @@ export function startMeetingScreenCapture({
 
       const permission =
         await permissionsCommands.checkPermission("screenRecording");
+      // Nothing else in the app asks for Screen Recording: without this the
+      // setting stays on while macOS never shows its prompt.
+      if (
+        permission?.status === "ok" &&
+        permission.data === "neverRequested" &&
+        !permissionRequested
+      ) {
+        permissionRequested = true;
+        await permissionsCommands.requestPermission("screenRecording");
+        return;
+      }
       if (permission?.status === "ok" && permission.data === "denied") {
         if (!permissionWarned) {
           permissionWarned = true;

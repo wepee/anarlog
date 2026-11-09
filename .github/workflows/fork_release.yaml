@@ -298,14 +298,16 @@ jobs:
             echo "::error::Built $built_version but expected $APP_VERSION"
             exit 1
           fi
-          codesign --verify --verbose=2 "$app"
+          codesign --verify --strict --verbose=2 "$app"
 
           out="$RUNNER_TEMP/release"
           mkdir -p "$out"
           # COPYFILE_DISABLE keeps bsdtar from emitting AppleDouble `._` entries,
           # which Tauri's extractor would otherwise unpack next to the bundle.
           archive="$out/BlackMushi_${APP_VERSION}_aarch64.app.tar.gz"
-          COPYFILE_DISABLE=1 tar -czf "$archive" -C "$bundle_dir" "$(basename "$app")"
+          # --no-xattrs: extended attributes would land on the installed bundle
+          # and fail its strict signature check.
+          COPYFILE_DISABLE=1 tar --no-xattrs -czf "$archive" -C "$bundle_dir" "$(basename "$app")"
           rm -f "$archive.sig"
           pnpm -F @anlg/desktop exec tauri signer sign "$archive"
 

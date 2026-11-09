@@ -78,6 +78,11 @@ sign_app() {
     options=(--timestamp --options runtime)
   fi
 
+  # Finder metadata on the bundle (com.apple.FinderInfo, resource forks) is
+  # outside the seal and fails `codesign --verify --strict`, which is what
+  # Gatekeeper applies to a downloaded app.
+  xattr -cr "$app"
+
   # Nested Mach-O first: the bundle signature seals them, so signing them
   # afterwards would invalidate the outer seal.
   while IFS= read -r -d '' nested; do
@@ -95,7 +100,7 @@ sign_app() {
     --entitlements "$entitlements" \
     "${options[@]+"${options[@]}"}" \
     "$app"
-  codesign --verify --verbose=2 "$app"
+  codesign --verify --strict --verbose=2 "$app"
 }
 
 entitlements_for() {

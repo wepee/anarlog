@@ -5,10 +5,12 @@ import { startMeetingScreenCapture } from "./meeting-screen-capture";
 const {
   captureMeetingScreenShareMock,
   checkPermissionMock,
+  requestPermissionMock,
   persistMeetingScreenCaptureMock,
 } = vi.hoisted(() => ({
   captureMeetingScreenShareMock: vi.fn(),
   checkPermissionMock: vi.fn(),
+  requestPermissionMock: vi.fn(),
   persistMeetingScreenCaptureMock: vi.fn(),
 }));
 
@@ -17,7 +19,10 @@ vi.mock("@anlg/plugin-detect", () => ({
 }));
 
 vi.mock("@anlg/plugin-permissions", () => ({
-  commands: { checkPermission: checkPermissionMock },
+  commands: {
+    checkPermission: checkPermissionMock,
+    requestPermission: requestPermissionMock,
+  },
 }));
 
 vi.mock("~/stt/meeting-screen-records", () => ({
@@ -88,6 +93,28 @@ describe("startMeetingScreenCapture", () => {
     await stop();
 
     expect(captureMeetingScreenShareMock).not.toHaveBeenCalled();
+  });
+
+  test("asks macOS for Screen Recording once when it was never requested", async () => {
+    checkPermissionMock.mockResolvedValue({
+      status: "ok",
+      data: "neverRequested",
+    });
+    requestPermissionMock.mockResolvedValue({ status: "ok", data: null });
+    captureMeetingScreenShareMock.mockResolvedValue({
+      status: "ok",
+      data: { ...frame, jpeg: null },
+    });
+
+    const stop = startMeetingScreenCapture({
+      sessionId: "session-1",
+      isEnabled: () => true,
+    });
+    await vi.advanceTimersByTimeAsync(9_000);
+    await stop();
+
+    expect(requestPermissionMock).toHaveBeenCalledTimes(1);
+    expect(requestPermissionMock).toHaveBeenCalledWith("screenRecording");
   });
 
   test("stops without waiting for a slow accessibility walk and drops its frame", async () => {
