@@ -132,7 +132,6 @@ owhisper-client = { path = "crates/owhisper-client", package = "owhisper-client"
 owhisper-interface = { path = "crates/owhisper-interface", package = "owhisper-interface" }
 soniox = { path = "crates/soniox", package = "soniox" }
 
-ashpd = { version = "0.13.13", default-features = false }
 tauri = "2.11.5"
 tauri-build = "2.6.3"
 tauri-plugin = "2.5"
@@ -225,7 +224,6 @@ isolang = "2.4"
 itertools = "0.14.0"
 jsonschema = "0.46.0"
 lazy_static = "1.5.0"
-libloading = "0.8"
 open = "5"
 regex = "1.12"
 rpassword = "7.5.4"
@@ -321,13 +319,9 @@ whichlang = "0.1"
 
 swift-rs = { git = "https://github.com/Brendonovich/swift-rs", rev = "fd82965" }
 
-wasapi = "0.23.0"
-windows = "0.62.2"
-windows-core = "0.62.2"
 xcap = "0.9.3"
 
 rmcp = "3.2"
-rustls = { version = "0.23", default-features = false }
 sqlx = { version = "=0.9.0-alpha.1", default-features = false }
 sys-locale = "0.3.2"
 sysinfo = "0.38"

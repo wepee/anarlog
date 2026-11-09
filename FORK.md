@@ -189,7 +189,9 @@ Intel). Tout ce qui ne servait qu'à Windows ou Linux est retiré :
   et `apps/cli`. Les branches `cfg(unix)` restent (macOS en fait partie).
   `apps/desktop/src-tauri/src/lib.rs` refuse de compiler hors macOS
   (`compile_error!`). `enterprise/` n'est pas concerné : ses workers tournent
-  sur des serveurs Linux.
+  sur des serveurs Linux, donc les crates qu'il utilise (`cloudsync`,
+  `db-core`, `db-app`, `db-migrate`, `agent-access`…) gardent leurs branches
+  Linux ; seuls Windows et le mobile y sont retirés.
 - **Front** : branches `platform() === "windows" | "linux"`, barre de titre
   Windows, libellés « Ctrl » / « Show in folder ».
 - **Packaging** : Flatpak, AUR, APT, AppImage, `bundle.linux` / `bundle.windows`

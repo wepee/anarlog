@@ -221,7 +221,6 @@ dependencies = [
  "db-core",
  "dirs 6.0.0",
  "insta",
- "keyring",
  "reqwest 0.13.2",
  "rmcp",
  "rpassword",
@@ -472,20 +471,6 @@ name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
-
-[[package]]
-name = "ashpd"
-version = "0.13.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb8421aaa9644a5faf26735f258b669b15f063313ef8f8e2bdb28912a1a6f111"
-dependencies = [
- "enumflags2",
- "futures-util",
- "getrandom 0.4.2",
- "serde",
- "tokio",
- "zbus",
-]
 
 [[package]]
 name = "askama"
@@ -791,56 +776,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
-name = "atspi"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c83247582e7508838caf5f316c00791eee0e15c0bf743e6880585b867e16815c"
-dependencies = [
- "atspi-common",
- "atspi-connection",
- "atspi-proxies",
-]
-
-[[package]]
-name = "atspi-common"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33dfc05e7cdf90988a197803bf24f5788f94f7c94a69efa95683e8ffe76cfdfb"
-dependencies = [
- "enumflags2",
- "serde",
- "static_assertions",
- "zbus",
- "zbus-lockstep",
- "zbus-lockstep-macros",
- "zbus_names",
- "zvariant",
-]
-
-[[package]]
-name = "atspi-connection"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4193d51303d8332304056ae0004714256b46b6635a5c556109b319c0d3784938"
-dependencies = [
- "atspi-common",
- "atspi-proxies",
- "futures-lite",
- "zbus",
-]
-
-[[package]]
-name = "atspi-proxies"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2eebcb9e7e76f26d0bcfd6f0295e1cd1e6f33bedbc5698a971db8dc43d7751c"
-dependencies = [
- "atspi-common",
- "serde",
- "zbus",
-]
-
-[[package]]
 name = "audacity"
 version = "0.1.0"
 
@@ -869,9 +804,7 @@ dependencies = [
  "data",
  "ebur128",
  "futures-util",
- "libpulse-binding",
  "pin-project",
- "pipewire",
  "resampler",
  "ringbuf",
  "rodio",
@@ -880,7 +813,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
- "wasapi",
 ]
 
 [[package]]
@@ -910,13 +842,10 @@ name = "audio-device"
 version = "0.1.0"
 dependencies = [
  "cidre",
- "libpulse-binding",
  "serde",
  "specta",
  "thiserror 2.0.18",
  "tracing",
- "windows 0.62.2",
- "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -3066,7 +2995,6 @@ dependencies = [
  "e2ee",
  "futures-util",
  "reqwest 0.13.2",
- "rustls",
  "serde",
  "serde_json",
  "sqlx",
@@ -3296,21 +3224,17 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "windows 0.62.2",
- "windows-registry 0.5.3",
 ]
 
 [[package]]
 name = "detect"
 version = "0.1.0"
 dependencies = [
- "atspi",
  "block2",
  "bundle",
  "cidre",
  "image",
  "language",
- "libpulse-binding",
  "macos-accessibility-client",
  "objc2",
  "objc2-app-kit",
@@ -3326,11 +3250,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "wasapi",
- "windows 0.62.2",
- "winreg 0.55.0",
  "xcap",
- "zbus",
 ]
 
 [[package]]
@@ -3345,7 +3265,6 @@ version = "0.1.0"
 dependencies = [
  "audio-device",
  "cidre",
- "libpulse-binding",
  "tracing",
 ]
 
@@ -6565,33 +6484,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
-name = "libpulse-binding"
-version = "2.30.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "909eb3049e16e373680fe65afe6e2a722ace06b671250cc4849557bc57d6a397"
-dependencies = [
- "bitflags 2.13.2",
- "libc",
- "libpulse-sys",
- "num-derive",
- "num-traits",
- "winapi",
-]
-
-[[package]]
-name = "libpulse-sys"
-version = "1.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d74371848b22e989f829cc1621d2ebd74960711557d8b45cfe740f60d0a05e61"
-dependencies = [
- "libc",
- "num-derive",
- "num-traits",
- "pkg-config",
- "winapi",
-]
-
-[[package]]
 name = "libredox"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7423,9 +7315,7 @@ name = "notification"
 version = "0.1.0"
 dependencies = [
  "notification-interface",
- "notification-linux",
  "notification-macos",
- "notification-windows",
  "tracing",
 ]
 
@@ -7435,20 +7325,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "specta",
-]
-
-[[package]]
-name = "notification-linux"
-version = "0.1.0"
-dependencies = [
- "gdk",
- "gdk-pixbuf",
- "glib",
- "gtk",
- "indexmap 2.14.0",
- "notification-interface",
- "pango",
- "tracing",
 ]
 
 [[package]]
@@ -7462,16 +7338,6 @@ dependencies = [
  "serde",
  "serde_json",
  "swift-rs 1.0.8",
-]
-
-[[package]]
-name = "notification-windows"
-version = "0.1.0"
-dependencies = [
- "indexmap 2.14.0",
- "notification-interface",
- "tracing",
- "windows 0.62.2",
 ]
 
 [[package]]
@@ -8337,15 +8203,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
-name = "openssl-src"
-version = "300.6.1+3.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46eb8fb9fb3b61ce1c0f8a026c4c1a0714d3a9e138e7fbde78753ce2babc3846"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "openssl-sys"
 version = "0.9.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8353,7 +8210,6 @@ checksum = "b47e7e6bb2c38cd930d25a23b40fa52e068c10e85f3e03a7f5ba5aaca5713695"
 dependencies = [
  "cc",
  "libc",
- "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -11768,14 +11624,12 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "dirs 6.0.0",
  "serde_json",
  "shellexpand",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "windows 0.62.2",
 ]
 
 [[package]]
@@ -12891,7 +12745,6 @@ name = "tauri-plugin-anlg-tray"
 version = "0.1.0"
 dependencies = [
  "intercept",
- "libloading 0.8.9",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -12929,7 +12782,6 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-plugin-settings",
- "tauri-plugin-store2",
  "tauri-specta",
  "tempfile",
  "thiserror 2.0.18",
@@ -13136,7 +12988,6 @@ dependencies = [
 name = "tauri-plugin-dictation"
 version = "0.1.0"
 dependencies = [
- "atspi",
  "audio",
  "dictation-ui-macos",
  "futures-util",
@@ -13156,7 +13007,6 @@ dependencies = [
  "tokio-tungstenite 0.29.0",
  "tokio-util",
  "url",
- "windows 0.62.2",
 ]
 
 [[package]]
@@ -13376,7 +13226,6 @@ dependencies = [
  "tauri-plugin",
  "tauri-specta",
  "thiserror 2.0.18",
- "windows 0.62.2",
 ]
 
 [[package]]
@@ -13693,8 +13542,6 @@ dependencies = [
 name = "tauri-plugin-shortcut"
 version = "0.1.0"
 dependencies = [
- "ashpd",
- "futures-util",
  "serde",
  "serde_json",
  "shortcut-macos",
@@ -14006,7 +13853,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
- "windows 0.62.2",
 ]
 
 [[package]]
@@ -15990,19 +15836,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasapi"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80c3aa5d6b0e7acc3ea10cb19c334df0c8d825060f14a30d9e3b03385e6e5175"
-dependencies = [
- "log",
- "num-integer",
- "thiserror 2.0.18",
- "windows 0.62.2",
- "windows-core 0.62.2",
-]
-
-[[package]]
 name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17601,7 +17434,6 @@ dependencies = [
  "rustix 1.1.4",
  "serde",
  "serde_repr",
- "tokio",
  "tracing",
  "uds_windows",
  "uuid",
@@ -17609,30 +17441,6 @@ dependencies = [
  "winnow 0.7.15",
  "zbus_macros",
  "zbus_names",
- "zvariant",
-]
-
-[[package]]
-name = "zbus-lockstep"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6998de05217a084b7578728a9443d04ea4cd80f2a0839b8d78770b76ccd45863"
-dependencies = [
- "zbus_xml",
- "zvariant",
-]
-
-[[package]]
-name = "zbus-lockstep-macros"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10da05367f3a7b7553c8cdf8fa91aee6b64afebe32b51c95177957efc47ca3a0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
- "zbus-lockstep",
- "zbus_xml",
  "zvariant",
 ]
 
@@ -17670,18 +17478,6 @@ checksum = "d8bf88b4a3ff53e883001e0e0115b297a9d53c31b9c1edd2bfdd853e3428624e"
 dependencies = [
  "serde",
  "winnow 1.0.1",
- "zvariant",
-]
-
-[[package]]
-name = "zbus_xml"
-version = "5.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1586c021a01ca0a9216dcd874e546382e156a5cbab5fab6cb5f10087e22682a"
-dependencies = [
- "serde",
- "winnow 1.0.1",
- "zbus_names",
  "zvariant",
 ]
 
