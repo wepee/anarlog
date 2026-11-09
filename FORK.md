@@ -77,6 +77,18 @@ empreintes candidates (`voiceprint_candidates`) ne sont migrées que si le
 trousseau les livre sans demander. Si la clé maîtresse est refusée, le
 comportement d'origine, un élément par secret, reprend.
 
+Cette demande par build disparaît avec une signature stable. Sans Developer ID,
+`fork_release.yaml` signe avec un certificat auto-signé (secrets
+`FORK_SIGNING_CERTIFICATE` / `FORK_SIGNING_CERTIFICATE_PASSWORD`, créés une
+fois par `scripts/fork-signing-certificate.sh`). L'exigence désignée devient
+« identifiant + certificat » au lieu du cdhash : le trousseau et les
+autorisations TCC (Accessibilité, micro, écran) passent d'une mise à jour à
+l'autre. Signé ad-hoc, chaque mise à jour laisse dans Réglages Système une
+entrée Accessibilité cochée qui désigne l'ancien build, alors que l'app se voit
+refusée. `scripts/build-macos.sh` retire `APPLE_SIGNING_IDENTITY` de
+l'environnement de Tauri pour une identité locale, sinon Tauri signerait avec le
+hardened runtime, incompatible avec un certificat auto-signé.
+
 ## 3. Déverrouillage des fonctions Pro
 
 Une seule ligne, volontairement : `isPro: true` dans le contexte de
