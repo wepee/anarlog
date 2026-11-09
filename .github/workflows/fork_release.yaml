@@ -89,9 +89,11 @@ jobs:
             echo "apple_cert=false" >> "$GITHUB_OUTPUT"
             echo "fork_cert=true" >> "$GITHUB_OUTPUT"
           else
-            echo "apple_cert=false" >> "$GITHUB_OUTPUT"
-            echo "fork_cert=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Neither APPLE_CERTIFICATE nor FORK_SIGNING_CERTIFICATE is set: the bundle will be signed ad-hoc, so after every update macOS asks for the keychain again and drops the Accessibility, microphone and screen grants. Run scripts/fork-signing-certificate.sh once to fix it."
+            # An ad-hoc release changes the app's identity for macOS: every
+            # install loses its keychain and TCC grants on update. Release 1.4.28
+            # shipped that way with only a warning, so refuse instead.
+            echo "::error::Neither APPLE_CERTIFICATE nor FORK_SIGNING_CERTIFICATE is set. An ad-hoc build would make macOS drop the keychain, Accessibility, microphone and screen grants on update. Run scripts/fork-signing-certificate.sh once, then run this workflow again."
+            exit 1
           fi
 
       - uses: ./.github/actions/macos_tcc
@@ -169,10 +171,8 @@ jobs:
             fi
           done
 
-      # A Developer ID is optional here: without one the bundle is signed
-      # ad-hoc, which still carries the right entitlements and bundle id but
-      # changes cdhash on every release, so macOS re-asks for microphone and
-      # screen permissions after each update.
+      # A Developer ID is optional here: without one the fork certificate below
+      # signs the bundle. One of the two is required (see the check above).
       - name: Import the Developer ID certificate
         id: apple-cert
         if: ${{ steps.signing.outputs.apple_cert == 'true' }}
