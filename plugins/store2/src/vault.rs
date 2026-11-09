@@ -44,6 +44,19 @@ pub(crate) struct Vault {
     file: VaultFile,
 }
 
+/// Secrets sealed in the vault file at `path`, readable without its key.
+pub(crate) fn sealed_entries_on_disk(path: &Path) -> usize {
+    std::fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<VaultFile>(&bytes).ok())
+        .map_or(0, |file| {
+            file.entries
+                .values()
+                .filter(|sealed| sealed.is_some())
+                .count()
+        })
+}
+
 pub(crate) fn generate_key() -> Result<[u8; KEY_LEN], String> {
     let mut key = [0_u8; KEY_LEN];
     getrandom::fill(&mut key).map_err(|error| error.to_string())?;
@@ -77,6 +90,10 @@ impl Vault {
         };
         let mut vault = Self { path, cipher, file };
         if !vault.readable() {
+            tracing::warn!(
+                sealed = vault.sealed_count(),
+                "secure_store_vault_unreadable_set_aside"
+            );
             let aside = vault.path.with_extension(format!(
                 "unreadable-{}.json",
                 std::time::SystemTime::now()
@@ -91,6 +108,14 @@ impl Vault {
             };
         }
         Ok(vault)
+    }
+
+    fn sealed_count(&self) -> usize {
+        self.file
+            .entries
+            .values()
+            .filter(|sealed| sealed.is_some())
+            .count()
     }
 
     fn readable(&self) -> bool {

@@ -5,6 +5,7 @@ mod commands;
 mod db;
 mod embedded_cli;
 mod ext;
+mod launch_diagnostics;
 mod search_index;
 mod startup;
 mod store;
@@ -349,6 +350,7 @@ pub fn main() {
         .on_window_event(tauri_plugin_windows::on_window_event)
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            launch_diagnostics::spawn(app_handle.clone());
             tauri_plugin_shortcut::initialize_global_shortcuts(&app_handle);
 
             specta_builder.mount_events(&app_handle);

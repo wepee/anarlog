@@ -89,6 +89,14 @@ refusée. `scripts/build-macos.sh` retire `APPLE_SIGNING_IDENTITY` de
 l'environnement de Tauri pour une identité locale, sinon Tauri signerait avec le
 hardened runtime, incompatible avec un certificat auto-signé.
 
+Diagnostic : au lancement, `apps/desktop/src-tauri/src/launch_diagnostics.rs`
+journalise la signature vue par `codesign` (ad-hoc ou certificat, TeamIdentifier,
+cdhash, exigence désignée) et l'état Accessibilité / micro / écran. Chaque
+lecture de la clé maîtresse journalise son issue et sa durée : au-delà d'une
+seconde, une fenêtre du trousseau a été affichée. Si la clé est introuvable
+alors que le coffre contient des secrets, l'app relit une fois avant d'en créer
+une nouvelle, et le journalise.
+
 ## 3. Déverrouillage des fonctions Pro
 
 Une seule ligne, volontairement : `isPro: true` dans le contexte de
@@ -139,6 +147,8 @@ pics d'onde et la retranscription suivent ce lien sans le savoir.
 |---|---|
 | `crates/fs-sync-core/src/audio/archive.rs` | copie vérifiée (date de modification conservée pour le cache des pics), remplacement atomique par un lien ; disponibilité (`SF_DATALESS`), téléchargement à la demande, sélection des fichiers à libérer |
 | `crates/fs-sync-core/src/audio/mod.rs` | supprimer un audio archivé supprime aussi le fichier archivé |
+| `crates/db-app/src/session_audio_ops.rs` | `list_session_audio_archive_candidates` : un statut `processing` resté figé (jamais remis à `complete` hors transcription par lots) ne bloque plus l'archivage ; l'état en direct (capture, lots) reste vérifié |
+| `crates/fs-sync-core/src/audio/archive.rs` | un dossier `audio-recovery/` vide ne bloque plus l'archivage ; jamais d'archive sur le fichier lui-même |
 | `crates/fs-sync-core/src/audio/archive.rs` (`relocate`) | changer de dossier d'archive y déplace les audios déjà archivés et refait leurs liens (simple renommage sur un même volume, copie vérifiée sinon) ; un ancien dossier inaccessible est retenté plus tard |
 | `plugins/fs-sync/src/{ext,commands}.rs` | `archive_session_audio_locked` ; commandes `audio_availability` et `audio_download` ; `audio_path` renvoie le chemin résolu |
 | `plugins/transcription/src/audio_retention.rs` | passe d'archivage toutes les 2 min, puis éviction iCloud (`brctl evict`) |

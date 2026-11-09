@@ -21,10 +21,9 @@ pub async fn get_app_setting_json(
         .await
 }
 
-macro_rules! session_audio_retention_candidates_sql {
-    ($tail:literal) => {
-        concat!(
-            "SELECT
+macro_rules! session_audio_candidates_select_sql {
+    () => {
+        "SELECT
            session.id AS session_id,
            CAST(round((julianday(session.created_at) - 2440587.5) * 86400000.0) AS INTEGER)
              AS created_at_ms,
@@ -37,8 +36,25 @@ macro_rules! session_audio_retention_candidates_sql {
                AND json_array_length(transcript.words_json) > 0
            ) AS has_words
          FROM sessions AS session
-         WHERE session.deleted_at IS NULL
-           AND NOT EXISTS(
+         WHERE session.deleted_at IS NULL "
+    };
+}
+
+macro_rules! session_audio_not_capturing_sql {
+    () => {
+        "AND NOT EXISTS(
+             SELECT 1
+             FROM app_settings AS capture
+             WHERE capture.id = ? || session.id
+           ) "
+    };
+}
+
+macro_rules! session_audio_retention_candidates_sql {
+    ($tail:literal) => {
+        concat!(
+            session_audio_candidates_select_sql!(),
+            "AND NOT EXISTS(
              SELECT 1
              FROM session_attachments AS audio
              WHERE audio.session_id = session.id
@@ -47,12 +63,8 @@ macro_rules! session_audio_retention_candidates_sql {
                AND audio.deleted_at IS NULL
                AND json_valid(audio.metadata_json)
                AND json_extract(audio.metadata_json, '$.transcript_status') = 'processing'
-           )
-           AND NOT EXISTS(
-             SELECT 1
-             FROM app_settings AS capture
-             WHERE capture.id = ? || session.id
            ) ",
+            session_audio_not_capturing_sql!(),
             $tail
         )
     };
@@ -64,6 +76,24 @@ pub async fn list_session_audio_retention_candidates(
     pool: &SqlitePool,
 ) -> Result<Vec<SessionAudioRetentionCandidate>, sqlx::Error> {
     sqlx::query_as(session_audio_retention_candidates_sql!(
+        "ORDER BY session.created_at, session.id"
+    ))
+    .bind(CAPTURE_LIFECYCLE_SETTING_PREFIX)
+    .fetch_all(pool)
+    .await
+}
+
+/// [fork] Sessions whose recording may be archived. Unlike retention, a
+/// `processing` transcript status does not hold the recording back: it is
+/// never cleared on sessions that were never batch-transcribed, archiving
+/// keeps the audio readable through its link, and the archive pass checks the
+/// live capture and batch state before touching a session.
+pub async fn list_session_audio_archive_candidates(
+    pool: &SqlitePool,
+) -> Result<Vec<SessionAudioRetentionCandidate>, sqlx::Error> {
+    sqlx::query_as(concat!(
+        session_audio_candidates_select_sql!(),
+        session_audio_not_capturing_sql!(),
         "ORDER BY session.created_at, session.id"
     ))
     .bind(CAPTURE_LIFECYCLE_SETTING_PREFIX)
