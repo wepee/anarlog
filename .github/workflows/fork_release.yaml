@@ -75,6 +75,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          FORK_SIGNING_CERTIFICATE: ${{ secrets.FORK_SIGNING_CERTIFICATE }}
         run: |
           set -euo pipefail
           if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
@@ -83,9 +84,16 @@ jobs:
           fi
           if [[ -n "${APPLE_CERTIFICATE:-}" ]]; then
             echo "apple_cert=true" >> "$GITHUB_OUTPUT"
-          else
+            echo "fork_cert=false" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${FORK_SIGNING_CERTIFICATE:-}" ]]; then
             echo "apple_cert=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No APPLE_CERTIFICATE secret: the bundle will be signed ad-hoc, so macOS re-asks for microphone and screen permissions after every update."
+            echo "fork_cert=true" >> "$GITHUB_OUTPUT"
+          else
+            # An ad-hoc release changes the app's identity for macOS: every
+            # install loses its keychain and TCC grants on update. Release 1.4.28
+            # shipped that way with only a warning, so refuse instead.
+            echo "::error::Neither APPLE_CERTIFICATE nor FORK_SIGNING_CERTIFICATE is set. An ad-hoc build would make macOS drop the keychain, Accessibility, microphone and screen grants on update. Run scripts/fork-signing-certificate.sh once, then run this workflow again."
+            exit 1
           fi
 
       - uses: ./.github/actions/macos_tcc
@@ -163,10 +171,8 @@ jobs:
             fi
           done
 
-      # A Developer ID is optional here: without one the bundle is signed
-      # ad-hoc, which still carries the right entitlements and bundle id but
-      # changes cdhash on every release, so macOS re-asks for microphone and
-      # screen permissions after each update.
+      # A Developer ID is optional here: without one the fork certificate below
+      # signs the bundle. One of the two is required (see the check above).
       - name: Import the Developer ID certificate
         id: apple-cert
         if: ${{ steps.signing.outputs.apple_cert == 'true' }}
@@ -176,13 +182,62 @@ jobs:
           apple-certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
 
+      # [fork] Without a Developer ID, a self-signed certificate still gives the
+      # bundle a designated requirement that survives updates (identifier +
+      # certificate), where ad-hoc keys it on a cdhash that changes with every
+      # build. Keychain ACLs and TCC grants (Accessibility, microphone, screen)
+      # then carry over from one release to the next. It cannot be notarised,
+      # which ad-hoc could not be either. Created by
+      # scripts/fork-signing-certificate.sh.
+      - name: Import the fork signing certificate
+        id: fork-cert
+        if: ${{ steps.signing.outputs.fork_cert == 'true' }}
+        env:
+          FORK_SIGNING_CERTIFICATE: ${{ secrets.FORK_SIGNING_CERTIFICATE }}
+          FORK_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.FORK_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/fork-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          p12="$RUNNER_TEMP/fork-signing.p12"
+          trap 'rm -f "$p12"' EXIT
+          printf '%s' "$FORK_SIGNING_CERTIFICATE" | base64 --decode > "$p12"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -t 3600 -u "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$p12" -k "$keychain" \
+            -P "${FORK_SIGNING_CERTIFICATE_PASSWORD:-}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$keychain_password" "$keychain" >/dev/null
+          # codesign only searches the keychains on the user search list.
+          existing=()
+          while IFS= read -r line; do
+            line="${line#"${line%%[![:space:]]*}"}"
+            existing+=("${line//\"/}")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing[@]+"${existing[@]}"}"
+
+          # Nothing trusts a self-signed root, so `find-identity -v` hides it;
+          # codesign signs with it all the same. Pass the SHA-1 rather than the
+          # name so there is nothing to match against trust settings.
+          identity="$(security find-identity -p codesigning "$keychain" |
+            awk '/^ *[0-9]+\)/ { print $2; exit }')"
+          if [[ ! "$identity" =~ ^[0-9A-F]{40}$ ]]; then
+            echo "::error::FORK_SIGNING_CERTIFICATE holds no code-signing identity."
+            security find-identity -p codesigning "$keychain" || true
+            exit 1
+          fi
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+          echo "Signing with the fork certificate $identity"
+
       - name: Build the macOS bundle
         env:
           CI: false
           CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
           APP_VERSION: ${{ steps.version.outputs.version }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple-cert.outputs.cert-id }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple-cert.outputs.cert-id || steps.fork-cert.outputs.identity }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

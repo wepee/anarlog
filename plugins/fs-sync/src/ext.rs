@@ -46,6 +46,18 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> FsSync<'a, R, M> {
         crate::audio::archive(&session_dir, archive_dir, session_id).map_err(|e| e.to_string())
     }
 
+    /// [fork] Moves an already archived recording into `archive_dir` when it
+    /// sits in a previous archive folder. Callers must hold `lock_session_audio`.
+    pub fn relocate_session_audio_locked(
+        &self,
+        session_id: &str,
+        archive_dir: &std::path::Path,
+    ) -> Result<crate::audio::ArchiveOutcome, String> {
+        let app = self.manager.app_handle();
+        let session_dir = crate::commands::resolve_session_dir(app, session_id)?;
+        crate::audio::relocate(&session_dir, archive_dir, session_id).map_err(|e| e.to_string())
+    }
+
     pub fn list_folders(&self) -> Result<crate::ListFoldersResult, crate::Error> {
         self.core()?.list_folders()
     }

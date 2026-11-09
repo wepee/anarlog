@@ -13,6 +13,8 @@ use super::AUDIO_FORMATS;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArchiveOutcome {
     Archived(PathBuf),
+    /// An earlier archive folder held it; it now lives in the current one.
+    Relocated(PathBuf),
     AlreadyArchived,
     NoAudio,
     /// A capture or a recovery is still writing next to the recording.
@@ -66,7 +68,7 @@ pub fn archive(
         return Ok(ArchiveOutcome::NoAudio);
     };
     if is_symlink {
-        return Ok(ArchiveOutcome::AlreadyArchived);
+        return relocate(session_dir, archive_dir, session_id);
     }
     if session_dir.join("audio-recovery").exists()
         || IN_PROGRESS_ARTIFACTS
@@ -89,45 +91,180 @@ pub fn archive(
     std::fs::create_dir_all(&target_dir)?;
     let target = target_dir.join(filename);
 
-    let source_len = std::fs::metadata(&source)?.len();
+    let source_metadata = std::fs::metadata(&source)?;
+    // An archive folder chosen inside the app's own sessions folder resolves
+    // onto the recording itself; linking it there would replace the only copy
+    // with a link to itself.
+    if std::fs::metadata(&target).is_ok_and(|target| same_file(&source_metadata, &target)) {
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    }
+    let source_len = source_metadata.len();
     let reuse_existing = std::fs::metadata(&target).is_ok_and(|metadata| {
         metadata.len() == source_len && same_content(&source, &target).unwrap_or(false)
     });
     if !reuse_existing {
-        let partial = target_dir.join(format!(
-            ".{}.{}.partial",
-            filename.to_string_lossy(),
-            uuid::Uuid::new_v4()
-        ));
-        let copy = (|| {
-            std::fs::copy(&source, &partial)?;
-            // Keep the recording's own timestamp: the waveform cache is keyed
-            // on it, and a new one would force a download just to redraw peaks.
-            let modified = std::fs::metadata(&source)?.modified()?;
-            let copied = std::fs::OpenOptions::new().write(true).open(&partial)?;
-            copied.set_modified(modified)?;
-            copied.sync_all()?;
-            if std::fs::metadata(&partial)?.len() != source_len {
-                return Err(std::io::Error::other("audio_archive_size_mismatch"));
-            }
-            std::fs::rename(&partial, &target)
-        })();
-        if let Err(error) = copy {
-            let _ = std::fs::remove_file(&partial);
-            return Err(error);
-        }
+        copy_verified(&source, &target)?;
     }
 
-    // Swap the local file for a link in one rename, so the recording is never
-    // missing from the session folder.
+    point_link_at(&source, &target)?;
+    Ok(ArchiveOutcome::Archived(target))
+}
+
+// A file played this recently may still be open in the player through its
+// current path; moving it would cut playback short.
+#[cfg(unix)]
+const RELOCATE_AFTER_PLAY: Duration = Duration::from_secs(30 * 60);
+
+/// Moves an archived recording into `archive_dir` when it was archived to
+/// another folder, the user having changed it since. Moving within one volume
+/// (iCloud Drive to iCloud Drive) is a rename and needs no download, even for
+/// an offloaded file; across volumes the file is copied, then the old one goes.
+#[cfg(unix)]
+pub fn relocate(
+    session_dir: &Path,
+    archive_dir: &Path,
+    session_id: &str,
+) -> std::io::Result<ArchiveOutcome> {
+    let Some((link, true)) = primary(session_dir)? else {
+        return Ok(ArchiveOutcome::NoAudio);
+    };
+    let Some(current) = archived_target(session_dir)? else {
+        return Ok(ArchiveOutcome::NoAudio);
+    };
+    let filename = link
+        .file_name()
+        .ok_or_else(|| std::io::Error::other("audio_source_filename_missing"))?;
+    let target_dir = archive_dir.join(session_id);
+    let target = target_dir.join(filename);
+    if current
+        .parent()
+        .is_some_and(|dir| same_dir(dir, &target_dir))
+    {
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    }
+    // Only what an archive pass laid out, `<folder>/<session id>/<file>`: a
+    // link the user made by hand is theirs to keep.
+    let laid_out_by_archive = current.file_name() == Some(filename)
+        && current
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|dir| dir == std::ffi::OsStr::new(session_id));
+    if !laid_out_by_archive {
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    }
+    let Ok(current_metadata) = std::fs::metadata(&current) else {
+        // Moved by a relocation that stopped before relinking.
+        if std::fs::metadata(&target).is_ok() {
+            point_link_at(&link, &target)?;
+            return Ok(ArchiveOutcome::Relocated(target));
+        }
+        // An old folder that is out of reach (drive unplugged) is retried later.
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    };
+    if opened_within(&current, RELOCATE_AFTER_PLAY) {
+        return Ok(ArchiveOutcome::Busy);
+    }
+
+    // The same folder under another spelling (case, firmlink) that
+    // `same_dir` missed: the move would delete the only copy.
+    if std::fs::metadata(&target).is_ok_and(|target| same_file(&current_metadata, &target)) {
+        return Ok(ArchiveOutcome::AlreadyArchived);
+    }
+
+    std::fs::create_dir_all(&target_dir)?;
+    match std::fs::symlink_metadata(&target) {
+        // Left by a relocation that stopped before relinking.
+        Ok(existing) => {
+            if existing.len() != current_metadata.len() || !same_content(&current, &target)? {
+                return Err(std::io::Error::other("audio_archive_target_exists"));
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match std::fs::rename(&current, &target) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
+                    copy_verified(&current, &target)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(error) => return Err(error),
+    }
+
+    point_link_at(&link, &target)?;
+    match std::fs::remove_file(&current) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    // Only succeeds once the session's old folder is empty.
+    if let Some(old_dir) = current.parent() {
+        let _ = std::fs::remove_dir(old_dir);
+    }
+    Ok(ArchiveOutcome::Relocated(target))
+}
+
+#[cfg(unix)]
+fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    a.dev() == b.dev() && a.ino() == b.ino()
+}
+
+#[cfg(unix)]
+fn same_dir(a: &Path, b: &Path) -> bool {
+    a == b
+        || matches!(
+            (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+            (Ok(a), Ok(b)) if a == b
+        )
+}
+
+/// Copies `source` to `target` through a partial file, so `target` only ever
+/// holds a complete recording.
+#[cfg(unix)]
+fn copy_verified(source: &Path, target: &Path) -> std::io::Result<()> {
+    let (Some(target_dir), Some(filename)) = (target.parent(), target.file_name()) else {
+        return Err(std::io::Error::other("audio_archive_target_invalid"));
+    };
+    let partial = target_dir.join(format!(
+        ".{}.{}.partial",
+        filename.to_string_lossy(),
+        uuid::Uuid::new_v4()
+    ));
+    let copy = (|| {
+        std::fs::copy(source, &partial)?;
+        // Keep the recording's own timestamp: the waveform cache is keyed
+        // on it, and a new one would force a download just to redraw peaks.
+        let modified = std::fs::metadata(source)?.modified()?;
+        let copied = std::fs::OpenOptions::new().write(true).open(&partial)?;
+        copied.set_modified(modified)?;
+        copied.sync_all()?;
+        if std::fs::metadata(&partial)?.len() != std::fs::metadata(source)?.len() {
+            return Err(std::io::Error::other("audio_archive_size_mismatch"));
+        }
+        std::fs::rename(&partial, target)
+    })();
+    if copy.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    copy
+}
+
+/// Points the session's recording at `target` in one rename, so the recording
+/// is never missing from the session folder.
+#[cfg(unix)]
+fn point_link_at(recording: &Path, target: &Path) -> std::io::Result<()> {
+    let (Some(session_dir), Some(filename)) = (recording.parent(), recording.file_name()) else {
+        return Err(std::io::Error::other("audio_source_filename_missing"));
+    };
     let link = session_dir.join(format!(".{}.archive-link", filename.to_string_lossy()));
     let _ = std::fs::remove_file(&link);
-    std::os::unix::fs::symlink(&target, &link)?;
-    if let Err(error) = std::fs::rename(&link, &source) {
+    std::os::unix::fs::symlink(target, &link)?;
+    if let Err(error) = std::fs::rename(&link, recording) {
         let _ = std::fs::remove_file(&link);
         return Err(error);
     }
-    Ok(ArchiveOutcome::Archived(target))
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, specta::Type)]
@@ -392,5 +529,92 @@ mod tests {
 
         assert!(!archive_dir.join("session-1").join("audio.mp3").exists());
         assert!(std::fs::symlink_metadata(session_dir.join("audio.mp3")).is_err());
+    }
+
+    #[test]
+    fn changing_the_archive_folder_moves_archived_recordings_into_the_new_one() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+        let old_dir = temp.path().join("old-archive");
+        let new_dir = temp.path().join("new-archive");
+        archive(&session_dir, &old_dir, "session-1").unwrap();
+        let before = std::fs::metadata(session_dir.join("audio.mp3"))
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        let outcome = archive(&session_dir, &new_dir, "session-1").unwrap();
+
+        let target = new_dir.join("session-1").join("audio.mp3");
+        assert_eq!(outcome, ArchiveOutcome::Relocated(target.clone()));
+        assert_eq!(archived_target(&session_dir).unwrap(), Some(target));
+        assert_eq!(
+            std::fs::read(session_dir.join("audio.mp3")).unwrap(),
+            b"meeting audio"
+        );
+        let after = std::fs::metadata(session_dir.join("audio.mp3"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert_eq!(before, after);
+        assert!(!old_dir.join("session-1").exists());
+        assert_eq!(
+            archive(&session_dir, &new_dir, "session-1").unwrap(),
+            ArchiveOutcome::AlreadyArchived
+        );
+    }
+
+    #[test]
+    fn an_archive_folder_set_to_the_sessions_folder_keeps_the_recording() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+
+        let outcome = archive(&session_dir, &temp.path().join("sessions"), "session-1").unwrap();
+
+        assert_eq!(outcome, ArchiveOutcome::AlreadyArchived);
+        assert_eq!(
+            std::fs::read(session_dir.join("audio.mp3")).unwrap(),
+            b"meeting audio"
+        );
+    }
+
+    #[test]
+    fn a_relocation_interrupted_before_relinking_is_finished() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+        let old_dir = temp.path().join("old-archive");
+        let new_dir = temp.path().join("new-archive");
+        archive(&session_dir, &old_dir, "session-1").unwrap();
+        std::fs::create_dir_all(new_dir.join("session-1")).unwrap();
+        std::fs::rename(
+            old_dir.join("session-1").join("audio.mp3"),
+            new_dir.join("session-1").join("audio.mp3"),
+        )
+        .unwrap();
+
+        let outcome = relocate(&session_dir, &new_dir, "session-1").unwrap();
+
+        assert!(matches!(outcome, ArchiveOutcome::Relocated(_)));
+        assert_eq!(
+            std::fs::read(session_dir.join("audio.mp3")).unwrap(),
+            b"meeting audio"
+        );
+    }
+
+    #[test]
+    fn an_unreachable_old_archive_folder_keeps_its_link() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_dir = session_with_audio(temp.path(), b"meeting audio");
+        let old_dir = temp.path().join("old-archive");
+        archive(&session_dir, &old_dir, "session-1").unwrap();
+        std::fs::rename(&old_dir, temp.path().join("unplugged")).unwrap();
+
+        let outcome = relocate(&session_dir, &temp.path().join("new-archive"), "session-1");
+
+        assert_eq!(outcome.unwrap(), ArchiveOutcome::AlreadyArchived);
+        assert_eq!(
+            archived_target(&session_dir).unwrap(),
+            Some(old_dir.join("session-1").join("audio.mp3"))
+        );
     }
 }
