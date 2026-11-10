@@ -7,7 +7,6 @@ import { EMPTY_LIVE_ASSIST_SNAPSHOT } from "~/session/insights/live-assist";
 describe("buildFloatingAssist", () => {
   it("groups action items by owner and flags the ones to clarify", () => {
     const assist = buildFloatingAssist({
-      templates: [{ id: "sales", title: "Commercial" }],
       answers: [],
       projects: [],
       projectsFailed: false,
@@ -20,7 +19,6 @@ describe("buildFloatingAssist", () => {
           { id: "3", text: "Share the export", owner: "Claire", due: null },
         ],
       },
-      template: { id: "sales", source: "auto" },
       dismissed: [],
       updatedAtMs: 1,
       status: "idle",
@@ -40,12 +38,6 @@ describe("buildFloatingAssist", () => {
         items: [{ text: "Plan the workshop", due: null, needsDetail: true }],
       },
     ]);
-    expect(assist.template).toEqual({
-      id: "sales",
-      title: "Commercial",
-      auto: true,
-    });
-    expect(assist.templates[0]).toEqual({ id: null, title: "Auto" });
   });
 
   it("hides answers to detected questions until their text starts", () => {
@@ -55,7 +47,6 @@ describe("buildFloatingAssist", () => {
       createdAtMs: 1,
     };
     const assist = buildFloatingAssist({
-      templates: [],
       projects: [],
       projectsFailed: false,
       projectId: null,
@@ -86,7 +77,6 @@ describe("buildFloatingAssist", () => {
         },
       ],
       snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
-      template: { id: null, source: "auto" },
       dismissed: [],
       updatedAtMs: 1,
       status: "idle",

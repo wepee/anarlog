@@ -516,14 +516,6 @@ msgstr ""
 msgid "Authorize access in your browser, then return to BlackMushi."
 msgstr ""
 
-#: src/meeting-float/assist.ts
-msgid "auto"
-msgstr "auto"
-
-#: src/meeting-float/assist.ts
-msgid "Auto"
-msgstr "Auto"
-
 #: src/templates/auto-form.tsx
 msgid "Auto summary format"
 msgstr ""
@@ -3978,10 +3970,6 @@ msgstr ""
 msgid "Summary ready"
 msgstr ""
 
-#: src/meeting-float/assist.ts
-msgid "Summary template"
-msgstr "Modèle de résumé"
-
 #: src/settings/general/week-start.tsx
 msgid "Sunday"
 msgstr ""
@@ -4072,10 +4060,6 @@ msgstr ""
 #: src/meeting-float/assist.ts
 msgid "The projects command failed. Check it in Settings › Meetings."
 msgstr "La commande projets a échoué. Vérifiez-la dans Réglages › Réunions."
-
-#: src/meeting-float/assist.ts
-msgid "The summary after the call will use this template."
-msgstr "Le résumé de fin d'appel utilisera ce modèle."
 
 #: src/meeting-float/assist.ts
 msgid "The summary shows up after the first minute of conversation."
@@ -4473,8 +4457,8 @@ msgid "When this happens"
 msgstr ""
 
 #: src/templates/template-form.tsx
-msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
-msgstr "Quand utiliser ce modèle, par ex. « premier appel avec un prospect ». Le Live Assist s'en sert pour reconnaître l'appel."
+msgid "When to use this template, e.g. \"first call with a prospect\". It picks the template of the summary after the call."
+msgstr "Quand utiliser ce modèle, par ex. « premier appel avec un prospect ». Il sert à choisir le modèle du compte rendu après l'appel."
 
 #: src/settings/general/meeting-settings.tsx
 msgid "While a meeting is transcribed live, the floating bar suggests the questions to ask, drafts the to-do and keeps a running summary. Sends the new transcript to your configured AI provider about once a minute."

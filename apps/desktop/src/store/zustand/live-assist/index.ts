@@ -3,11 +3,9 @@ import { create } from "zustand";
 import {
   EMPTY_LIVE_ASSIST_SNAPSHOT,
   type LiveAssistSnapshot,
-  type LiveAssistTemplate,
 } from "~/session/insights/live-assist";
 import type { LiveAnswerSource } from "~/session/live-assist/answers";
 
-type LiveAssistTemplateOption = { id: string; title: string };
 type LiveAssistProjectOption = { id: string; title: string };
 
 type LiveAssistAnswer = {
@@ -26,7 +24,6 @@ type LiveAssistAnswer = {
 const MAX_ANSWERS = 20;
 
 export type LiveAssistSessionState = {
-  templates: LiveAssistTemplateOption[];
   projects: LiveAssistProjectOption[];
   projectsFailed: boolean;
   // Picked by hand in the floating bar; never guessed, only kept when the
@@ -34,20 +31,17 @@ export type LiveAssistSessionState = {
   projectId: string | null;
   answers: LiveAssistAnswer[];
   snapshot: LiveAssistSnapshot;
-  template: LiveAssistTemplate;
   dismissed: string[];
   updatedAtMs: number | null;
   status: "idle" | "updating" | "error";
 };
 
 const EMPTY_SESSION: LiveAssistSessionState = {
-  templates: [],
   projects: [],
   projectsFailed: false,
   projectId: null,
   answers: [],
   snapshot: EMPTY_LIVE_ASSIST_SNAPSHOT,
-  template: { id: null, source: "auto" },
   dismissed: [],
   updatedAtMs: null,
   status: "idle",
@@ -61,10 +55,6 @@ type LiveAssistActions = {
   setStatus: (
     sessionId: string,
     status: LiveAssistSessionState["status"],
-  ) => void;
-  setTemplates: (
-    sessionId: string,
-    templates: LiveAssistTemplateOption[],
   ) => void;
   setProjects: (sessionId: string, projects: LiveAssistProjectOption[]) => void;
   setProjectsFailed: (sessionId: string) => void;
@@ -84,12 +74,10 @@ type LiveAssistActions = {
     sessionId: string,
     update: {
       snapshot: LiveAssistSnapshot;
-      template: LiveAssistTemplate;
       updatedAtMs: number;
     },
   ) => void;
   dismissQuestion: (sessionId: string, questionId: string) => void;
-  selectTemplate: (sessionId: string, templateId: string | null) => void;
   markQuestionsSeen: (sessionId: string) => void;
   clearSession: (sessionId: string) => void;
 };
@@ -111,8 +99,6 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
       sessions: {},
       setStatus: (sessionId, status) =>
         updateSession(sessionId, (session) => ({ ...session, status })),
-      setTemplates: (sessionId, templates) =>
-        updateSession(sessionId, (session) => ({ ...session, templates })),
       setProjects: (sessionId, projects) =>
         updateSession(sessionId, (session) => ({ ...session, projects })),
       setProjectsFailed: (sessionId) =>
@@ -161,7 +147,7 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
               }
             : session,
         ),
-      applyUpdate: (sessionId, { snapshot, template, updatedAtMs }) =>
+      applyUpdate: (sessionId, { snapshot, updatedAtMs }) =>
         updateSession(sessionId, (session) => ({
           ...session,
           snapshot: {
@@ -170,9 +156,6 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
               (question) => !session.dismissed.includes(question.text),
             ),
           },
-          // A choice made by hand while this update was running wins.
-          template:
-            session.template.source === "manual" ? session.template : template,
           updatedAtMs,
           status: "idle",
         })),
@@ -195,11 +178,6 @@ export const useLiveAssistStore = create<LiveAssistState & LiveAssistActions>(
             },
           };
         }),
-      selectTemplate: (sessionId, templateId) =>
-        updateSession(sessionId, (session) => ({
-          ...session,
-          template: { id: templateId, source: "manual" },
-        })),
       markQuestionsSeen: (sessionId) =>
         updateSession(sessionId, (session) =>
           session.snapshot.questions.some((question) => question.isNew)

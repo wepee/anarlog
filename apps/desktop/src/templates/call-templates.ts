@@ -12,10 +12,8 @@ type CallTemplateDefinition = {
 };
 
 // The six call types were chosen from a simulation on real calls (see the
-// Live Assist v2 spec): with them, the type of 13 of 15 calls fit well and
-// no wrong type was ever shown live. Their sections double as the points
-// Live Assist tracks during the call, so each section names something the
-// summary needs to be filled.
+// Live Assist v2 spec): with them, the type of 13 of 15 calls fit well. Each
+// section names something the summary needs to be filled.
 const CALL_TEMPLATES: Record<"fr" | "en", CallTemplateDefinition[]> = {
   fr: [
     {

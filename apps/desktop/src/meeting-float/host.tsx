@@ -42,7 +42,6 @@ import {
 
 import { getDictationPanelState } from "~/dictation/panel";
 import { useDictationStatus } from "~/dictation/state";
-import { setManualTemplateChoice } from "~/services/enhancer/auto-template";
 import { liveAssistLog } from "~/session/live-assist/journal";
 import {
   getStoredSettingValues,
@@ -307,10 +306,6 @@ function FloatingMeetingWindowSync({
         }
         if (payload.action === "dismissQuestion" && payload.id) {
           store.dismissQuestion(payload.sessionId, payload.id);
-        } else if (payload.action === "selectTemplate") {
-          const templateId = payload.id ?? null;
-          setManualTemplateChoice(payload.sessionId, templateId);
-          store.selectTemplate(payload.sessionId, templateId);
         } else if (payload.action === "selectProject") {
           store.selectProject(payload.sessionId, payload.id ?? null);
         } else if (payload.action === "dismissAnswer" && payload.id) {
@@ -465,7 +460,6 @@ function getFloatingAssistJson(state: ListenerState): string | null {
       "panel.content_sent",
       {
         bytes: json.length,
-        template: assist.template,
         questions: assist.questions.length,
         newQuestions: assist.newQuestions,
         todoGroups: assist.todoGroups.map((group) => ({

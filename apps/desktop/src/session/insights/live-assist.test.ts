@@ -4,7 +4,6 @@ import type { LiveTranscriptSegment } from "@anlg/plugin-transcription";
 
 import {
   buildLiveAssistWindow,
-  decideLiveAssistTemplate,
   detectIncomingQuestions,
   EMPTY_LIVE_ASSIST_SNAPSHOT,
   type LiveAssistOutput,
@@ -30,7 +29,6 @@ function segment(
 
 function output(partial: Partial<LiveAssistOutput> = {}): LiveAssistOutput {
   return {
-    template: { templateId: null, confidence: "low", evidence: null },
     recent: "",
     topics: [],
     decisions: [],
@@ -66,7 +64,6 @@ describe("shouldRunLiveAssistUpdate", () => {
         nowMs: 100_000,
         lastRunAtMs: 80_000,
         newWords: 200,
-        forced: false,
       }),
     ).toBe(false);
     expect(
@@ -74,7 +71,6 @@ describe("shouldRunLiveAssistUpdate", () => {
         nowMs: 200_000,
         lastRunAtMs: 80_000,
         newWords: 20,
-        forced: false,
       }),
     ).toBe(false);
     expect(
@@ -82,7 +78,6 @@ describe("shouldRunLiveAssistUpdate", () => {
         nowMs: 200_000,
         lastRunAtMs: 80_000,
         newWords: 80,
-        forced: false,
       }),
     ).toBe(true);
   });
@@ -140,43 +135,6 @@ describe("mergeLiveAssistOutput", () => {
         isNew: true,
       },
     ]);
-  });
-});
-
-describe("decideLiveAssistTemplate", () => {
-  const candidates = [
-    { id: "sales", title: "Commercial", description: "", sections: [] },
-  ];
-  const transcript =
-    "[01:00] Speaker 1: on cherche un outil pour gérer nos devis";
-  const proven = output({
-    template: {
-      templateId: "sales",
-      confidence: "high",
-      evidence: "on cherche un outil pour gérer nos devis",
-    },
-  });
-
-  it("switches on one cited sentence", () => {
-    expect(
-      decideLiveAssistTemplate(
-        { id: null, source: "auto" },
-        proven,
-        candidates,
-        transcript,
-      ).template,
-    ).toEqual({ id: "sales", source: "auto" });
-  });
-
-  it("never replaces a template picked by hand", () => {
-    expect(
-      decideLiveAssistTemplate(
-        { id: null, source: "manual" },
-        proven,
-        candidates,
-        transcript,
-      ).template,
-    ).toEqual({ id: null, source: "manual" });
   });
 });
 

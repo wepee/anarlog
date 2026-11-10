@@ -36,9 +36,6 @@ vi.mock("./past-meetings", () => ({
   loadPastMeetings: pastMeetings.load,
   NO_PAST_MEETINGS: { text: "", titles: [] },
 }));
-vi.mock("~/services/enhancer/auto-template", () => ({
-  listTemplateCandidates: async () => [],
-}));
 vi.mock("~/services/enhancer/summary-language", () => ({
   resolveSummaryLanguage: async () => "fr",
 }));

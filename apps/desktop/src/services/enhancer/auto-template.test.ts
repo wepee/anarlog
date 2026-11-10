@@ -25,30 +25,13 @@ vi.mock("~/templates/detect", () => ({
   detectCallTemplate: mocks.detectCallTemplate,
 }));
 
-import {
-  resolveAutoTemplateId,
-  setManualTemplateChoice,
-} from "./auto-template";
+import { resolveAutoTemplateId } from "./auto-template";
 
 const model = {} as never;
 
 describe("resolveAutoTemplateId", () => {
   beforeEach(() => {
     mocks.detectCallTemplate.mockReset();
-  });
-
-  it("keeps a template picked by hand during the call", async () => {
-    mocks.detectCallTemplate.mockResolvedValue({ templateId: "sales" });
-    setManualTemplateChoice("manual-session", null);
-
-    await expect(
-      resolveAutoTemplateId({
-        sessionId: "manual-session",
-        model,
-        defaultTemplateId: "default",
-      }),
-    ).resolves.toBeUndefined();
-    expect(mocks.detectCallTemplate).not.toHaveBeenCalled();
   });
 
   it("falls back to the default template without a proven detection", async () => {

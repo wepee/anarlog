@@ -8,20 +8,7 @@ import {
 } from "~/templates/detect";
 import { listUserTemplates } from "~/templates/queries";
 
-// Templates picked by hand in the floating bar during a call. Kept in memory
-// only: the summary that follows the call reads it once, nothing is stored
-// with the note besides the template the summary ends up using.
-const manualChoices = new Map<string, string | null>();
 const detections = new Map<string, Promise<string | null>>();
-
-export function setManualTemplateChoice(
-  sessionId: string,
-  templateId: string | null,
-) {
-  manualChoices.set(sessionId, templateId);
-  detections.delete(sessionId);
-  liveAssistLog("template.manual_choice", { templateId }, sessionId);
-}
 
 export async function listTemplateCandidates(): Promise<
   CallTemplateCandidate[]
@@ -40,9 +27,8 @@ export async function listTemplateCandidates(): Promise<
 }
 
 // Picks the template for a summary when nothing explicit was asked for:
-// a choice made by hand during the call wins, then a detection on the whole
-// transcript (backed by a quoted sentence), and only then the default
-// template from the settings. The note's starting template plays no part:
+// a detection on the whole transcript once the call is over (backed by a
+// quoted sentence), and otherwise the default template from the settings. The note's starting template plays no part:
 // a note that starts recording is always empty.
 export async function resolveAutoTemplateId({
   sessionId,
@@ -53,15 +39,6 @@ export async function resolveAutoTemplateId({
   model: LanguageModel | null;
   defaultTemplateId: string | undefined;
 }): Promise<string | undefined> {
-  const manual = manualChoices.get(sessionId);
-  if (manual !== undefined) {
-    liveAssistLog(
-      "summary.template_resolved",
-      { source: "manual", templateId: manual },
-      sessionId,
-    );
-    return manual ?? undefined;
-  }
   if (!model) {
     liveAssistLog(
       "summary.template_resolved",
