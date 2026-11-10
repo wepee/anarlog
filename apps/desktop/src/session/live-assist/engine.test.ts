@@ -36,9 +36,6 @@ vi.mock("./past-meetings", () => ({
   loadPastMeetings: pastMeetings.load,
   NO_PAST_MEETINGS: { text: "", titles: [] },
 }));
-vi.mock("~/services/enhancer/auto-template", () => ({
-  listTemplateCandidates: async () => [],
-}));
 vi.mock("~/services/enhancer/summary-language", () => ({
   resolveSummaryLanguage: async () => "fr",
 }));
@@ -57,7 +54,10 @@ vi.mock("./projects", () => ({
 
 import { createLiveAssistEngine } from "./engine";
 
-import { getLiveAssistSession } from "~/store/zustand/live-assist";
+import {
+  getLiveAssistSession,
+  useLiveAssistStore,
+} from "~/store/zustand/live-assist";
 
 const config = {
   enabled: true,
@@ -191,5 +191,59 @@ describe("live answers", () => {
       ],
     });
     engine.dispose();
+  });
+
+  it("keeps the picked project when the recording of the same call restarts, not for another call", async () => {
+    mocks.snapshot = null;
+    mocks.listProjects.mockResolvedValue([
+      { id: "projects/Brain", label: "Brain" },
+    ] as never);
+    const live = listener.store as StoreApi<{
+      live: {
+        status: string;
+        sessionId: string | null;
+        liveTranscriptionActive: boolean;
+      };
+    }>;
+    const record = (sessionId: string | null) =>
+      live.setState({
+        live: {
+          status: sessionId ? "active" : "inactive",
+          sessionId,
+          liveTranscriptionActive: true,
+        },
+      });
+    const projectsLoaded = (sessionId: string) =>
+      vi.waitFor(() =>
+        expect(getLiveAssistSession(sessionId).projects).toHaveLength(1),
+      );
+
+    record("first");
+    const engine = createLiveAssistEngine(() => ({
+      ...config,
+      projectsCommand: "memex",
+    }));
+    engine.sync();
+    await projectsLoaded("first");
+    useLiveAssistStore.getState().selectProject("first", "projects/Brain");
+
+    record(null);
+    record("restart");
+    await projectsLoaded("restart");
+    expect(getLiveAssistSession("restart").projectId).toBe("projects/Brain");
+
+    mocks.snapshot = {
+      title: "Point hebdo Lumen",
+      event: null,
+      ownerUserId: "me",
+      participants: [],
+    };
+    record(null);
+    record("other");
+    await projectsLoaded("other");
+    expect(getLiveAssistSession("other").projectId).toBeNull();
+
+    engine.dispose();
+    record("s1");
   });
 });

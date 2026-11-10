@@ -19,9 +19,6 @@ export type FloatingAssist = {
     due: string;
     toClarify: string;
     dismiss: string;
-    templateMenu: string;
-    templateFooter: string;
-    auto: string;
     emptyQuestions: string;
     emptyTodo: string;
     emptySummary: string;
@@ -40,8 +37,6 @@ export type FloatingAssist = {
   // The latest suggested answer, also shown on the Questions tab so it is
   // seen without switching tabs.
   spotlight: { id: string; question: string; answer: string } | null;
-  template: { id: string | null; title: string; auto: boolean };
-  templates: Array<{ id: string | null; title: string }>;
   // null when no projects command is set. "Project?" until the user picks
   // one; projects come most likely first.
   project: { title: string } | null;
@@ -92,7 +87,6 @@ export type FloatingAssist = {
 
 export type FloatingAssistAction =
   | { action: "dismissQuestion"; id: string }
-  | { action: "selectTemplate"; id: string | null }
   | { action: "selectProject"; id: string | null }
   | { action: "dismissAnswer"; id: string }
   | { action: "seenQuestions" }
@@ -105,9 +99,7 @@ const SPOTLIGHT_MS = 2 * 60_000;
 export function buildFloatingAssist(
   session: LiveAssistSessionState,
 ): FloatingAssist {
-  const { snapshot, template, templates, projectId, projects, projectsFailed } =
-    session;
-  const autoTitle = t`Auto`;
+  const { snapshot, projectId, projects, projectsFailed } = session;
   const selfLabel = t`Me`;
   const noOwnerLabel = t`No owner`;
 
@@ -169,9 +161,6 @@ export function buildFloatingAssist(
       due: t`due`,
       toClarify: t`to clarify`,
       dismiss: t`Dismiss`,
-      templateMenu: t`Summary template`,
-      templateFooter: t`The summary after the call will use this template.`,
-      auto: t`auto`,
       emptyQuestions: t`Questions to ask will show up once the conversation gets going.`,
       emptyTodo: t`No action items yet.`,
       emptySummary: t`The summary shows up after the first minute of conversation.`,
@@ -199,17 +188,6 @@ export function buildFloatingAssist(
           answer: spotlight.answer,
         }
       : null,
-    template: {
-      id: template.id,
-      title:
-        templates.find((option) => option.id === template.id)?.title ??
-        autoTitle,
-      auto: template.source === "auto",
-    },
-    templates: [
-      { id: null, title: autoTitle },
-      ...templates.map(({ id, title }) => ({ id, title })),
-    ],
     project:
       projects.length > 0
         ? { title: projectTitle }

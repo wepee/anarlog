@@ -126,7 +126,6 @@ struct FloatingAssistPanelView<Live: View>: View {
         if let project = assist.project {
           projectMenu(project)
         }
-        templateMenu
       }
       HStack(spacing: 2) {
         tabButton(.questions, assist.labels.questions, count: assist.newQuestions)
@@ -138,31 +137,6 @@ struct FloatingAssistPanelView<Live: View>: View {
       .padding(3)
       .background(Capsule().fill(Color.black.opacity(isDark ? 0.18 : 0.07)))
     }
-  }
-
-  private var templateMenu: some View {
-    Menu {
-      Section(assist.labels.templateMenu) {
-        ForEach(Array(assist.templates.enumerated()), id: \.offset) { _, option in
-          Button {
-            onAction("selectTemplate", option.id)
-          } label: {
-            if option.id == assist.template.id {
-              Label(option.title, systemImage: "checkmark")
-            } else {
-              Text(option.title)
-            }
-          }
-        }
-      }
-      Divider()
-      Text(assist.labels.templateFooter)
-    } label: {
-      menuChip(assist.template.title, auto: assist.template.auto)
-    }
-    .menuStyle(.borderlessButton)
-    .menuIndicator(.hidden)
-    .fixedSize()
   }
 
   private func projectMenu(_ project: FloatingAssistPayload.Project) -> some View {
@@ -183,19 +157,16 @@ struct FloatingAssistPanelView<Live: View>: View {
       Divider()
       Text(assist.labels.projectFooter)
     } label: {
-      menuChip(project.title, auto: false)
+      menuChip(project.title)
     }
     .menuStyle(.borderlessButton)
     .menuIndicator(.hidden)
     .fixedSize()
   }
 
-  private func menuChip(_ title: String, auto: Bool) -> some View {
+  private func menuChip(_ title: String) -> some View {
     HStack(spacing: 4) {
       Text(title).lineLimit(1).truncationMode(.tail).frame(maxWidth: 140, alignment: .leading)
-      if auto {
-        Text("· \(assist.labels.auto)").foregroundStyle(secondary)
-      }
       Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
     }
     .font(.system(size: 11.5, weight: .medium))
@@ -266,24 +237,24 @@ struct FloatingAssistPanelView<Live: View>: View {
         Button {
           tab = .answers
         } label: {
-        VStack(alignment: .leading, spacing: 4) {
-          Text(assist.labels.suggestedAnswer.uppercased())
-            .font(.system(size: 10.5, design: .monospaced))
-            .foregroundStyle(amber)
-          Text(spotlight.question)
-            .font(.system(size: 12))
-            .foregroundStyle(secondary)
-            .fixedSize(horizontal: false, vertical: true)
-          Text(spotlight.answer)
-            .font(.system(size: 13.5, weight: .medium))
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-          RoundedRectangle(cornerRadius: 12).strokeBorder(primary.opacity(0.16), lineWidth: 0.5)
-        )
+          VStack(alignment: .leading, spacing: 4) {
+            Text(assist.labels.suggestedAnswer.uppercased())
+              .font(.system(size: 10.5, design: .monospaced))
+              .foregroundStyle(amber)
+            Text(spotlight.question)
+              .font(.system(size: 12))
+              .foregroundStyle(secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Text(spotlight.answer)
+              .font(.system(size: 13.5, weight: .medium))
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .background(
+            RoundedRectangle(cornerRadius: 12).strokeBorder(primary.opacity(0.16), lineWidth: 0.5)
+          )
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -304,7 +275,7 @@ struct FloatingAssistPanelView<Live: View>: View {
       }
     }
     if !assist.coverage.isEmpty {
-      sectionTitle("\(assist.labels.toCover) · \(assist.template.title)")
+      sectionTitle(assist.labels.toCover)
       LazyVGrid(
         columns: [GridItem(.adaptive(minimum: 96), spacing: 6, alignment: .leading)],
         alignment: .leading,

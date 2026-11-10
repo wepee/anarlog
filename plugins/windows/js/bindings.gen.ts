@@ -376,7 +376,6 @@ export type AppWindow =
   | { type: "note"; value: string };
 export type AssistPanelAction =
   | "dismissQuestion"
-  | "selectTemplate"
   | "seenQuestions"
   /**
    * Ask a question to the LLM; the question text travels in `id`.
@@ -384,7 +383,7 @@ export type AssistPanelAction =
   | "ask"
   | "seenAnswers"
   /**
-   * The project to use, null to let the projects command pick.
+   * The project whose notes answers use, null for none.
    */
   | "selectProject"
   | "dismissAnswer";
@@ -405,9 +404,8 @@ export type FloatingBarAssistAction = {
   sessionId: string;
   action: AssistPanelAction;
   /**
-   * The question or answer to dismiss, the template to select (null for
-   * Auto), the project to select (null for Auto), or the text of a
-   * question to ask.
+   * The question or answer to dismiss, the project to select (null for
+   * none), or the text of a question to ask.
    */
   id?: string | null;
 };

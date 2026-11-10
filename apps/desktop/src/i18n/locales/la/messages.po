@@ -516,14 +516,6 @@ msgstr ""
 msgid "Authorize access in your browser, then return to BlackMushi."
 msgstr ""
 
-#: src/meeting-float/assist.ts
-msgid "auto"
-msgstr ""
-
-#: src/meeting-float/assist.ts
-msgid "Auto"
-msgstr ""
-
 #: src/templates/auto-form.tsx
 msgid "Auto summary format"
 msgstr ""
@@ -3978,10 +3970,6 @@ msgstr ""
 msgid "Summary ready"
 msgstr ""
 
-#: src/meeting-float/assist.ts
-msgid "Summary template"
-msgstr ""
-
 #: src/settings/general/week-start.tsx
 msgid "Sunday"
 msgstr ""
@@ -4071,10 +4059,6 @@ msgstr ""
 
 #: src/meeting-float/assist.ts
 msgid "The projects command failed. Check it in Settings › Meetings."
-msgstr ""
-
-#: src/meeting-float/assist.ts
-msgid "The summary after the call will use this template."
 msgstr ""
 
 #: src/meeting-float/assist.ts
@@ -4473,7 +4457,7 @@ msgid "When this happens"
 msgstr ""
 
 #: src/templates/template-form.tsx
-msgid "When to use this template, e.g. \"first call with a prospect\". Live Assist uses it to recognize the call."
+msgid "When to use this template, e.g. \"first call with a prospect\". It picks the template of the summary after the call."
 msgstr ""
 
 #: src/settings/general/meeting-settings.tsx

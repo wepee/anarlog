@@ -24,7 +24,7 @@ const DETECTION_TAIL_CHARS = 3_000;
 const EVIDENCE_MIN_TOKENS = 3;
 const EVIDENCE_MIN_OVERLAP = 0.75;
 
-export const templateProposalSchema = z.object({
+const templateProposalSchema = z.object({
   templateId: z.string().nullable(),
   confidence: z.enum(["high", "medium", "low"]),
   evidence: z.string().nullable(),
@@ -124,7 +124,7 @@ function cleanSectionHint(text: string | undefined): string {
     : cleaned;
 }
 
-export const TEMPLATE_RULES = `Choosing the template:
+const TEMPLATE_RULES = `Choosing the template:
 - Pick the template whose "when" (the user's own description of when to use it) matches the purpose of the call; tags and sections are secondary hints. Return templateId null when none fits.
 - "high" confidence requires a short verbatim quote (max 15 words) from the transcript that shows the purpose of the call: someone describing a need, presenting a product, reviewing progress, assigning internal tasks, interviewing a candidate...
 - The calendar title and the participants are hints, never evidence: with only them, confidence is at most "medium" and evidence is null.

@@ -27,6 +27,17 @@ final class FloatingBarManager {
         self.resize(panel, to: layout)
       }
       .store(in: &cancellables)
+    model.$peek
+      .removeDuplicates()
+      .dropFirst()
+      .sink { [weak self] peek in
+        guard let self, let panel = self.panel else { return }
+        guard !self.isApplyingExternalState else { return }
+        DispatchQueue.main.async {
+          self.resize(panel, to: self.layout(isExpanded: self.model.isExpanded, peeks: peek != nil))
+        }
+      }
+      .store(in: &cancellables)
   }
 
   func show() {
@@ -151,6 +162,7 @@ final class FloatingBarManager {
     if model.isExpanded != isExpanded {
       model.isExpanded = isExpanded
     }
+    model.offerPeek(assist?.spotlight)
     isApplyingExternalState = false
     if let panel {
       if startsDictation {
@@ -224,7 +236,7 @@ final class FloatingBarManager {
     let anchor = NSPoint(x: panel.frame.minX + offset.x, y: panel.frame.minY + offset.y)
     let workArea = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
     let grows =
-      nextLayout.isExpanded
+      (nextLayout.isExpanded || nextLayout.peeks)
       && panel.frame.height
         <= FloatingBarLayout.containerSize(isExpanded: false, showsExpand: true).height
     let expandsUpward =
@@ -249,11 +261,12 @@ final class FloatingBarManager {
     layout(isExpanded: model.isExpanded)
   }
 
-  private func layout(isExpanded: Bool) -> FloatingBarWindowLayout {
+  private func layout(isExpanded: Bool, peeks: Bool? = nil) -> FloatingBarWindowLayout {
     FloatingBarWindowLayout(
       isExpanded: isExpanded,
       showsExpand: model.liveCaptionToggleVisible,
-      hasAssist: model.assist != nil
+      hasAssist: model.assist != nil,
+      peeks: peeks ?? (model.peek != nil)
     )
   }
 
@@ -261,7 +274,8 @@ final class FloatingBarManager {
     FloatingBarLayout.containerSize(
       isExpanded: layout.isExpanded,
       showsExpand: layout.showsExpand,
-      hasAssist: layout.hasAssist
+      hasAssist: layout.hasAssist,
+      peeks: layout.peeks
     )
   }
 
@@ -298,6 +312,7 @@ private struct FloatingBarWindowLayout {
   let isExpanded: Bool
   let showsExpand: Bool
   let hasAssist: Bool
+  let peeks: Bool
 }
 
 final class FloatingBarPanel: NSPanel {

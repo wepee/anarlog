@@ -247,7 +247,6 @@ describe("FloatingMeetingWindowHost", () => {
           },
         ],
       },
-      template: { id: null, source: "auto" },
       updatedAtMs: 1,
     });
     render(<FloatingMeetingWindowHost />);

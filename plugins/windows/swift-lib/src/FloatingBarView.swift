@@ -19,6 +19,8 @@ enum FloatingBarLayout {
   static let assistExpandedWidth: CGFloat = 384
   static let assistExpandedHeight: CGFloat = 548
   static let assistCornerRadius: CGFloat = 28
+  static let peekWidth: CGFloat = 320
+  static let peekHeight: CGFloat = 92
   static let expandedPadding: CGFloat = 12
   static let waveformWidth: CGFloat = 26
   static let waveformHeight: CGFloat = 20
@@ -43,9 +45,16 @@ enum FloatingBarLayout {
       + compactHorizontalPadding * 2
   }
 
-  static func containerSize(isExpanded: Bool, showsExpand: Bool, hasAssist: Bool = false)
+  static func containerSize(
+    isExpanded: Bool, showsExpand: Bool, hasAssist: Bool = false, peeks: Bool = false
+  )
     -> NSSize
   {
+    if peeks, !isExpanded {
+      return NSSize(
+        width: peekWidth + inset * 2,
+        height: compactHeight + peekHeight + hoverHandleReservedHeight + inset * 2)
+    }
     let expanded =
       hasAssist
       ? NSSize(width: assistExpandedWidth, height: assistExpandedHeight)
@@ -54,7 +63,8 @@ enum FloatingBarLayout {
       width: (isExpanded
         ? expanded.width : compactWidth(showsExpand: showsExpand)) + inset
         * 2,
-      height: (isExpanded ? expanded.height : compactHeight) + hoverHandleReservedHeight + inset * 2)
+      height: (isExpanded ? expanded.height : compactHeight) + hoverHandleReservedHeight + inset * 2
+    )
   }
 
 }
@@ -79,13 +89,14 @@ struct FloatingBarView: View {
   private var expandsUpward: Bool { model.placement?.expandsUpward ?? true }
 
   var body: some View {
-    let showsHoverHandle = isBarHovered && !model.isExpanded
+    let peek = model.isExpanded ? nil : model.peek
+    let showsHoverHandle = isBarHovered && !model.isExpanded && peek == nil
     let width = containerSize.width - FloatingBarLayout.inset * 2
     let showsAssist = model.isExpanded && model.assist != nil && model.dictation == nil
     let radius =
       showsAssist
       ? FloatingBarLayout.assistCornerRadius
-      : model.isExpanded
+      : model.isExpanded || peek != nil
         ? FloatingBarLayout.expandedCornerRadius : FloatingBarLayout.compactCornerRadius
     let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
     ZStack(alignment: .bottom) {
@@ -99,6 +110,10 @@ struct FloatingBarView: View {
       ZStack(alignment: .topLeading) {
         if model.isExpanded {
           expandedPanel
+            .frame(width: width, height: max(0, bodyHeight - FloatingBarLayout.compactHeight))
+            .offset(y: expandsUpward ? 0 : FloatingBarLayout.compactHeight)
+        } else if let peek {
+          answerPeek(peek)
             .frame(width: width, height: max(0, bodyHeight - FloatingBarLayout.compactHeight))
             .offset(y: expandsUpward ? 0 : FloatingBarLayout.compactHeight)
         }
@@ -125,7 +140,8 @@ struct FloatingBarView: View {
     .modifier(
       FloatingBarSurface(
         shape: shape,
-        fill: isBarHovered && !model.isExpanded ? envelopeSurfaceColor : surfaceColor,
+        fill: isBarHovered && !model.isExpanded && peek == nil
+          ? envelopeSurfaceColor : surfaceColor,
         usesGlass: showsAssist,
         glassTint: surfaceColor.opacity(0.35)
       )
@@ -162,6 +178,43 @@ struct FloatingBarView: View {
     } else {
       transcriptPanel
     }
+  }
+
+  private func answerPeek(_ peek: FloatingAssistPayload.Spotlight) -> some View {
+    HStack(alignment: .top, spacing: 2) {
+      Button {
+        performClick { setExpanded(true) }
+      } label: {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(peek.question)
+            .font(.system(size: 11.5))
+            .foregroundStyle(secondaryContentColor)
+            .lineLimit(1)
+            .truncationMode(.tail)
+          Text(peek.answer)
+            .font(.system(size: 13.5, weight: .medium))
+            .foregroundStyle(primaryContentColor)
+            .lineLimit(3)
+            .truncationMode(.tail)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help(model.assist?.labels.suggestedAnswer ?? "")
+      FloatingIconButton(
+        systemName: "xmark",
+        accessibilityLabel: model.assist?.labels.dismiss ?? "Dismiss",
+        color: secondaryContentColor,
+        hoverFill: controlHoverFill,
+        size: 22,
+        action: { performClick { model.hidePeek() } }
+      )
+    }
+    .padding(.leading, 14)
+    .padding(.trailing, 8)
+    .padding(.vertical, 10)
   }
 
   private func assistAction(_ action: String, _ id: String?) {
@@ -338,7 +391,8 @@ struct FloatingBarView: View {
       ?? FloatingBarLayout.containerSize(
         isExpanded: model.isExpanded,
         showsExpand: model.liveCaptionToggleVisible,
-        hasAssist: model.assist != nil
+        hasAssist: model.assist != nil,
+        peeks: model.peek != nil
       )
   }
 
@@ -465,6 +519,7 @@ struct FloatingBarView: View {
       dictationAction("togglePreview")
     } else {
       model.isExpanded = expanded
+      model.offerPeek(model.assist?.spotlight)
       settings.setLiveCaptionMinimized(!expanded)
     }
   }
