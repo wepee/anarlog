@@ -77,7 +77,7 @@ The active provider and model are always visible under **Settings → Transcript
 
 ## Get started
 
-1. [Download BlackMushi](https://anarlog.so/download) for macOS.
+1. [Download BlackMushi](https://github.com/wepee/blackmushi/releases/latest) for macOS on Apple Silicon.
 2. Open it and join a meeting. anarlog records on your device and transcribes with the model you selected.
 3. Generate a note, edit it like a document, and export Markdown when you need it.
 4. Optional: connect an LLM provider or a local model in settings for summaries and chat.

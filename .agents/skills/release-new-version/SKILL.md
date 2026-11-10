@@ -19,8 +19,8 @@ look for it, and do not recreate it as part of a release:
 - no Nightly channel, and no `desktop_nightly.yaml` / `desktop_cd.yaml` /
   `desktop_publish.yaml`
 - no CrabNebula, no Microsoft Store, no Flathub, no APT or AUR repositories
-- no Windows or Linux release artifacts (their **CI** still runs; only the
-  release lane is macOS-only)
+- no Windows or Linux builds at all: BlackMushi ships for macOS only, and the
+  Windows and Linux CI jobs were removed
 - no web app, so no website changelog page to publish or verify
 - no mobile app, no TestFlight, no Google Play, no `apps/mobile`
 - no hosted API, Stripe, or database deployments to sequence before a release
@@ -107,9 +107,8 @@ the resulting SHA.
 
 ## CI gate
 
-**Pull requests and pushes do not run the desktop native jobs.** `macos_ci`,
-`linux_ci`, `windows_ci` and `desktop_swift` only run on the daily schedule or
-`workflow_dispatch`, so a green PR proves nothing about them. Dispatch the full
+**Pull requests and pushes do not run the desktop native jobs.** `macos_ci` and
+`desktop_swift` only run on the daily schedule or `workflow_dispatch`, so a green PR proves nothing about them. Dispatch the full
 run against the candidate and check the jobs individually:
 
 ```bash
