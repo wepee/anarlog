@@ -237,24 +237,24 @@ struct FloatingAssistPanelView<Live: View>: View {
         Button {
           tab = .answers
         } label: {
-        VStack(alignment: .leading, spacing: 4) {
-          Text(assist.labels.suggestedAnswer.uppercased())
-            .font(.system(size: 10.5, design: .monospaced))
-            .foregroundStyle(amber)
-          Text(spotlight.question)
-            .font(.system(size: 12))
-            .foregroundStyle(secondary)
-            .fixedSize(horizontal: false, vertical: true)
-          Text(spotlight.answer)
-            .font(.system(size: 13.5, weight: .medium))
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-          RoundedRectangle(cornerRadius: 12).strokeBorder(primary.opacity(0.16), lineWidth: 0.5)
-        )
+          VStack(alignment: .leading, spacing: 4) {
+            Text(assist.labels.suggestedAnswer.uppercased())
+              .font(.system(size: 10.5, design: .monospaced))
+              .foregroundStyle(amber)
+            Text(spotlight.question)
+              .font(.system(size: 12))
+              .foregroundStyle(secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Text(spotlight.answer)
+              .font(.system(size: 13.5, weight: .medium))
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .background(
+            RoundedRectangle(cornerRadius: 12).strokeBorder(primary.opacity(0.16), lineWidth: 0.5)
+          )
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

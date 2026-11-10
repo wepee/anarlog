@@ -63,7 +63,8 @@ enum FloatingBarLayout {
       width: (isExpanded
         ? expanded.width : compactWidth(showsExpand: showsExpand)) + inset
         * 2,
-      height: (isExpanded ? expanded.height : compactHeight) + hoverHandleReservedHeight + inset * 2)
+      height: (isExpanded ? expanded.height : compactHeight) + hoverHandleReservedHeight + inset * 2
+    )
   }
 
 }
