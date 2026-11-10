@@ -608,8 +608,16 @@ async fn migration_dates_imported_transcripts_at_the_meeting_start() {
     assert_eq!(
         rows,
         vec![
-            ("imported".to_string(), meeting_start, Some(meeting_start + 60_000)),
-            ("live".to_string(), 1_787_775_058_055, Some(1_787_775_118_055)),
+            (
+                "imported".to_string(),
+                meeting_start,
+                Some(meeting_start + 60_000)
+            ),
+            (
+                "live".to_string(),
+                1_787_775_058_055,
+                Some(1_787_775_118_055)
+            ),
         ]
     );
 }
