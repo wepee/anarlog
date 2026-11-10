@@ -14,6 +14,9 @@ type LiveAssistAnswer = {
   origin: "auto" | "asked";
   // Who asked, as labelled in the transcript, for a question heard in the call.
   speaker?: string;
+  // Earlier, shorter versions of the same question, removed once this one
+  // has its answer.
+  replaces?: string[];
   status: "queued" | "answering" | "ready" | "error";
   answer: string;
   sources: LiveAnswerSource[];
@@ -61,7 +64,10 @@ type LiveAssistActions = {
   selectProject: (sessionId: string, projectId: string | null) => void;
   queueAnswer: (
     sessionId: string,
-    answer: Pick<LiveAssistAnswer, "id" | "question" | "origin" | "speaker">,
+    answer: Pick<
+      LiveAssistAnswer,
+      "id" | "question" | "origin" | "speaker" | "replaces"
+    >,
   ) => void;
   updateAnswer: (
     sessionId: string,

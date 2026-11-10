@@ -1,5 +1,7 @@
+import { tool } from "ai";
 import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   extractCitations,
@@ -21,10 +23,10 @@ function text(id: string, value: string) {
   ];
 }
 
-function finish(reason: "stop" | "tool-calls") {
+function finish(reason: "stop" | "tool-calls", raw: string = reason) {
   return {
     type: "finish",
-    finishReason: { unified: reason, raw: reason },
+    finishReason: { unified: reason, raw },
     usage,
   };
 }
@@ -169,5 +171,58 @@ describe("live answers", () => {
       text: "Ils veulent voir les prix des mutuelles.",
       refs: ["2026-10-01 Tiers payant [3290cd87] › Transcript"],
     });
+  });
+});
+
+describe("a reply that stops mid-way", () => {
+  function modelStopping(replies: string[]) {
+    const calls: Array<string[]> = [];
+    let call = 0;
+    const model = new MockLanguageModelV3({
+      doStream: async (options) => {
+        calls.push((options.tools ?? []).map((item) => item.name));
+        return {
+          stream: convertArrayToReadableStream<unknown>([
+            ...text("t1", replies[call++]!),
+            finish("stop", "pause_turn"),
+          ]) as never,
+        };
+      },
+    });
+    return { model, calls };
+  }
+
+  async function answerWith(model: MockLanguageModelV3) {
+    return streamLiveAnswer({
+      model,
+      providerId: "anthropic",
+      modelId: "claude-haiku-5-5",
+      prompt: { context: "", request: "" },
+      webTools: {
+        web_search: tool({
+          inputSchema: z.object({}),
+          execute: async () => "",
+        }),
+      },
+      projectRead: null,
+      onText: () => {},
+    });
+  }
+
+  it("asks again without web search, then keeps only its finished sentences", async () => {
+    const { model, calls } = modelStopping([
+      "Oui, c'est réaliste : un cockp",
+      "Oui, c'est réaliste. Chaque agent peut appeler son propre mod",
+    ]);
+
+    const result = await answerWith(model);
+
+    expect(calls).toEqual([["web_search"], []]);
+    expect(result.text).toBe("Oui, c'est réaliste.");
+    expect(result.skipped).toBe(false);
+    expect(result.ends.map((end) => end.raw)).toEqual([
+      "pause_turn",
+      "pause_turn",
+    ]);
   });
 });

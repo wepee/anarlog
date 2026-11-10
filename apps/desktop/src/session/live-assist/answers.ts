@@ -39,8 +39,9 @@ Speaker labels can be wrong: in a room with one microphone everyone shows as "Yo
 When the question was heard in the call, reply exactly SKIP if:
 - it is small talk, a greeting, an audio check, or rhetorical;
 - it is not addressed to the user, or the user is the one asking it;
-- it asks about the user's own feelings, preferences or choices, or asks the user to agree or decide;
+- it only asks the user to agree, to decide something that is theirs to decide (a date, a price, a commitment), or how they feel;
 - your sources do not support a useful answer. Never reply that you lack the information.
+A question asking for the user's opinion, advice or method ("what do you think?", "what would you recommend?", "how would you test it?") is not a choice: answer it with what the user could recommend, drawn from the call and general good practice.
 Answer it even if someone already started answering: it helps the user complete the answer.
 When the user typed the question: never reply SKIP; if your sources lack the facts, say so in a few words.
 
@@ -168,6 +169,9 @@ export function getLiveAnswerProviderOptions(
 // Only the text of the latest step counts: anything written before a tool
 // call is dropped, and a reply that turns out to be SKIP is never shown.
 // `onText` receives the visible text so far.
+// A reply the provider stopped before its end (out of tokens, or Anthropic
+// pausing a turn that searches the web) is asked once more without web
+// search; if it stops again, only its finished sentences are kept.
 export async function streamLiveAnswer({
   model,
   providerId,
@@ -197,9 +201,15 @@ export async function streamLiveAnswer({
   sources: LiveAnswerSource[];
   firstTextMs: number | null;
   reads: Array<{ section?: string; search?: string }>;
+  ends: Array<{ finishReason: string; raw: string | null; cut: boolean }>;
 }> {
   const startedAt = Date.now();
   let firstTextMs: number | null = null;
+  const ends: Array<{
+    finishReason: string;
+    raw: string | null;
+    cut: boolean;
+  }> = [];
   const providerOptions = getLiveAnswerProviderOptions(providerId, modelId);
   const reads: Array<{ section?: string; search?: string }> = [];
   let readText = "";
@@ -230,7 +240,6 @@ export async function streamLiveAnswer({
         }
       : {}),
   };
-  const hasTools = Object.keys(tools).length > 0;
   const messages: ModelMessage[] = [
     {
       role: "user",
@@ -246,47 +255,74 @@ export async function streamLiveAnswer({
       ],
     },
   ];
-  const result = streamText({
-    model,
-    system: LIVE_ANSWER_SYSTEM_PROMPT,
-    messages,
-    ...(hasTools ? { tools, stopWhen: stepCountIs(MAX_READS + 2) } : {}),
-    ...(providerOptions ? { providerOptions } : {}),
-    abortSignal: signal,
-    maxRetries: 1,
-    maxOutputTokens: 400,
-    timeout: { totalMs: ANSWER_TIMEOUT_MS },
-  });
-
   let stepText = "";
-  const webSources: LiveAnswerSource[] = [];
-  for await (const part of result.fullStream) {
-    if (part.type === "start-step") {
-      if (stepText) {
-        onText("");
+  let webSources: LiveAnswerSource[] = [];
+  const attempt = async (activeTools: ToolSet) => {
+    const hasTools = Object.keys(activeTools).length > 0;
+    const result = streamText({
+      model,
+      system: LIVE_ANSWER_SYSTEM_PROMPT,
+      messages,
+      ...(hasTools
+        ? { tools: activeTools, stopWhen: stepCountIs(MAX_READS + 2) }
+        : {}),
+      ...(providerOptions ? { providerOptions } : {}),
+      abortSignal: signal,
+      maxRetries: 1,
+      maxOutputTokens: 400,
+      timeout: { totalMs: ANSWER_TIMEOUT_MS },
+    });
+
+    stepText = "";
+    webSources = [];
+    let end = { finishReason: "unknown", raw: null as string | null };
+    for await (const part of result.fullStream) {
+      if (part.type === "start-step") {
+        if (stepText) {
+          onText("");
+        }
+        stepText = "";
+      } else if (part.type === "text-delta") {
+        stepText += part.text;
+        const shown = visibleText(stepText);
+        if (!isSkippedAnswer(stepText) && shown.length >= 4) {
+          firstTextMs ??= Date.now() - startedAt;
+          onText(shown);
+        }
+      } else if (part.type === "source" && part.sourceType === "url") {
+        if (
+          webSources.length < MAX_WEB_SOURCES &&
+          !webSources.some((source) => source.url === part.url)
+        ) {
+          webSources.push({
+            kind: "web",
+            label: getSourceLabel(part.url),
+            url: part.url,
+          });
+        }
+      } else if (part.type === "finish-step") {
+        end = {
+          finishReason: part.finishReason,
+          raw: part.rawFinishReason ?? null,
+        };
+      } else if (part.type === "error") {
+        throw part.error;
       }
-      stepText = "";
-    } else if (part.type === "text-delta") {
-      stepText += part.text;
-      const shown = visibleText(stepText);
-      if (!isSkippedAnswer(stepText) && shown.length >= 4) {
-        firstTextMs ??= Date.now() - startedAt;
-        onText(shown);
-      }
-    } else if (part.type === "source" && part.sourceType === "url") {
-      if (
-        webSources.length < MAX_WEB_SOURCES &&
-        !webSources.some((source) => source.url === part.url)
-      ) {
-        webSources.push({
-          kind: "web",
-          label: getSourceLabel(part.url),
-          url: part.url,
-        });
-      }
-    } else if (part.type === "error") {
-      throw part.error;
     }
+    const cut =
+      Boolean(stepText.trim()) &&
+      !isSkippedAnswer(stepText) &&
+      (end.finishReason === "length" || end.raw === "pause_turn");
+    ends.push({ ...end, cut });
+    return cut;
+  };
+
+  const { read_notes: readNotes } = tools;
+  if (
+    (await attempt(tools)) &&
+    (await attempt(readNotes ? { read_notes: readNotes } : {}))
+  ) {
+    stepText = finishedSentences(stepText);
   }
 
   const skipped = !stepText.trim() || isSkippedAnswer(stepText);
@@ -307,5 +343,18 @@ export async function streamLiveAnswer({
     ],
     firstTextMs,
     reads,
+    ends,
   };
+}
+
+// The finished sentences of a reply that stopped mid-way.
+function finishedSentences(text: string): string {
+  const body = text.trim();
+  const end = Math.max(
+    body.lastIndexOf(". "),
+    body.lastIndexOf("? "),
+    body.lastIndexOf("! "),
+    /[.?!]$/.test(body) ? body.length - 1 : -1,
+  );
+  return end < 0 ? "" : body.slice(0, end + 1);
 }

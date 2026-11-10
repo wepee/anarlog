@@ -29,6 +29,7 @@ import {
   LIVE_ASSIST_MIN_NEW_WORDS,
   LIVE_ASSIST_SYSTEM_PROMPT,
   liveAssistOutputSchema,
+  matchEarlierQuestion,
   mergeLiveAssistOutput,
   shouldRunLiveAssistUpdate,
 } from "~/session/insights/live-assist";
@@ -87,9 +88,10 @@ type RunningSession = {
   projects: ProjectOption[];
   projectContexts: Map<string, Promise<string>>;
   questionsScannedEndMs: number;
-  seenQuestions: Set<string>;
+  askedQuestions: Array<{ sentence: string; answerId: string }>;
   autoAnswers: number;
   answering: AbortController | null;
+  answeringId: string | null;
   transcriptChangedAt: number;
   transcriptSignature: string;
   scannedSignature: string;
@@ -208,9 +210,10 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         projects: [],
         projectContexts: new Map(),
         questionsScannedEndMs: 0,
-        seenQuestions: new Set(),
+        askedQuestions: [],
         autoAnswers: 0,
         answering: null,
+        answeringId: null,
         transcriptChangedAt: Date.now(),
         transcriptSignature: "",
         scannedSignature: "",
@@ -585,12 +588,20 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     if (!config.autoAnswers) {
       return;
     }
+    const store = useLiveAssistStore.getState();
     for (const question of questions) {
-      const key = question.text.toLowerCase().replace(/\s+/g, " ");
-      if (session.seenQuestions.has(key)) {
+      const { repeated, replaces } = matchEarlierQuestion(
+        question.sentences,
+        session.askedQuestions,
+      );
+      if (repeated) {
+        liveAssistLog(
+          "answer.repeated",
+          { question: question.text, of: replaces },
+          session.sessionId,
+        );
         continue;
       }
-      session.seenQuestions.add(key);
       if (session.autoAnswers >= MAX_AUTO_ANSWERS_PER_CALL) {
         liveAssistLog(
           "answer.skipped",
@@ -600,16 +611,40 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
         continue;
       }
       session.autoAnswers += 1;
-      useLiveAssistStore.getState().queueAnswer(session.sessionId, {
-        id: crypto.randomUUID(),
+      const id = crypto.randomUUID();
+      // The longer question takes the place of the earlier one: an answer
+      // not written yet is dropped, one already shown stays until the new
+      // answer is ready.
+      const earlier = getLiveAssistSession(session.sessionId).answers.filter(
+        (answer) => replaces.includes(answer.id),
+      );
+      for (const answer of earlier) {
+        if (answer.status === "queued") {
+          store.removeAnswer(session.sessionId, answer.id);
+        } else if (session.answeringId === answer.id) {
+          session.answering?.abort();
+        }
+      }
+      session.askedQuestions.push(
+        ...question.sentences.map((sentence) => ({ sentence, answerId: id })),
+      );
+      store.queueAnswer(session.sessionId, {
+        id,
         question: question.text,
         origin: "auto",
         speaker: question.speaker,
+        replaces: [
+          ...new Set([
+            ...replaces,
+            ...earlier.flatMap((answer) => answer.replaces ?? []),
+          ]),
+        ],
       });
       liveAssistLog(
         "answer.question_detected",
         {
           question: question.text,
+          replaces,
           turnEndedAtMs: question.endMs,
           latestAudioMs: listenerStore
             .getState()
@@ -644,6 +679,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
 
     const controller = new AbortController();
     session.answering = controller;
+    session.answeringId = next.id;
     store.updateAnswer(sessionId, next.id, { status: "answering" });
     const startedAt = Date.now();
     try {
@@ -747,6 +783,9 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           answer: result.text,
           sources: result.sources,
         });
+        for (const id of next.replaces ?? []) {
+          store.removeAnswer(sessionId, id);
+        }
       }
       liveAssistLog(
         "answer.done",
@@ -758,6 +797,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
           text: result.text,
           sources: result.sources,
           reads: result.reads,
+          ends: result.ends,
         },
         sessionId,
       );
@@ -787,6 +827,7 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       );
     } finally {
       session.answering = null;
+      session.answeringId = null;
       if (current === session) {
         void processAnswers(session);
       }

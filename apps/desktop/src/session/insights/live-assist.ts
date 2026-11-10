@@ -389,11 +389,64 @@ function isQuestion(sentence: string): boolean {
   return sentence.endsWith("?") || QUESTION_OPENING.test(sentence);
 }
 
+// Words that carry the question: short ones ("est", "que", "un") are in
+// every question.
+function questionWords(sentence: string): string[] {
+  return sentence
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}']+/u)
+    .filter((word) => word.length >= 4);
+}
+
+// Share of the words of `sentence` already said in `earlier`.
+function wordsCovered(earlier: string, sentence: string): number {
+  const said = new Set(questionWords(earlier));
+  const words = questionWords(sentence);
+  return words.length === 0
+    ? 1
+    : words.filter((word) => said.has(word)).length / words.length;
+}
+
+const SAME_QUESTION_SHARE = 0.8;
+
+// A participant's turn is transcribed as it goes, so the same question comes
+// back longer ("are there tools" then "are there tools better than others for
+// leads?") or reworded by the transcription. A question whose sentences were
+// all asked already is a repeat; one that repeats or extends an earlier
+// question replaces it, so the answer covers the whole question.
+export function matchEarlierQuestion(
+  sentences: string[],
+  earlier: Array<{ sentence: string; answerId: string }>,
+): { repeated: boolean; replaces: string[] } {
+  const isSaid = (sentence: string) =>
+    earlier.some(
+      (item) => wordsCovered(item.sentence, sentence) >= SAME_QUESTION_SHARE,
+    );
+  const replaces = earlier
+    .filter((item) =>
+      sentences.some(
+        (sentence) =>
+          wordsCovered(item.sentence, sentence) >= SAME_QUESTION_SHARE ||
+          wordsCovered(sentence, item.sentence) >= SAME_QUESTION_SHARE,
+      ),
+    )
+    .map((item) => item.answerId);
+  return {
+    repeated: sentences.every(isSaid),
+    replaces: [...new Set(replaces)],
+  };
+}
+
 export function detectIncomingQuestions(
   segments: LiveTranscriptSegment[],
   scannedEndMs: number,
 ): {
-  questions: Array<{ text: string; endMs: number; speaker: string }>;
+  questions: Array<{
+    text: string;
+    sentences: string[];
+    endMs: number;
+    speaker: string;
+  }>;
   lastEndMs: number;
 } {
   const fresh = segments
@@ -427,7 +480,12 @@ export function detectIncomingQuestions(
   // Every speaker counts, the user's mic included: in a room everyone is on
   // that mic, and a colleague may be on the other side. The model judges
   // whether the question is for the user.
-  const questions: Array<{ text: string; endMs: number; speaker: string }> = [];
+  const questions: Array<{
+    text: string;
+    sentences: string[];
+    endMs: number;
+    speaker: string;
+  }> = [];
   for (const turn of turns) {
     // A question often spans two segments of the same turn.
     const text = turn.map((segment) => segment.text.trim()).join(" ");
@@ -438,8 +496,10 @@ export function detectIncomingQuestions(
         !SMALL_TALK.test(sentence),
     );
     if (asked.length > 0) {
+      const sentences = asked.slice(-MAX_QUESTIONS_PER_TURN);
       questions.push({
-        text: asked.slice(-MAX_QUESTIONS_PER_TURN).join(" "),
+        text: sentences.join(" "),
+        sentences,
         endMs: turn[turn.length - 1]!.end_ms,
         speaker: formatLiveAssistSpeakerLabel(turn[0]!.key),
       });
