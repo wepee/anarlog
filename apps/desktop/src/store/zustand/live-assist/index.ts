@@ -29,7 +29,8 @@ export type LiveAssistSessionState = {
   templates: LiveAssistTemplateOption[];
   projects: LiveAssistProjectOption[];
   projectsFailed: boolean;
-  // Picked by hand in the floating bar; never set automatically.
+  // Picked by hand in the floating bar; never guessed, only kept when the
+  // recording of the same call restarts.
   projectId: string | null;
   answers: LiveAssistAnswer[];
   snapshot: LiveAssistSnapshot;

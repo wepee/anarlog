@@ -54,6 +54,9 @@ const QUESTION_SCAN_MS = 400;
 const ANSWER_RENDER_INTERVAL_MS = 120;
 // An answer waits this long at most for a project context still loading.
 const CONTEXT_WAIT_MS = 3_000;
+// A recording started this soon after the previous one stopped, for the
+// same call, is a restart of that call: it keeps the project picked by hand.
+const PROJECT_CARRY_OVER_MS = 10 * 60_000;
 
 type EngineConfig = {
   enabled: boolean;
@@ -109,6 +112,11 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   let current: RunningSession | null = null;
   let disposed = false;
   let lastInactiveReason: string | null = null;
+  let stoppedCall: {
+    stoppedAt: number;
+    projectId: string;
+    context: Promise<CallContext>;
+  } | null = null;
 
   liveAssistLog("engine.created");
 
@@ -121,6 +129,11 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       { reason, updates: current.updates, running: current.running },
       current.sessionId,
     );
+    const { projectId } = getLiveAssistSession(current.sessionId);
+    stoppedCall =
+      projectId && current.context
+        ? { stoppedAt: Date.now(), projectId, context: current.context }
+        : null;
     current.controller?.abort();
     current.answering?.abort();
     useLiveAssistStore.getState().clearSession(current.sessionId);
@@ -215,7 +228,13 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
       // before the first question.
       session.context = loadCallContext(activeSessionId);
       session.pastMeetings = loadPastMeetingsFor(session);
-      void loadProjects(session);
+      const previous =
+        stoppedCall &&
+        Date.now() - stoppedCall.stoppedAt < PROJECT_CARRY_OVER_MS
+          ? stoppedCall
+          : null;
+      stoppedCall = null;
+      void loadProjects(session, previous);
     }
   };
 
@@ -248,8 +267,12 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
   };
 
   // The projects for the picker, most likely first. The user picks the
-  // call's project by hand; it is never chosen automatically.
-  const loadProjects = async (session: RunningSession) => {
+  // call's project by hand; it is never guessed, only kept when the
+  // recording of the same call restarts.
+  const loadProjects = async (
+    session: RunningSession,
+    previous: typeof stoppedCall,
+  ) => {
     const command = getConfig().projectsCommand.trim();
     if (!command) {
       liveAssistLog("projects.not_configured", undefined, session.sessionId);
@@ -258,16 +281,35 @@ export function createLiveAssistEngine(getConfig: () => EngineConfig) {
     const startedAt = Date.now();
     try {
       session.context ??= loadCallContext(session.sessionId);
-      const { title, participants } = await session.context;
-      const projects = await listProjects(command, { title, participants });
+      const context = await session.context;
+      const projects = await listProjects(command, context);
+      const previousContext = await previous?.context;
       if (current !== session) {
         return;
       }
       session.projects = projects;
-      useLiveAssistStore.getState().setProjects(
+      const store = useLiveAssistStore.getState();
+      store.setProjects(
         session.sessionId,
         projects.map(({ id, label }) => ({ id, title: label })),
       );
+      if (
+        previous &&
+        previousContext &&
+        isSameCall(previousContext, context) &&
+        projects.some((project) => project.id === previous.projectId) &&
+        !getLiveAssistSession(session.sessionId).projectId
+      ) {
+        liveAssistLog(
+          "project.carried_over",
+          {
+            projectId: previous.projectId,
+            msSincePreviousStop: Date.now() - previous.stoppedAt,
+          },
+          session.sessionId,
+        );
+        store.selectProject(session.sessionId, previous.projectId);
+      }
       liveAssistLog(
         "projects.loaded",
         {
@@ -950,6 +992,15 @@ async function loadCallContext(sessionId: string): Promise<CallContext> {
   };
   liveAssistLog("context.loaded", context, sessionId);
   return context;
+}
+
+function isSameCall(a: CallContext, b: CallContext): boolean {
+  const people = ({ participants }: CallContext) =>
+    participants
+      .map(({ name, email }) => (email ?? name).toLowerCase())
+      .sort()
+      .join("\n");
+  return a.title === b.title && people(a) === people(b);
 }
 
 function getTranscriptSignature(segments: LiveTranscriptSegment[]): string {
