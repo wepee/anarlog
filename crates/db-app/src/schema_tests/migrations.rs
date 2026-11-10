@@ -552,6 +552,62 @@ async fn migration_repairs_empty_titles_from_summary_headings() {
 }
 
 #[tokio::test]
+async fn migration_dates_imported_transcripts_at_the_meeting_start() {
+    let db = Db::connect_memory_plain().await.unwrap();
+    anlg_db_migrate::migrate(
+        &db,
+        anlg_db_migrate::DbSchema {
+            steps: migration_steps_before("20261109120000_repair_imported_transcript_start"),
+            validate_cloudsync_table: cloudsync_alter_guard_required,
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("INSERT INTO sessions (id, title) VALUES ('s', 'Imported')")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO transcripts
+             (id, session_id, source, started_at_ms, ended_at_ms, created_at)
+             VALUES
+             ('imported', 's', 'import', 7540, 60000, '2026-07-07T18:00:00.000Z'),
+             ('live', 's', 'live_capture', 1787775058055, 1787775118055,
+              '2026-08-26T10:00:00.000Z')",
+    )
+    .execute(db.pool())
+    .await
+    .unwrap();
+
+    anlg_db_migrate::migrate(&db, schema()).await.unwrap();
+
+    let rows = sqlx::query_as::<_, (String, i64, Option<i64>)>(
+        "SELECT id, started_at_ms, ended_at_ms FROM transcripts ORDER BY id",
+    )
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
+
+    let meeting_start = 1_783_447_200_000;
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "imported".to_string(),
+                meeting_start,
+                Some(meeting_start + 60_000)
+            ),
+            (
+                "live".to_string(),
+                1_787_775_058_055,
+                Some(1_787_775_118_055)
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn repair_migration_recreates_missing_templates_table() {
     let db = Db::connect_memory_plain().await.unwrap();
     anlg_db_migrate::migrate(

@@ -52,6 +52,33 @@ describe("meeting import statements", () => {
       );
     }
   });
+
+  it("dates the transcript at the meeting start, not the first word offset", () => {
+    const transcript = buildMeetingStatements({
+      providerId: "fireflies",
+      sourcePath: "/exports/late-start.json",
+      sessionId: "33333333-3333-4333-8333-333333333333",
+      importKey: "fireflies:late-start",
+      meeting: {
+        externalId: "late-start",
+        title: "Late start",
+        startedAt: "2026-08-06T01:00:00.000Z",
+        endedAt: "",
+        sourceUrl: "",
+        noteMarkdown: "",
+        summaryMarkdown: "",
+        transcript: [
+          { speaker: "Ada", text: "Hello.", startMs: 7_540, endMs: 9_000 },
+        ],
+        attendees: [],
+        actionItems: [],
+      },
+    }).find(({ sql }) => sql.includes("INSERT INTO transcripts"));
+
+    const meetingStart = Date.parse("2026-08-06T01:00:00.000Z");
+    expect(transcript?.params[2]).toBe(meetingStart);
+    expect(transcript?.params[3]).toBe(meetingStart + 9_000);
+  });
 });
 
 describe("imported transcript speakers", () => {
