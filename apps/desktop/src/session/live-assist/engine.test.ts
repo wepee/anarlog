@@ -30,7 +30,10 @@ vi.mock("./journal", () => ({
 }));
 vi.mock("./answers", () => ({
   buildLiveAnswerPrompt: () => ({ context: "", request: "" }),
-  streamLiveAnswer: () => new Promise(() => {}),
+  streamLiveAnswer: ({ signal }: { signal: AbortSignal }) =>
+    new Promise((_, reject) =>
+      signal.addEventListener("abort", () => reject(new Error("aborted"))),
+    ),
 }));
 vi.mock("./past-meetings", () => ({
   loadPastMeetings: pastMeetings.load,
@@ -135,6 +138,39 @@ describe("live answers", () => {
     expect(
       getLiveAssistSession("s1").answers.map((answer) => answer.question),
     ).toEqual(["Et vous facturez combien pour un audit complet ?"]);
+    engine.dispose();
+  });
+
+  it("keeps one answer for a question that comes back longer, and none for one asked again", async () => {
+    vi.useFakeTimers();
+    const engine = createLiveAssistEngine(() => ({
+      ...config,
+      projectContext: false,
+    }));
+    engine.sync();
+    const store = listener.store as StoreApi<{ liveSegments: unknown[] }>;
+    const say = async (startMs: number, text: string) => {
+      store.setState({
+        liveSegments: [segment("r1", "RemoteParty", startMs, text, true)],
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+    };
+
+    await say(0, "Est-ce qu'il y a des outils qui sont");
+    await say(
+      1_000,
+      "Est-ce qu'il y a des outils qui sont plus adéquats que d'autres pour trouver des leads ?",
+    );
+    await say(
+      2_000,
+      "Est-ce qu'il y a des outils qui sont plus adéquats que d'autres pour trouver des leads ?",
+    );
+
+    expect(
+      getLiveAssistSession("s1").answers.map((answer) => answer.question),
+    ).toEqual([
+      "Est-ce qu'il y a des outils qui sont plus adéquats que d'autres pour trouver des leads ?",
+    ]);
     engine.dispose();
   });
 

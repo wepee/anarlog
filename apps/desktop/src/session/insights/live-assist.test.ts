@@ -7,6 +7,7 @@ import {
   detectIncomingQuestions,
   EMPTY_LIVE_ASSIST_SNAPSHOT,
   type LiveAssistOutput,
+  matchEarlierQuestion,
   mergeLiveAssistOutput,
   shouldRunLiveAssistUpdate,
 } from "./live-assist";
@@ -217,5 +218,47 @@ describe("detectIncomingQuestions", () => {
     expect(result.questions.map((question) => question.text)).toEqual([
       "Vous avez prévu quel budget pour la V2 ?",
     ]);
+  });
+});
+
+describe("matchEarlierQuestion", () => {
+  it("treats a question coming back longer or reworded as the same one, not a new question that shares its words", () => {
+    const earlier = [
+      {
+        sentence: "Est-ce qu'il y a des outils qui sont",
+        answerId: "a1",
+      },
+      {
+        sentence:
+          "il Alors la première partie, est-ce que j'ai besoin d'IA vraiment dans mon produit ?",
+        answerId: "a2",
+      },
+      { sentence: "ça se passe comment ?", answerId: "a3" },
+      { sentence: "Est-ce que vous avez un budget ?", answerId: "a4" },
+    ];
+
+    expect(
+      matchEarlierQuestion(
+        [
+          "Est-ce qu'il y a des outils qui sont plus payant ou pas payant, plus adéquats que d'autres pour avoir des résultats.",
+        ],
+        earlier,
+      ),
+    ).toEqual({ repeated: false, replaces: ["a1"] });
+    expect(
+      matchEarlierQuestion(
+        [
+          "Alors première partie, est-ce que j'ai besoin d'IA vraiment dans mon produit ?",
+        ],
+        earlier,
+      ),
+    ).toEqual({ repeated: true, replaces: ["a2"] });
+    expect(matchEarlierQuestion(["se passe comment ?"], earlier)).toEqual({
+      repeated: true,
+      replaces: ["a3"],
+    });
+    expect(
+      matchEarlierQuestion(["Est-ce que vous avez un planning ?"], earlier),
+    ).toEqual({ repeated: false, replaces: [] });
   });
 });
